@@ -12084,6 +12084,9 @@ Object.assign(HU_EN, {
     '1–3 goals of your own and 1–3 expectations of the teacher. Only you can see them.',
   'Lezárt és kész kurzusok':'Closed and completed courses',
   'az ablak nincs nyitva':'the window is not open',
+  'Nincs visszaigazolva':'Not confirmed',
+  'Elindult egy beküldés, de a rendszer a kampány lezárásáig nem igazolja vissza. Ha megszakadt, töltsd ki újra — ha nem, nyugodtan hagyd így.':
+    'A submission was started, but the system cannot confirm it until the campaign closes. If it was interrupted, fill it in again — otherwise you can safely leave it.',
   'Most nincs értékelhető kurzusod':'You have no course to evaluate right now',
   'Amikor egy kampány megnyílik, a véleményezhető kurzusaid itt jelennek meg.':
     'When a campaign opens, the courses you can evaluate will appear here.',

@@ -1069,7 +1069,15 @@ const ECHO_STATE = {
   // pillanataban hivja — vagyis ez azt jelenti, hogy egy korabbi bekuldes
   // elindult, de nem fejezodott be. A FELBEHAGYOTT ettol kulon allapot: ott
   // van mentett piszkozat, es a kitoltes folytathato.
-  folyamatban: { label: 'Sikertelen beküldés', tone: 'amber', icon: 'AlertTriangle', hint: 'Egy korábbi beküldés nem fejeződött be. Kérjük, töltsd ki újra.' },
+  /* A FELIRAT KORABBAN „Sikertelen beküldés" VOLT — es ez tobbnyire NEM IGAZ.
+     A napló `submitted` jelzoje csak a kampany lezarasakor kerul fel (kotegelt
+     echo.mark_submitted), tehat egy TOKELETESEN sikeres bekuldes is ide esik,
+     amig a kampany nyitva van. A felulet igy sikertelenseget allitott olyan
+     hallgatonak, aki rendben bekuldott — es ujrakitoltesre biztatta.
+     Amit tudunk: elindult egy bekuldes, es a rendszer meg nem tudja
+     visszaigazolni. Ha ezen a bongeszon tortent, a sajat masolat elarulja, es
+     a kartya „Kész"-t mutat helyette. */
+  folyamatban: { label: 'Nincs visszaigazolva', tone: 'amber', icon: 'AlertTriangle', hint: 'Elindult egy beküldés, de a rendszer a kampány lezárásáig nem igazolja vissza. Ha megszakadt, töltsd ki újra — ha nem, nyugodtan hagyd így.' },
   // 22_echo_draft.sql: van mentett piszkozat, a kitoltes ott folytathato, ahol
   // abbamaradt. A piszkozat a bekuldesig visszakeresheto a hallgatohoz — ezt a
   // felulet a kitoltoben ki is mondja.
@@ -2131,6 +2139,11 @@ function ECHO_StudentView({ user }) {
 
   const key = (c) => c.campaign_id + '|' + c.course_id;
 
+  /* A saját másolatokat renderelésenként EGYSZER olvassuk ki: az
+     ECHO_masolatMind() a teljes JSON-t értelmezi, és 20+ kurzuskártyánál
+     kártyánként újra megtenné. */
+  const masolatok = ECHO_masolatMind();
+
   if (mode && mode.kind === 'goals') {
     return <ECHO_GoalsView course={mode.course} onBack={() => { setMode(null); load(true); }} onSaved={() => load(true)} />;
   }
@@ -2159,7 +2172,7 @@ function ECHO_StudentView({ user }) {
   // Ugyanaz a három jelzés, mint a hírfolyam kártyáján (lásd ott a
   // magyarázatot) — a két felület ne mondjon mást ugyanarról a kérdőívről.
   const open   = rows.filter(c => !localDone[key(c)] && !c.submitted &&
-    !ECHO_masolatGet(c.campaign_id, c.course_id) &&
+    !masolatok[key(c)] &&
     (c.allapot === 'kitoltheto' || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott'));
   const goals  = rows.filter(c => c.allapot === 'celkituzes');
   const rest   = rows.filter(c => open.indexOf(c) < 0 && goals.indexOf(c) < 0);
@@ -2190,12 +2203,22 @@ function ECHO_StudentView({ user }) {
     String(a.course_name || '').localeCompare(String(b.course_name || ''), 'hu'));
 
   const Card = ({ c }) => {
-    const doneNow = !!localDone[key(c)];
+    /* MI SZAMIT BIZONYITEKNAK A BEKULDESRE
+       A szerver `submitted` jelzoje CSAK a kampany lezarasakor kerul fel: az
+       echo.mark_submitted() kotegelt, es kurzusonkent csak akkor jelol, ha
+       minden kiadott jegy elkoltodott (15_echo_core.sql 6.4). Ez szandekos —
+       egyenkenti jeloles elarulna, ki mikor kuldott be. Amig tehat a kampany
+       nyitva van, a napló szerint SENKI nincs bekuldve.
+       Ezert a sajat masolat a dontő jel: az KIZAROLAG sikeres bekuldes utan
+       irodik (lasd ECHO_masolatMent hivasat a varazsloban). Ha megvan, a
+       hallgato ezen a bongeszon beküldte — akkor is, ha kozben ujratoltotte az
+       oldalt vagy visszajott egy masik napon. */
+    const doneNow = !!localDone[key(c)] || !!masolatok[key(c)];
     const allapot = doneNow ? 'kitoltve' : c.allapot;
     const canFill = !doneNow && c.is_open &&
       (c.allapot === 'kitoltheto' || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott');
     const canGoals = c.is_goals_open;
-    const masolat = ECHO_masolatGet(c.campaign_id, c.course_id);
+    const masolat = masolatok[key(c)];
     return (
       <div className="bg-white rounded-3xl border border-slate-100 p-5 hover:border-slate-200 transition-all">
         <div className="flex items-start justify-between gap-3 mb-3">
