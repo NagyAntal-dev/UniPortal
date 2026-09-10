@@ -11835,6 +11835,157 @@ HU_EN_PHRASES.push(
   [/(\d+)\s*szabad sáv\b/g, '$1 free slot(s)'],
 );
 
+/* ------------------------------------------------------------------
+   ECHO kampánykezelés — angol feliratok.
+   Ezek eddig hiányoztak, ezért angol módban magyarul maradtak, és a
+   státuszsávban keveredtek a nyelvek (OPEN / ELŐKÉSZÍTÉS / CLOSED).
+   A kulcs a szövegcsomópont TÉNYLEGES tartalma — a képernyőn látható
+   nagybetűs alak CSS (uppercase), azt nem szabad kulcsnak venni.
+   ------------------------------------------------------------------ */
+Object.assign(HU_EN, {
+  'A hallgatónak nincs elegendő tapasztalata az oktató munkájáról.':'The student does not have enough experience of the teacher\'s work.',
+  'A kis csoportban a válasz tartalma önmagában azonosítaná a kitöltőt.':'In such a small group the content of the answer would identify the respondent.',
+  'A szerkesztés csak piszkozat (draft) állapotban engedett; minden más állapotnál olvasó mód.':'Editing is allowed only in draft state; every other state is read-only.',
+  'Alkalmasság újraépítése':'Rebuild eligibility',
+  'alkalmasság újraépítése':'rebuild eligibility',
+  'Archív':'Archived',
+  'archív':'archived',
+  'Beérkezett':'Received',
+  'beérkezett':'received',
+  'Dékán':'Dean',
+  'ECHO — kampánykezelés':'ECHO — campaign management',
+  'ECHO-szerepkör kiosztása':'Assign ECHO role',
+  'ECHO-szerepkörök és oktatói kötés':'ECHO roles and teacher links',
+  'Előkészítés':'Preparation',
+  'előkészítés':'preparation',
+  'Eredmény: külön nézetben':'Results: in a separate view',
+  'Feldolgozás':'Processing',
+  'feldolgozás':'processing',
+  'határozatlan':'indefinite',
+  'Hatókör':'Scope',
+  'hatókör':'scope',
+  'Intézményi':'Institutional',
+  'intézményi':'institutional',
+  'intézményi szint, jegyzőkönyv':'institution level, minutes',
+  'Jogosult hallgató':'Eligible student',
+  'jogosult hallgató':'eligible student',
+  'Kampány':'Campaign',
+  'kampány':'campaign',
+  'Kiosztás':'Assignment',
+  'kiosztás':'assignment',
+  'Kitöltési arány':'Response rate',
+  'kitöltési arány':'response rate',
+  'kizárt kurzus':'excluded course',
+  'kizárt oktatói pár':'excluded teacher pair',
+  'Kizárva':'Excluded',
+  'kizárva':'excluded',
+  'Kizárási napló':'Exclusion log',
+  'kizárási napló':'exclusion log',
+  'Kurzusonkénti kitöltés':'Responses by course',
+  'Kurzus–oktató pár':'Course–teacher pair',
+  'Kérdőív':'Questionnaire',
+  'kérdőív':'questionnaire',
+  'Kérdőívszerkesztő':'Questionnaire editor',
+  'kérdőívszerkesztő':'questionnaire editor',
+  'Kötés bontása':'Unlink',
+  'Kötött fiók':'Linked account',
+  'kötött fiók':'linked account',
+  'Közzétéve':'Published',
+  'Lejár':'Expires',
+  'lejár':'expires',
+  'Lezárás':'Close',
+  'lezárás':'close',
+  'Létszám a küszöb alatt':'Headcount below the threshold',
+  'Minőségirányítás':'Quality management',
+  'Moderálás':'Moderation',
+  'moderálás':'moderation',
+  'Moderálási sor':'Moderation queue',
+  'moderálási sor':'moderation queue',
+  'Nincs kontaktóra, így nincs mit véleményezni.':'There are no contact hours, so there is nothing to evaluate.',
+  'Nincs oktatási tevékenység, csak számonkérés.':'No teaching activity, assessment only.',
+  'Nincs rögzített oktató':'No teacher on record',
+  'Nincs órarendi információ':'No timetable information',
+  'Oktató':'Teacher',
+  'oktató':'teacher',
+  'Oktató ↔ fiók összekötés':'Teacher ↔ account link',
+  'Oktató ↔ fiók összekötés · hatókörös, lejáró, iktatható felhatalmazás':'Teacher ↔ account link · scoped, expiring, recordable authorisation',
+  'Oktatói munka hallgatói véleményezése · kampány-életciklus, kitöltési arány, kizárási napló':'Student evaluation of teaching · campaign lifecycle, response rate, exclusion log',
+  'oktatói pár':'teacher pair',
+  'Oktatói értékelés nem képezhető.':'A teacher-level result cannot be produced.',
+  'Oktatói óraarány a küszöb alatt':'Teacher\'s share of hours below the threshold',
+  'Sablonok és verziók':'Templates and versions',
+  'Sablonok, verziók, állapotgép · a szerkesztés csak piszkozatban engedett':'Templates, versions, state machine · editing is allowed only in draft',
+  'Sor frissítése':'Refresh queue',
+  'Szakasz / kérdés':'Section / question',
+  'Szerepkör':'Role',
+  'szerepkör':'role',
+  'Szöveges válaszok érvényessége · 3. § (10) · a szöveg nem törlődik':'Validity of free-text answers · § 3 (10) · the text is never deleted',
+  'Tanszékvezető':'Head of department',
+  'Verzió':'Version',
+  'verzió':'version',
+  'Vissza előkészítésbe':'Back to preparation',
+  'Válassz egy verziót':'Select a version',
+  'Zárolt':'Sealed',
+  'Élesítve':'Live',
+  'élesítve':'live',
+  'Összeköt':'Link',
+  'összeköt':'link',
+  'Új kampány':'New campaign',
+  'Új verzió':'New version',
+  'új verzió':'new version',
+  'üres = határozatlan':'empty = indefinite',
+  'üres = intézményi szint':'empty = institution level',
+  '— intézményi —':'— institutional —',
+  '— válassz fiókot —':'— select an account —',
+  '— válassz —':'— select —',
+});
+/* Az ékezet nélküli magyar szavak (Ablak, Kurzus, Kiosztva…) a fenti körből
+   kimaradtak, mert az első keresés ékezetre szűrt. Ezeket a magyar és az angol
+   képernyő összevetése hozta elő — ami mindkét nyelven azonos, az fordítatlan. */
+Object.assign(HU_EN, {
+  'Ablak':'Window','ablak':'window',
+  'Elkezdte':'Started','elkezdte':'started',
+  'Kiosztva':'Assigned','kiosztva':'assigned',
+  'Kurzus':'Course','kurzus':'course',
+  'Vizsgakurzus':'Exam course','vizsgakurzus':'exam course',
+  'Iktatószám':'Reference number','iktatószám':'reference number',
+  'Szervezeti egység':'Organisational unit','szervezeti egység':'organisational unit',
+});
+HU_EN_PHRASES.push(
+  [/· elkezdte /g, '· started '],
+);
+
+/* Az ECHO szerepkör-katalógus címkéi és súgói (ECHO_ROLE_INFO). A választóban
+   „címke (KÓD)" alakban jelennek meg; a fenti option-ág fordítja a címkét. */
+Object.assign(HU_EN, {
+  'Rektori':'Rectorate',
+  'EHÖK':'Student Union',
+  'Moderátor':'Moderator',
+  'ECHO üzemeltető':'ECHO operator',
+  'a saját kurzusainak saját bontása':'their own breakdown of their own courses',
+  'a hatókörébe eső tanszék oktatói':'the teachers of the department in their scope',
+  'a hatókörébe eső kar':'the faculty in their scope',
+  'vezetői betekintés':'executive oversight',
+  'hallgatói önkormányzat, aggregált':'student union, aggregated',
+  'szöveges válaszok érvényessége (3. § (10))':'validity of free-text answers (§ 3 (10))',
+  'szerepkörök kiosztása':'assigning roles',
+});
+
+/* Az „Új kampány" dialógus feliratai. */
+Object.assign(HU_EN, {
+  'Kampány létrehozása':'Create campaign',
+  'Válassz félévet…':'Select a term…',
+  'A kampány mindig ELŐKÉSZÍTÉS (draft) állapotban jön létre':
+    'The campaign is always created in PREPARATION (draft) state',
+  'Csak jóváhagyott és élesített verzió választható. A MEGNYITÁSHOZ már élesített (live) kell.':
+    'Only an approved, live version can be selected. OPENING the campaign requires a live version.',
+  'Ez látszik a hallgatói és az oktatói felületen is.':
+    'This is shown on both the student and the teacher screens.',
+  'Később adom meg — most csak a kampány váza jöjjön létre':
+    'I will set this later — create only the campaign shell for now',
+});
+
+
 (function setupI18n(){
   if ((localStorage.getItem('nje_lang') || 'hu') !== 'en') return;
   const SKIP = { INPUT:1, TEXTAREA:1, SCRIPT:1, STYLE:1, OPTION:1 };
@@ -11893,6 +12044,15 @@ HU_EN_PHRASES.push(
         // Gyakori minta: „Felirat (12)" — a darabszám marad, a felirat fordul.
         const c = k.match(/^(.*\S)\s*\((\d+)\)$/);
         if (c && HU_EN[c[1]]) to = HU_EN[c[1]] + ' (' + c[2] + ')';
+      }
+      if (!to) {
+        /* Ugyanez KÓDDAL a zárójelben: „Oktató (OKTATO)". Az ECHO szerepkör-
+           választója így írja ki a címkét és a nyers enum-értéket egyszerre.
+           A kód AZONOSÍTÓ — nem fordítjuk —, a címke viszont igen. MÉRVE:
+           enélkül a Szerepkörök fül mind a nyolc szerepköre magyarul maradt
+           angol módban, mert az OPTION a SKIP-ben van. */
+        const c2 = k.match(/^(.*\S)\s*\(([A-Z][A-Z0-9_]*)\)$/);
+        if (c2 && HU_EN[c2[1]]) to = HU_EN[c2[1]] + ' (' + c2[2] + ')';
       }
       if (!to) return;
       const only = el.childNodes.length === 1 && el.firstChild.nodeType === 3;
