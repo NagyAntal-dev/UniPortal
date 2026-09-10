@@ -4153,13 +4153,30 @@ function ECHO_ResultBlock({ r, lang, cim, ikon, tajekoztato }) {
           </div>
           <div className="bg-slate-50 rounded-2xl p-4">
             <p className="text-xl font-black text-slate-900">{v.valaszok}</p>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mt-0.5">válasz</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mt-0.5">
+              válasz ebben a bontásban
+            </p>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4">
             <p className="text-xl font-black text-slate-900">{v.jogosult}</p>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mt-0.5">jogosult</p>
           </div>
         </div>
+      )}
+
+      {/* MIÉRT LEHET KEVESEBB, MINT AHÁNYAN KITÖLTÖTTÉK
+          A kampánykezelő 5/5-öt, azaz 100%-ot mutathat, miközben itt 4 áll — és
+          ez így helyes. A 3. § (9) szerint a 33% alatti óralátogatást valló
+          hallgató véleménye TÁJÉKOZTATÓ JELLEGŰ: kikerül a fő halmazból egy
+          külön blokkba. A számot nem mondjuk meg (az önmagában is információ
+          lenne egy kis csoportról), de azt igen, hogy a különbség ONNAN jön —
+          különben úgy tűnik, elveszett egy válasz. */}
+      {!tajekoztato && (
+        <p className="text-[11px] text-slate-400 leading-relaxed -mt-2 mb-5">
+          Ez a szám kevesebb lehet, mint ahányan kitöltötték: a 33% alatti óralátogatást
+          valló hallgatók válaszai a 3. § (9) szerint külön, tájékoztató blokkba kerülnek,
+          és ebbe a bontásba nem számítanak bele.
+        </p>
       )}
 
       {r.rejtve ? (

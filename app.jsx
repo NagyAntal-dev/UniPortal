@@ -12084,6 +12084,9 @@ Object.assign(HU_EN, {
     '1–3 goals of your own and 1–3 expectations of the teacher. Only you can see them.',
   'Lezárt és kész kurzusok':'Closed and completed courses',
   'az ablak nincs nyitva':'the window is not open',
+  'válasz ebben a bontásban':'responses in this breakdown',
+  'Ez a szám kevesebb lehet, mint ahányan kitöltötték: a 33% alatti óralátogatást valló hallgatók válaszai a 3. § (9) szerint külön, tájékoztató blokkba kerülnek, és ebbe a bontásba nem számítanak bele.':
+    'This number can be lower than the number of people who filled it in: under § 3 (9), answers from students who declared attendance below 33% go into a separate, indicative block and are not counted in this breakdown.',
   'Nincs visszaigazolva':'Not confirmed',
   'Elindult egy beküldés, de a rendszer a kampány lezárásáig nem igazolja vissza. Ha megszakadt, töltsd ki újra — ha nem, nyugodtan hagyd így.':
     'A submission was started, but the system cannot confirm it until the campaign closes. If it was interrupted, fill it in again — otherwise you can safely leave it.',
