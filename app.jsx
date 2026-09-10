@@ -63,6 +63,10 @@ const AppView = {
   // az echo.course / echo.enrollment onallo torzsadat, amire az ECHO-n kivul
   // is hivatkoznak majd. Sajat menupont, sajat nezet.
   COURSES: 'courses',
+  // Oktatoi nyilvantartas (54_teacher_registry.sql). A COURSES mintajara
+  // onallo torzsadat-menupont: az echo.teacher-re az ECHO-n kivul is
+  // hivatkoznak, es a felvitel/inaktivalas nem kampanyhoz kotott muvelet.
+  TEACHERS: 'teachers',
   // Kollégiumi modul (26_dorm.sql). Három nézet, három közönség:
   // az üzemeltetés, a karbantartás és maga a lakó.
   DORM_OPS: 'dorm_ops',
@@ -75,6 +79,7 @@ const MENU_ITEMS = [
   { id: AppView.PROGRAMS, label: 'Programok', icon: <Lucide.BookOpen size={20} /> },
   { id: AppView.TRAININGS, label: 'Képzések', icon: <Lucide.GraduationCap size={20} /> },
   { id: AppView.COURSES, label: 'Kurzusok', icon: <Lucide.Library size={20} /> },
+  { id: AppView.TEACHERS, label: 'Oktatók', icon: <Lucide.GraduationCap size={20} /> },
   { id: AppView.ASSISTANT, label: 'AI Asszisztens', icon: <Lucide.Sparkles size={20} /> },
   { id: AppView.AGENT_PORTAL, label: 'Ügynök és partner portál', icon: <Lucide.Briefcase size={20} /> },
   { id: AppView.ADMISSIONS_CORE, label: 'Jelentkezés és Felvételi', icon: <Lucide.FileText size={20} /> },
@@ -11033,6 +11038,12 @@ const App: React.FC = () => {
     // az a kotes epp azt jelenti, hogy az illeto oktatokent van nyilvantartva.
     // Ha valakinek megsincs echo.teacher sora, a kepernyo ezt KIMONDJA —
     // nem uresen hallgat, es nem piros hibaval fogad.
+    // Az oktatoi nyilvantartas UGYINTEZOI torzsadat: felvitel, javitas,
+    // inaktivalas. A COURSES-szal szemben a hallgato es az oktato NEM latja
+    // — nekik nincs mit kezdeniuk vele.
+    if (item.id === AppView.TEACHERS) {
+      return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role);
+    }
     if (item.id === AppView.COURSES) {
       if (['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role)) return true;
       if (currentUser.role === 'TEACHER') return true;
@@ -11130,6 +11141,12 @@ const App: React.FC = () => {
           ? <RegistrationsView user={currentUser} />
           : <FeedView user={currentUser} onNavigate={setActiveView} />;
       case AppView.ECHO_STUDENT: return <ECHO_StudentView user={currentUser} />;
+      case AppView.TEACHERS:
+        // Ugyanaz a feltetel, mint a menuszuresben — kulonben a menupont
+        // latszana, de a Hirfolyam jonne fel helyette.
+        return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role)
+          ? <TCH_View user={currentUser} />
+          : <FeedView user={currentUser} onNavigate={setActiveView} />;
       case AppView.COURSES:
         // Ugyanaz a ket feltetel, mint a menuszuresben — kulonben egy oktato
         // latna a menupontot, es a Hirfolyam jonne fel helyette.
@@ -11983,6 +12000,100 @@ Object.assign(HU_EN, {
     'This is shown on both the student and the teacher screens.',
   'Később adom meg — most csak a kampány váza jöjjön létre':
     'I will set this later — create only the campaign shell for now',
+});
+
+/* Oktatói nyilvántartás (features/teachers.jsx) — angol feliratok. */
+Object.assign(HU_EN, {
+  'Oktatók':'Teachers',   // a bal oldali menüpont neve
+  'Keresés':'Search',
+  'Az oktatói nyilvántartás adatbázis-oldala még nincs telepítve. Futtatni kell a supabase/54_teacher_registry.sql migrációt.':
+    'The database side of the teacher registry is not installed yet. The supabase/54_teacher_registry.sql migration needs to be run.',
+  'a fiók-kötéshez nem ez kell, csak elérhetőség':
+    'not used for the account link — contact detail only',
+  'A kód és a név kötelező — a kód később is módosítható, de egyedi':
+    'The code and the name are required — the code can be changed later, but it stays unique',
+  'A kódot csak akkor írd át, ha a nyilvántartásban is változott':
+    'Change the code only if it changed in the official register too',
+  'A kötés adja meg, hogy az oktató lássa a saját eredményeit':
+    'The link is what lets the teacher see their own results',
+  'A részarány dönti el, bekerül-e az oktató a kampány jogosultjai közé':
+    'The share decides whether the teacher becomes eligible in a campaign',
+  'a szűrés szerint':'matching the filter',
+  'Aktiválás':'Activate',
+  'Aktív':'Active',
+  'Amíg nincs kurzus-hozzárendelése, egyetlen kampányba sem kerül be.':
+    'Until they have a course assignment, they are not included in any campaign.',
+  'Az inaktiválás megtörtént, de olvasd el ezt:':'The teacher was deactivated — but read this:',
+  'Betöltés…':'Loading…',
+  'Csak aktív':'Active only',
+  'csak azok látszanak, amiket még nem visz':'only courses they do not teach yet are listed',
+  'Csak inaktív':'Inactive only',
+  'csak olyan fiók választható, ami még nincs másik oktatóhoz kötve':
+    'only accounts not yet linked to another teacher can be selected',
+  'egyedi azonosító':'unique identifier',
+  'Ehhez az oktatóhoz nem tartozik semmi — biztonságosan törölhető.':
+    'Nothing is attached to this teacher — they can be deleted safely.',
+  'Ez adja meg, hogy az oktató belépve lássa a saját eredményeit. Kötés nélkül az „Oktatói eredmények" képernyő üresen fogadja.':
+    'This is what lets the teacher see their own results after signing in. Without a link the “Teaching results” screen is empty for them.',
+  'Ez alapján kerül be a kampányok jogosultjai közé.':
+    'This is what puts them among the eligible teachers of a campaign.',
+  'Fiók':'Account',
+  'Fiók összekötése':'Link an account',
+  'Fiók-kötés':'Account link',
+  'fiókhoz kötve':'linked to an account',
+  'Félév':'Term',
+  'Gyakorlatvezető':'Lab instructor',
+  'Hozzárendelés':'Assign',
+  'Inaktiválás':'Deactivate',
+  'Inaktív':'Inactive',
+  'Jegyzőkönyv':'Minutes',
+  'Jelenlegi fiók:':'Current account:',
+  'Jogosultság':'Eligibility',
+  'Keresés…':'Search…',
+  'Kezdj el gépelni…':'Start typing…',
+  'Kizárás':'Exclusion',
+  'Kurzus hozzárendelése':'Assign a course',
+  'kurzus nélkül':'without a course',
+  'kurzus-hozzárendelés':'course assignments',
+  'Kurzusai':'Their courses',
+  'Kurzusfelelős':'Course leader',
+  'Kód':'Code',
+  'kötve':'linked',
+  'Levétel a kurzusról':'Remove from the course',
+  'mekkora részt visz a kurzusból':'how much of the course they teach',
+  'Mező ürítése':'Clear field',
+  'Mi tartozik hozzá':'What is attached to them',
+  'Mind':'All',
+  'nem kötelező':'optional',
+  'nincs':'none',
+  'Nincs fiók összekötve.':'No account linked.',
+  'Nincs kurzusa':'No courses',
+  'Nincs megadva':'Not set',
+  'Nincs találat':'No results',
+  'Nincs találat.':'No results.',
+  'Név':'Name',
+  'név, kód vagy e-mail':'name, code or email',
+  'Oktató létrehozása':'Create teacher',
+  'Oktató szerkesztése':'Edit teacher',
+  'Oktatói nyilvántartás':'Teacher registry',
+  'Oktatók adatai, kurzus-hozzárendelései és fiók-kötése · az ECHO kampányok innen veszik, kinek a munkáját értékelik':
+    'Teacher records, course assignments and account links · ECHO campaigns take from here whose work is evaluated',
+  'pl. Kovács Anna':'e.g. Anna Kovács',
+  'Részarány':'Share',
+  'Részarány (%)':'Share (%)',
+  'Szerep':'Role',
+  'tanszék vagy kar':'department or faculty',
+  'Titulus':'Academic title',
+  'Törlés nem lehetséges, mert tartozik hozzá adat. Használd az inaktiválást.':
+    'Deletion is not possible because data is attached. Use deactivation instead.',
+  'Válassz kurzust…':'Select a course…',
+  'Válassz…':'Select…',
+  'Válasz':'Response',
+  'Változtass a keresésen vagy a szűrőkön — vagy vegyél fel új oktatót.':
+    'Change the search or the filters — or add a new teacher.',
+  'Végleges törlés':'Delete permanently',
+  'Észrevétel':'Comment',
+  'Új oktató':'New teacher',
 });
 
 

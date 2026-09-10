@@ -55,6 +55,9 @@ const FEATURE_FILES = [
   // CRS_Tab-ra, de az fuggveny-deklaracio, tehat hoistolodik — a modul
   // kiertekelesenek sorrendje emiatt kozombos.
   'features/courses.jsx',
+  // Oktatoi nyilvantartas (54_teacher_registry.sql). A data-layer UTAN kell
+  // allnia: onnan veszi a UModal/UField/UBadge/UEmpty atomokat.
+  'features/teachers.jsx',
 ];
 
 // `motion` is only referenced by the shim at the top of app.jsx, which renders
