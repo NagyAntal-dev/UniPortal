@@ -12085,6 +12085,24 @@ Object.assign(HU_EN, {
   'Lezárt és kész kurzusok':'Closed and completed courses',
   'az ablak nincs nyitva':'the window is not open',
   'válasz ebben a bontásban':'responses in this breakdown',
+
+  /* Adminisztrátori nyers nézet és relevancia-szűrő (56_admin_results_control.sql) */
+  'Adminisztrátori nézet':'Administrator view',
+  'Az adminisztrátori nyers nézet még nincs telepítve. Futtatni kell a supabase/56_admin_results_control.sql migrációt.':
+    'The administrator raw view is not installed yet. The supabase/56_admin_results_control.sql migration needs to be run.',
+  'A küszöbök az OKTATÓ felé védik a hallgatók névtelenségét. Adminisztrátorként megnézheted a teljes, szűretlen eredményt, és te döntöd el, milyen szűréssel kerüljön az oktató elé.':
+    'The thresholds protect student anonymity towards the TEACHER. As an administrator you can view the complete, unfiltered result and decide what filtering is applied before it reaches the teacher.',
+  'Teljes, szűretlen eredmény':'Complete, unfiltered result',
+  'Küszöb és óralátogatás-szűrés nélkül. A megtekintés naplózódik.':
+    'Without thresholds or attendance filtering. This view is logged.',
+  'A 33% alatti óralátogatású válaszok is számítsanak bele':
+    'Count answers with attendance below 33% as well',
+  'A kampány le van pecsételve — a szűrés már nem módosítható.':
+    'The campaign is sealed — the filtering can no longer be changed.',
+  'ebből 33% alatti':'of which below 33%',
+  'Ehhez a bontáshoz nincs kérdés.':'There is no question in this breakdown.',
+  '33% alatti óralátogatás':'attendance below 33%',
+  'Bezárás':'Close',
   'Ez a szám kevesebb lehet, mint ahányan kitöltötték: a 33% alatti óralátogatást valló hallgatók válaszai a 3. § (9) szerint külön, tájékoztató blokkba kerülnek, és ebbe a bontásba nem számítanak bele.':
     'This number can be lower than the number of people who filled it in: under § 3 (9), answers from students who declared attendance below 33% go into a separate, indicative block and are not counted in this breakdown.',
   'Nincs visszaigazolva':'Not confirmed',

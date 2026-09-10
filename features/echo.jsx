@@ -302,6 +302,16 @@ function ECHO_msg(e) {
     return ECHO_ERR[code];
   }
   if (/function .*echo_/i.test(raw) || /schema cache/i.test(raw)) {
+    /* Nevezzük meg a HELYES migrációt: a „telepítsd a 15-öst" üzenet félrevezet,
+       ha valójában egy későbbi csomag hiányzik. */
+    if (/echo_results_raw|echo_campaign_filters/i.test(raw)) {
+      return 'Az adminisztrátori nyers nézet még nincs telepítve. '
+           + 'Futtatni kell a supabase/56_admin_results_control.sql migrációt.';
+    }
+    if (/echo_teacher_(list|get|save|set_active|course_set|options|delete)/i.test(raw)) {
+      return 'Az oktatói nyilvántartás még nincs telepítve '
+           + '(supabase/54_teacher_registry.sql).';
+    }
     return 'Az ECHO adatbázis-rész még nincs telepítve (15_echo_core.sql).';
   }
   return raw || 'Ismeretlen hiba.';
@@ -451,6 +461,17 @@ const ECHO_api = {
      (is_admin(), illetve az echo.teacher.profile_id szerinti oktatói kötés). */
   teacherResults: (campaign, course, teacher) =>
     ECHO_rpc('echo_teacher_results', { p_campaign: campaign, p_course: course, p_teacher: teacher || null }),
+  // ADMIN NYERS NEZET (56_admin_results_control.sql) — kuszob es
+  // oralatogatas-szures nelkul, moderalasi allapottal egyutt.
+  resultsRaw:     (campaign, course, scope, teacher) =>
+                    ECHO_rpc('echo_results_raw', { p_campaign: campaign, p_course: course,
+                                                   p_scope: scope || 'course', p_teacher: teacher || null }),
+  // A kampany relevancia-szuroje: beleszamitson-e az alacsony oralatogatas.
+  filtersGet:     (campaign) => ECHO_rpc('echo_campaign_filters_get', { p_campaign: campaign }),
+  filtersSet:     (campaign, lowIncluded) =>
+                    ECHO_rpc('echo_campaign_filters_set',
+                             { p_campaign: campaign, p_low_attendance_included: !!lowIncluded }),
+
   courseResults:  (campaign, course) =>
     ECHO_rpc('echo_course_results', { p_campaign: campaign, p_course: course }),
 
@@ -4119,6 +4140,101 @@ function ECHO_ResultQuestion({ q, kuszob, lang }) {
 
 // Egy teljes bontás (kurzusszintű vagy egy oktató). A `tajekoztato` a
 // 33% alatti óralátogatású blokkot jelöli.
+/* ------------------------------------------------------------
+   NYERS, SZŰRETLEN EREDMÉNY — kizárólag adminisztrátornak.
+
+   Ez a nézet SEMMIT nem rejt el: nincs k-küszöb, nincs óralátogatás-szűrés, és
+   a szöveges válaszok a moderálási állapotukkal együtt jönnek. Az a célja, hogy
+   az adminisztrátor a TELJES képet lássa, és ő döntsön arról, mi releváns.
+
+   AMI ITT SINCS: a hallgató személye. A válaszsorban nincs olyan mező, ami rá
+   mutatna — ez a nyers nézetben is így van, mert a beküldés eleve névtelen.
+   ------------------------------------------------------------ */
+function ECHO_RawResults({ nyers, lang }) {
+  if (!nyers) return null;
+  const v = nyers.valaszadas || {};
+  const kerdesek = nyers.kerdesek || [];
+
+  const ertekSzoveg = (e) => {
+    if (e === null || e === undefined) return '—';
+    if (Array.isArray(e)) return e.join(', ');
+    if (typeof e === 'object') return JSON.stringify(e);
+    return String(e);
+  };
+
+  return (
+    <div className="mt-5 bg-white border border-primary/20 rounded-2xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center gap-4">
+        <div>
+          <span className="text-[10px] font-black text-primary uppercase tracking-widest">
+            Teljes, szűretlen eredmény
+          </span>
+          <p className="text-[12px] text-slate-500 mt-0.5">
+            Küszöb és óralátogatás-szűrés nélkül. A megtekintés naplózódik.
+          </p>
+        </div>
+        <div className="flex gap-4 ml-auto">
+          {[[v.valaszok, 'válasz'], [v.alacsony, 'ebből 33% alatti'], [v.jogosult, 'jogosult']].map(([n, c], i) => (
+            <div key={i} className="text-center">
+              <p className="text-xl font-black text-slate-900">{n == null ? '—' : n}</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">{c}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {kerdesek.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-slate-400 font-bold">Ehhez a bontáshoz nincs kérdés.</p>
+      ) : (
+        <div className="divide-y divide-slate-50">
+          {kerdesek.map((q, i) => (
+            <div key={q.id || i} className="px-5 py-4">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <ECHO_Src>{q.szakasz || ''}</ECHO_Src>
+              </p>
+              <p className="text-sm font-bold text-slate-800 mt-0.5">
+                <ECHO_Src>{ECHO_txt(q, lang) || q.id}</ECHO_Src>
+                <span className="text-slate-400 font-medium"> · {q.valasz_db} válasz</span>
+              </p>
+
+              {(q.ertekek || []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {q.ertekek.map((e, j) => (
+                    <span key={j} className="px-2 py-1 rounded-lg bg-slate-100 text-[12px] font-bold text-slate-700">
+                      <ECHO_Src>{ertekSzoveg(e)}</ECHO_Src>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {(q.szovegek || []).length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {q.szovegek.map((t, j) => (
+                    <div key={j} className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                      <p className="text-[13px] text-slate-700"><ECHO_Src>{ertekSzoveg(t.szoveg)}</ECHO_Src></p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        <UBadge tone={t.allapot === 'valid' ? 'green'
+                                      : t.allapot === 'invalid' ? 'red'
+                                      : t.allapot === 'pending' ? 'amber' : 'slate'}>
+                          {t.allapot}
+                        </UBadge>
+                        {t.alacsony_oralatogatas && (
+                          <UBadge tone="amber">33% alatti óralátogatás</UBadge>
+                        )}
+                        {t.indok && <span className="text-[11px] text-slate-400">{t.indok}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ECHO_ResultBlock({ r, lang, cim, ikon, tajekoztato }) {
   if (!r) return null;
   const k = r.kuszobok || {};
@@ -4548,7 +4664,25 @@ function ECHO_TeacherView({ user }) {
     return () => { dead = true; };
   }, [cid, courseId]);
 
-  const camp = (camps || []).find(c => c.id === cid) || null;
+  // ADMIN NYERS NEZET es RELEVANCIA-SZURO (56_admin_results_control.sql)
+  const [nyers, setNyers]       = useState(null);   // a szuretlen eredmeny
+  const [nyersBusy, setNyersBusy] = useState(false);
+  const [nyersErr, setNyersErr] = useState('');
+  const [szuroBusy, setSzuroBusy] = useState(false);
+  const [szuro, setSzuro] = useState(null);   // { low_attendance_included, zarolt }
+
+  // A szuro aktualis erteke kampanyvaltaskor. Csak adminnak — az RPC ugyis
+  // elutasitana mast, es feleslegesen hibat irnank a kepernyore.
+  useEffect(() => {
+    if (mode !== 'admin' || !cid) { setSzuro(null); return; }
+    let el = true;
+    ECHO_api.filtersGet(cid)
+      .then(r => { if (el) setSzuro(r); })
+      .catch(() => { if (el) setSzuro(null); });
+    return () => { el = false; };
+  }, [mode, cid]);
+
+    const camp = (camps || []).find(c => c.id === cid) || null;
   const courses = (rate && rate.kurzusonkent) || [];
   const course = courses.find(k => k.course_id === courseId) || null;
   const campState = camp ? (ECHO_CAMPAIGN_STATE[camp.state] || { label: camp.state, tone: 'slate' }) : null;
@@ -4687,6 +4821,85 @@ function ECHO_TeacherView({ user }) {
       )}
 
       {busy && <div className="space-y-3 mb-6"><SkeletonBar w="40%" h={16} /><SkeletonBar /><SkeletonBar w="70%" /></div>}
+
+      {/* ADMINISZTRÁTORI VEZÉRLŐ — csak adminnak, és csak ha van kiválasztott kurzus.
+          Két dolgot ad: (a) a relevancia-szűrőt, ami azt dönti el, mi kerül az
+          OKTATÓ elé, és (b) a nyers nézetet, ami küszöb nélkül mindent megmutat. */}
+      {mode === 'admin' && cid && courseId && (
+        <div className="mb-6 rounded-3xl border border-primary/20 bg-primary/[0.03] p-5">
+          <div className="flex items-start gap-2.5 mb-4">
+            <Lucide.ShieldCheck size={18} className="text-primary flex-none mt-0.5" />
+            <div>
+              <h3 className="font-black text-slate-900 text-[15px]">Adminisztrátori nézet</h3>
+              <p className="text-[12px] text-slate-500 mt-0.5 max-w-2xl">
+                A küszöbök az OKTATÓ felé védik a hallgatók névtelenségét. Adminisztrátorként
+                megnézheted a teljes, szűretlen eredményt, és te döntöd el, milyen szűréssel
+                kerüljön az oktató elé.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => {
+                setNyersBusy(true); setNyersErr('');
+                ECHO_api.resultsRaw(cid, courseId, 'course', null)
+                  .then(r => setNyers(r))
+                  .catch(e => setNyersErr(ECHO_msg(e)))
+                  .finally(() => setNyersBusy(false));
+              }}
+              disabled={nyersBusy}
+              className={U_btnPrimary + ' py-2.5 px-4 text-sm'}>
+              <Lucide.Eye size={15} /> {nyersBusy ? 'Betöltés…' : 'Teljes, szűretlen eredmény'}
+            </button>
+
+            {nyers && (
+              <button onClick={() => setNyers(null)} className={U_btnGhost + ' py-2.5 px-4 text-sm'}>
+                <Lucide.EyeOff size={15} /> Bezárás
+              </button>
+            )}
+
+            {/* A relevancia-szűrő. Lepecsételt kampányon a szerver elutasítja —
+                ilyenkor meg sem kínáljuk, hanem megmondjuk, miért. */}
+            {szuro && szuro.zarolt ? (
+              <span className="text-[12px] text-slate-400">
+                A kampány le van pecsételve — a szűrés már nem módosítható.
+              </span>
+            ) : (
+              <label className="flex items-center gap-2 text-[13px] font-bold text-slate-600 cursor-pointer">
+                <input type="checkbox" disabled={szuroBusy}
+                  checked={!!(szuro && szuro.low_attendance_included)}
+                  onChange={(e) => {
+                    setSzuroBusy(true);
+                    ECHO_api.filtersSet(cid, e.target.checked)
+                      .then(r => {
+                        setSzuro(p => ({ ...(p || {}), low_attendance_included: !!r.low_attendance_included }));
+                        // Az eredmenyt ujra kell kerni: a szuro megvaltoztatta,
+                        // mi szamit bele — kulonben a regi szamokat mutatnank.
+                        setCres(null); setTres(null); setNyers(null);
+                        setBusy(true);
+                        Promise.all([
+                          ECHO_api.courseResults(cid, courseId).catch(() => null),
+                          ECHO_api.teacherResults(cid, courseId, null).catch(() => null),
+                        ]).then(([c, t]) => { setCres(c); setTres(t); }).finally(() => setBusy(false));
+                      })
+                      .catch(err => setNyersErr(ECHO_msg(err)))
+                      .finally(() => setSzuroBusy(false));
+                  }} />
+                A 33% alatti óralátogatású válaszok is számítsanak bele
+              </label>
+            )}
+          </div>
+
+          {nyersErr && (
+            <div className="mt-3 text-[13px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
+              {nyersErr}
+            </div>
+          )}
+
+          {nyers && <ECHO_RawResults nyers={nyers} lang={lang} />}
+        </div>
+      )}
 
       {!busy && cres && (
         <div className="space-y-6">
