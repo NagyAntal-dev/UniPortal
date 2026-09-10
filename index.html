@@ -430,7 +430,11 @@
   </footer>
 
   <!-- ===== AUTH MODAL ===== -->
-  <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" id="authModal" onclick="if(event.target===this)closeAuth()">
+  <!-- A háttérre kattintás SZÁNDÉKOSAN nem zár: a belépőűrlapba már beírt
+       adatot veszítené el egy véletlen kattintás. Bezárni az X-szel lehet
+       (a fejlécben), illetve Escape-pel — az utóbbi tudatos gesztus, és a
+       billentyűvel dolgozóknak ez az egyetlen kiútja. -->
+  <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" id="authModal">
     <div class="modal-card w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
       <div class="flex items-center justify-between px-7 pt-6">
         <div class="flex items-center gap-2">
@@ -466,10 +470,6 @@
         </div>
         <div id="loginError" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
         <button id="loginBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Sign in</button>
-        <div class="pt-4 border-t border-slate-100">
-          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Quick sign-in with a demo account</p>
-          <div class="flex flex-wrap gap-2" id="demoChips"></div>
-        </div>
       </form>
 
       <!-- REGISTER -->
@@ -607,21 +607,10 @@
       }, 5200);
     }
 
-    /* ---- Demo accounts ----
-       A jelentkező a platform elsődleges felhasználója, ezért a hallgatói
-       belépés áll az első helyen, és kiemelt (alapértelmezett) gombként
-       jelenik meg. A többi szerepkör utána, változatlan sorrendben. */
-    const DEMOACCTS = [
-      ['Student', 'ammar@test.com', true],
-      ['Admin', 'admin@uni.hu'], ['Admissions', 'admissions@uni.hu'],
-      ['Finance', 'finance@uni.hu'], ['Agent', 'agent@globalstudy.com'],
-    ];
-    const CHIP_BASE = 'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ';
-    document.getElementById('demoChips').innerHTML = DEMOACCTS.map(([label, email, primary]) => `
-      <button type="button" onclick="fillDemo('${email}')" title="${email}" class="${CHIP_BASE}${primary
-        ? 'bg-primary-600 text-white shadow-md shadow-primary-600/20 ring-2 ring-primary-200 hover:bg-primary-700'
-        : 'bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-700'}">${label}${primary ? ' <span class="font-semibold opacity-80">· default</span>' : ''}</button>`).join('');
-    function fillDemo(email){ document.getElementById('loginEmail').value = email; document.getElementById('loginPassword').value = 'Demo1234!'; }
+    /* A demó-fiókok gyorsgombjai innen KIKERÜLTEK. Ez nyilvános oldal: a
+       gombok beégetett jelszóval töltötték ki az űrlapot, tehát bárki
+       bejuthatott velük. A tesztfiókok adatai a tesztelési kézikönyvben
+       vannak, azokat kézzel kell begépelni. */
     function enterApp(){ window.location.href = 'app.html'; }
     function showErr(id, msg){ const el = document.getElementById(id); el.textContent = msg; el.classList.remove('hidden'); }
     function hideErr(id){ document.getElementById(id).classList.add('hidden'); }

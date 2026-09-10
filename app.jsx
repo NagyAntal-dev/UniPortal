@@ -10999,23 +10999,11 @@ const App: React.FC = () => {
               {authBusy ? 'Bejelentkezés…' : 'Belépés a rendszerbe'}
             </button>
           </form>
-          <div className="mt-8 pt-8 border-t border-slate-50">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Teszt fiókok · jelszó: <code className="text-primary normal-case tracking-normal">Demo1234!</code></p>
-            <div className="grid grid-cols-2 gap-2">
-              {[['ADMIN','admin@uni.hu'],['FELVÉTELI','admissions@uni.hu'],['PÉNZÜGY','finance@uni.hu'],['ÜGYNÖK','agent@globalstudy.com'],['HALLGATÓ','ammar@test.com']].map(([role, email]) => (
-                <button
-                  key={email}
-                  type="button"
-                  onClick={() => { setLoginEmail(email); setLoginPassword('Demo1234!'); }}
-                  className="text-left px-3 py-2 rounded-xl bg-slate-50 hover:bg-primary/10 transition-colors"
-                >
-                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-wider">{role}</span>
-                  <span className="block text-[11px] font-bold text-slate-600 truncate">{email}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <a href="index.html" className="block text-center mt-6 text-xs font-bold text-slate-400 hover:text-primary transition-colors">← Vissza a főoldalra</a>
+          {/* A teszt-fiókok gyorsgombjai innen KIKERÜLTEK. Ez a képernyő
+              nyilvánosan elérhető, és a gombok mellett a jelszó szövegesen is
+              ki volt írva, tehát bárki bejuthatott velük. A tesztfiókok adatai
+              a tesztelési kézikönyvben vannak, azokat kézzel kell begépelni. */}
+          <a href="index.html" className="block text-center mt-8 text-xs font-bold text-slate-400 hover:text-primary transition-colors">← Vissza a főoldalra</a>
         </div>
       </div>
     );
