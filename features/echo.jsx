@@ -1095,6 +1095,27 @@ const ECHO_CAMPAIGN_STATE = {
   published:  { label: 'Közzétéve',   tone: 'primary' },
 };
 
+/* AZ ÁLLAPOT ÉS AZ ABLAK KÉT KÜLÖN DOLOG — és ez félrevezetett már.
+   A kampány „NYITVA" állapotba kerül attól, hogy az ügyintéző megnyitja, de
+   kitölthetővé csak akkor válik, amikor elérkezik a NYITÁSI IDŐPONT. A szerver
+   ezt az is_open mezőben külön meg is mondja; eddig nem használtuk ki, ezért a
+   lista „NYITVA"-t mutatott olyan kampányra is, amelynek az ablaka még el sem
+   kezdődött — és úgy tűnt, a hallgatói oldal hibázik.
+   Visszaad: null (nincs mit hozzátenni), vagy {szoveg, tone}. */
+function ECHO_ablakAllapot(c) {
+  if (!c || c.state !== 'open' || c.is_open) return null;
+  const nyit = Date.parse(c.opens_at || '');
+  const zar  = Date.parse(c.closes_at || '');
+  const most = Date.now();
+  if (!isNaN(nyit) && most < nyit) {
+    return { szoveg: 'megnyílik: ' + ECHO_dateTime(c.opens_at), tone: 'amber' };
+  }
+  if (!isNaN(zar) && most > zar) {
+    return { szoveg: 'az ablak lejárt: ' + ECHO_dateTime(c.closes_at), tone: 'red' };
+  }
+  return { szoveg: 'az ablak nincs nyitva', tone: 'amber' };
+}
+
 function ECHO_date(s) {
   if (!s) return '—';
   try { return new Date(s).toLocaleDateString('hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
@@ -2135,7 +2156,10 @@ function ECHO_StudentView({ user }) {
 
   // A 'felbehagyott' ide tartozik: van mentett piszkozat, es a kitoltes
   // folytathato — ez a legsurgetobb teendo a listaban.
-  const open   = rows.filter(c => !localDone[key(c)] &&
+  // Ugyanaz a három jelzés, mint a hírfolyam kártyáján (lásd ott a
+  // magyarázatot) — a két felület ne mondjon mást ugyanarról a kérdőívről.
+  const open   = rows.filter(c => !localDone[key(c)] && !c.submitted &&
+    !ECHO_masolatGet(c.campaign_id, c.course_id) &&
     (c.allapot === 'kitoltheto' || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott'));
   const goals  = rows.filter(c => c.allapot === 'celkituzes');
   const rest   = rows.filter(c => open.indexOf(c) < 0 && goals.indexOf(c) < 0);
@@ -2225,6 +2249,13 @@ function ECHO_StudentView({ user }) {
           {!canFill && !canGoals && !masolat && (
             <div className="flex-1 text-xs font-bold text-slate-400 py-3">
               {(ECHO_STATE[allapot] || ECHO_STATE.nem_nyitott).hint}
+              {/* „A kampány még nem indult." önmagában nem mond semmit arról,
+                  MIKOR indul — a hallgató nem tudja, mikor nézzen vissza. */}
+              {allapot === 'nem_nyitott' && c.opens_at && (
+                <span className="block mt-1 text-amber-600">
+                  Megnyílik: {ECHO_dateTime(c.opens_at)}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -3485,7 +3516,17 @@ function ECHO_CampaignsPanel({ user }) {
                         <p className="font-black text-slate-900 text-sm"><ECHO_Src>{c.name}</ECHO_Src></p>
                         <p className="text-[11px] font-bold text-slate-400 mt-0.5"><ECHO_Src>{c.code} · {c.term}</ECHO_Src></p>
                       </td>
-                      <td className="px-6 py-4"><UBadge tone={st.tone}>{st.label}</UBadge></td>
+                      <td className="px-6 py-4">
+                        <UBadge tone={st.tone}>{st.label}</UBadge>
+                        {/* Ha az állapot NYITVA, de az ablak nem tart most, azt
+                            ki kell mondani — enélkül a sor azt sugallja, hogy a
+                            hallgatók már kitölthetik. */}
+                        {(() => { const a = ECHO_ablakAllapot(c); return a ? (
+                          <span className={'block mt-1 text-[10px] font-bold '
+                            + (a.tone === 'red' ? 'text-red-600' : 'text-amber-600')}>
+                            {a.szoveg}
+                          </span>) : null; })()}
+                      </td>
                       <td className="px-6 py-4 text-xs font-bold text-slate-500 whitespace-nowrap">
                         {ECHO_date(c.opens_at)} — {ECHO_date(c.closes_at)}
                       </td>
@@ -3540,6 +3581,14 @@ function ECHO_CampaignsPanel({ user }) {
                     <UBadge tone={(ECHO_CAMPAIGN_STATE[sel.state] || {}).tone || 'slate'}>
                       {(ECHO_CAMPAIGN_STATE[sel.state] || {}).label || sel.state}
                     </UBadge>
+                    {/* Az ablak állapota az ÁLLAPOT MELLETT, mert a kettő
+                        nem ugyanaz: a megnyitás az állapotot váltja, a
+                        kitölthetőség viszont a nyitási időponttól függ. */}
+                    {(() => { const a = ECHO_ablakAllapot(sel); return a ? (
+                      <span className={'text-[10px] font-black tracking-wider flex items-center gap-1 '
+                        + (a.tone === 'red' ? 'text-red-600' : 'text-amber-600')}>
+                        <Lucide.Clock size={11} /> {a.szoveg}
+                      </span>) : null; })()}
                     {detail && detail.sealed_at && (
                       <span className="text-[10px] font-black text-violet-500 tracking-wider flex items-center gap-1">
                         <Lucide.Lock size={11} /> lepecsételve {ECHO_date(detail.sealed_at)}

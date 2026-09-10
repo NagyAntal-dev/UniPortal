@@ -279,8 +279,27 @@ function FEED_EchoTeendok({ onNavigate }) {
 
   if (!sor) return null;
 
+  /* MI TŰNIK EL A KÁRTYÁRÓL
+       A beküldés után a kérdőívnek azonnal el kell tűnnie a teendők közül.
+       Három jelzésre támaszkodunk, mert egyik sem elég önmagában:
+         1. c.submitted — a szerver részvételi naplója. Ez az elsődleges.
+         2. az allapot már nem kitölthető ('kitoltve', 'lezart', stb.).
+         3. van SAJÁT MÁSOLAT ebben a böngészőben — vagyis innen küldték be.
+            Ez fogja meg azt a rést, amikor a beküldés megtörtént, de a
+            részvételi napló frissítése még nem látszik a lekérdezésben:
+            ilyenkor az allapot még 'folyamatban' lenne, és a kártya
+            visszahozná egy már kitöltött kérdőívet. */
+  const bekuldve = (c) => {
+    if (c.submitted) return true;
+    try {
+      if (typeof ECHO_masolatGet === 'function'
+          && ECHO_masolatGet(c.campaign_id, c.course_id)) return true;
+    } catch (e) { /* a másolat hiánya nem hiba */ }
+    return false;
+  };
+
   const teendo = sor
-    .filter(c => c.is_open &&
+    .filter(c => c.is_open && !bekuldve(c) &&
       (c.allapot === 'kitoltheto' || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott'))
     .sort((a, b) => {
       // Ugyanaz a rangsor, mint a Kurzusértékelés listáján: elkezdett előbb,

@@ -11970,6 +11970,9 @@ Object.assign(HU_EN, {
 });
 HU_EN_PHRASES.push(
   [/· elkezdte /g, '· started '],
+  [/\bmegnyílik: /g, 'opens: '],
+  [/\bMegnyílik: /g, 'Opens: '],
+  [/\baz ablak lejárt: /g, 'the window has closed: '],
   [/^(\d+) kérdőív vár rád$/g, '$1 questionnaires are waiting for you'],
   [/(\d+) nap múlva zár/g, 'closes in $1 days'],
   [/\bma zár\b/g, 'closes today'],
@@ -12080,6 +12083,7 @@ Object.assign(HU_EN, {
   '1–3 saját cél és 1–3 oktatói elvárás. Csak Te látod.':
     '1–3 goals of your own and 1–3 expectations of the teacher. Only you can see them.',
   'Lezárt és kész kurzusok':'Closed and completed courses',
+  'az ablak nincs nyitva':'the window is not open',
   'Most nincs értékelhető kurzusod':'You have no course to evaluate right now',
   'Amikor egy kampány megnyílik, a véleményezhető kurzusaid itt jelennek meg.':
     'When a campaign opens, the courses you can evaluate will appear here.',
