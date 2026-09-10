@@ -248,6 +248,120 @@ function FeedCard({ post, user, rsvps, tix, onChange, onDelete }) {
 }
 
 /* ---------- main view ---------- */
+/* ------------------------------------------------------------
+   Kitöltendő kérdőívek a hírfolyam tetején.
+
+   MIÉRT ITT
+     A kérdőívre a hallgatónak határideje van, de a Kurzusértékelés menüpontba
+     nem feltétlenül néz be. A hírfolyam az, amit belépéskor lát — a teendő
+     ezért ide kerül, és a gomb NEM a listáig visz, hanem egyenesen a kitöltőt
+     nyitja (az átadás az ECHO_ATADAS_KULCS sessionStorage-kulcson megy).
+
+   HA NINCS TEENDŐ, NEM RENDERELÜNK SEMMIT — üres doboz csak zajt csinálna.
+   ------------------------------------------------------------ */
+function FEED_EchoTeendok({ onNavigate }) {
+  const [sor, setSor] = useState(null);
+
+  useEffect(() => {
+    let el = true;
+    (async () => {
+      try {
+        // Az ECHO modul a csomagban ELŐBB áll, tehát az ECHO_api itt már él.
+        // A védelem mégis kell: ha valaki átrendezi a sorrendet, a hírfolyam
+        // ne fehér képernyővel bukjon el egy nem létező néven.
+        if (typeof ECHO_api === 'undefined' || !ECHO_api.myCourses) { if (el) setSor([]); return; }
+        const d = await ECHO_api.myCourses();
+        if (el) setSor(Array.isArray(d) ? d : []);
+      } catch (e) { if (el) setSor([]); }
+    })();
+    return () => { el = false; };
+  }, []);
+
+  if (!sor) return null;
+
+  const teendo = sor
+    .filter(c => c.is_open &&
+      (c.allapot === 'kitoltheto' || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott'))
+    .sort((a, b) => {
+      // Ugyanaz a rangsor, mint a Kurzusértékelés listáján: elkezdett előbb,
+      // aztán a közelebbi határidő. A kettő ne mondjon mást ugyanarról.
+      const s = (x) => (x.has_draft || x.allapot === 'folyamatban' || x.allapot === 'felbehagyott') ? 0 : 1;
+      const h = (x) => { const t = Date.parse(x.closes_at || ''); return isNaN(t) ? Number.MAX_SAFE_INTEGER : t; };
+      return (s(a) - s(b)) || (h(a) - h(b));
+    });
+
+  if (teendo.length === 0) return null;
+
+  const indit = (c) => {
+    try {
+      sessionStorage.setItem('echo_megnyitando',
+        JSON.stringify({ campaign_id: c.campaign_id, course_id: c.course_id }));
+    } catch (e) { /* privát ablakban is működjön — ilyenkor csak a listáig visz */ }
+    onNavigate && onNavigate(AppView.ECHO_STUDENT);
+  };
+
+  const napokMulva = (c) => {
+    const t = Date.parse(c.closes_at || '');
+    if (isNaN(t)) return null;
+    return Math.ceil((t - Date.now()) / 86400000);
+  };
+
+  return (
+    <div className="mb-6 bg-white rounded-3xl border border-primary/20 overflow-hidden shadow-sm">
+      <div className="flex items-start gap-3 px-5 sm:px-6 py-4 bg-primary/5 border-b border-primary/10">
+        <span className="w-9 h-9 rounded-2xl bg-primary/15 text-primary flex items-center justify-center flex-none">
+          <Lucide.ClipboardList size={18} />
+        </span>
+        <div>
+          <h3 className="text-[15px] font-black text-slate-900">
+            {teendo.length === 1 ? 'Egy kérdőív vár rád' : teendo.length + ' kérdőív vár rád'}
+          </h3>
+          <p className="text-[12px] text-slate-500 mt-0.5">
+            Oktatói munka véleményezése · a kitöltés névtelen, a válaszaid nem köthetők vissza hozzád
+          </p>
+        </div>
+      </div>
+
+      <div className="divide-y divide-slate-50">
+        {teendo.slice(0, 5).map(c => {
+          const nap = napokMulva(c);
+          const elkezdte = c.has_draft || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott';
+          return (
+            <div key={c.campaign_id + '|' + c.course_id}
+              className="flex items-center justify-between gap-4 px-5 sm:px-6 py-3.5 flex-wrap">
+              <div className="min-w-0">
+                <span className="block text-sm font-bold text-slate-800 truncate">
+                  {c.course_name}
+                </span>
+                <span className="block text-[11px] text-slate-400 mt-0.5">
+                  {c.campaign_name}
+                  {nap != null && nap >= 0 && (
+                    <span className={nap <= 3 ? ' text-amber-600 font-bold' : ''}>
+                      {' · '}{nap === 0 ? 'ma zár' : nap + ' nap múlva zár'}
+                    </span>
+                  )}
+                </span>
+              </div>
+              <button onClick={() => indit(c)}
+                className={U_btnPrimary + ' flex-none py-2 px-4 text-[13px]'}>
+                {elkezdte ? 'Folytatás' : 'Kitöltés'}
+                <Lucide.ArrowRight size={15} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {teendo.length > 5 && (
+        <button onClick={() => onNavigate && onNavigate(AppView.ECHO_STUDENT)}
+          className="w-full px-6 py-3 text-[12px] font-bold text-primary hover:bg-primary/5 transition-colors border-t border-slate-50">
+          + még {teendo.length - 5} kérdőív — mutasd mind
+        </button>
+      )}
+    </div>
+  );
+}
+
 const FeedView = ({ user, onNavigate }) => {
   const [posts, setPosts] = useState(null);
   const [rsvps, setRsvps] = useState([]);
@@ -279,6 +393,10 @@ const FeedView = ({ user, onNavigate }) => {
         </div>
         {isAdmin(user) && <button className={U_btnPrimary} onClick={() => setComposer(true)}><Lucide.Plus size={17} /> Új bejegyzés</button>}
       </div>
+
+      {/* Kitöltendő kérdőívek — a hírfolyam bejegyzései ELŐTT, mert ez teendő,
+          nem hír. Ha nincs, a komponens nem renderel semmit. */}
+      <FEED_EchoTeendok onNavigate={onNavigate} />
 
       {/* filters */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-6 -mx-1 px-1 custom-scrollbar">

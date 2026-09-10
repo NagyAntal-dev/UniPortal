@@ -11970,6 +11970,11 @@ Object.assign(HU_EN, {
 });
 HU_EN_PHRASES.push(
   [/· elkezdte /g, '· started '],
+  [/^(\d+) kérdőív vár rád$/g, '$1 questionnaires are waiting for you'],
+  [/(\d+) nap múlva zár/g, 'closes in $1 days'],
+  [/\bma zár\b/g, 'closes today'],
+  [/\+ még (\d+) kérdőív — mutasd mind/g, '+ $1 more — show all'],
+  [/·\s*(\d+)\s*fő\b/g, '· $1 students'],
 );
 
 /* Az ECHO szerepkör-katalógus címkéi és súgói (ECHO_ROLE_INFO). A választóban
@@ -12035,8 +12040,49 @@ Object.assign(HU_EN, {
     'Nothing is attached to this teacher — they can be deleted safely.',
   'Ez adja meg, hogy az oktató belépve lássa a saját eredményeit. Kötés nélkül az „Oktatói eredmények" képernyő üresen fogadja.':
     'This is what lets the teacher see their own results after signing in. Without a link the “Teaching results” screen is empty for them.',
-  'Ez alapján kerül be a kampányok jogosultjai közé.':
-    'This is what puts them among the eligible teachers of a campaign.',
+  'Ez alapján kerül be a kampányok jogosultjai közé. Nyisd le a kurzust a hallgatói névsorért, vagy a ceruzával írd át a részarányt és a szerepet.':
+    'This is what puts them among the eligible teachers of a campaign. Expand a course for its student list, or use the pencil to change the share and the role.',
+  'A kurzus hallgatói':'Students of the course',
+  'Ők értékelik ezt az oktatót ezen a kurzuson.':
+    'These are the students who evaluate this teacher on this course.',
+  'Keresés a névsorban…':'Search the list…',
+  'Névsor betöltése…':'Loading the list…',
+  'Nincs találat a keresésre.':'No match for the search.',
+  'Erre a kurzusra egyetlen hallgató sincs felvéve.':'No student is enrolled on this course.',
+  'Hallgató':'Student',
+  'aktív':'active',
+  'Részarány és szerep módosítása':'Change the share and the role',
+
+  /* Hallgatói oldal: hírfolyam-teendők és a saját válaszmásolat. */
+  'Egy kérdőív vár rád':'One questionnaire is waiting for you',
+  'Oktatói munka véleményezése · a kitöltés névtelen, a válaszaid nem köthetők vissza hozzád':
+    'Student evaluation of teaching · filling it in is anonymous, your answers cannot be traced back to you',
+  'Kitöltés':'Fill in',
+  'Folytatás':'Continue',
+  'A válaszaim':'My answers',
+  'Ez a másolat csak ezen a böngészőn van meg.':'This copy exists only in this browser.',
+  'A beküldött értékelés névtelen: a rendszer nem tárolja, ki mit válaszolt, ezért a válaszaidat nem tudja visszaadni.':
+    'The submitted evaluation is anonymous: the system does not store who answered what, so it cannot give your answers back to you.',
+  'Ezt a másolatot a beküldéskor a saját gépeden mentettük el. Másik gépen, másik böngészőben, vagy a böngészőadatok törlése után nem lesz meg.':
+    'This copy was saved on your own device when you submitted. It will not be there on another device, in another browser, or after you clear your browser data.',
+  'A másolat üres.':'The copy is empty.',
+  'Mentve:':'Saved:',
+  'Bezárás':'Close',
+
+  /* A Kurzusértékelés képernyő feliratai — ezek korábban is fordítatlanok
+     voltak, csak most kerültek szem elé. */
+  'Oktatói munka hallgatói véleményezése · 28/2023. szenátusi határozat':
+    'Student evaluation of teaching · Senate decision 28/2023',
+  'Kitölthető most':'Open for you now',
+  'A félév végi értékelés. Névtelen — a válaszaid nem köthetők vissza hozzád.':
+    'The end-of-term evaluation. Anonymous — your answers cannot be traced back to you.',
+  'Félév eleji célmeghatározás':'Goal setting at the start of term',
+  '1–3 saját cél és 1–3 oktatói elvárás. Csak Te látod.':
+    '1–3 goals of your own and 1–3 expectations of the teacher. Only you can see them.',
+  'Lezárt és kész kurzusok':'Closed and completed courses',
+  'Most nincs értékelhető kurzusod':'You have no course to evaluate right now',
+  'Amikor egy kampány megnyílik, a véleményezhető kurzusaid itt jelennek meg.':
+    'When a campaign opens, the courses you can evaluate will appear here.',
   'Fiók':'Account',
   'Fiók összekötése':'Link an account',
   'Fiók-kötés':'Account link',

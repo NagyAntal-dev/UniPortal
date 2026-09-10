@@ -79,6 +79,24 @@ function TCH_Picker({ kind, teacherId, value, label, hint, placeholder, onPick, 
   const [opts, setOpts] = useState([]);
   const [err, setErr]   = useState('');
   const [tolt, setTolt] = useState(false);
+  const dobozRef = useRef(null);
+
+  /* A legördülő abszolút pozícionált, tehát RÁFEKSZIK az alatta lévő mezőkre
+     és gombokra. Ha csak a saját gombjával lehetne becsukni, a felhasználó
+     mellékattintva egy TAKART elemet célozna meg — például a „Hozzárendelés"
+     gombot, miközben azt hiszi, csak elveti a listát. Ezért kívülre kattintva
+     és Escape-re is becsukjuk. */
+  useEffect(() => {
+    if (!nyit) return;
+    const kivul = (e) => { if (dobozRef.current && !dobozRef.current.contains(e.target)) setNyit(false); };
+    const esc   = (e) => { if (e.key === 'Escape') setNyit(false); };
+    document.addEventListener('mousedown', kivul);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', kivul);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [nyit]);
 
   useEffect(() => {
     if (!nyit) return;
@@ -94,7 +112,7 @@ function TCH_Picker({ kind, teacherId, value, label, hint, placeholder, onPick, 
   }, [nyit, q, kind, teacherId]);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={dobozRef}>
       <UField label={label} hint={hint}>
         <div className="flex gap-2">
           <button
@@ -189,8 +207,22 @@ function TCH_Form({ open, oktato, onClose, onSaved }) {
     finally { setBusy(false); }
   };
 
+  /* A közös UModal a HÁTTÉRRE kattintva is zár. Egy kitöltött űrlapnál ez egy
+     véletlen kattintással mindent elvisz, nyom nélkül — ugyanaz a panasz, ami
+     a belépőablaknál is jött. Itt nem az egész alkalmazást írjuk át: ha van
+     beírt adat, rákérdezünk. */
+  const piszkos = () => !!(
+    (f.code && f.code.trim()) || (f.name && f.name.trim()) ||
+    (f.title && f.title.trim()) || (f.email && f.email.trim()) || f.org_unit_id
+  );
+  const zarhat = () => {
+    if (busy) return;
+    if (piszkos() && !window.confirm('A beírt adatok elvesznek. Biztosan bezárod?')) return;
+    onClose();
+  };
+
   return (
-    <UModal open={open} onClose={busy ? () => {} : onClose} max="max-w-2xl"
+    <UModal open={open} onClose={zarhat} max="max-w-2xl"
       icon={<Lucide.GraduationCap size={20} />}
       title={uj ? 'Új oktató' : 'Oktató szerkesztése'}
       subtitle={uj ? 'A kód és a név kötelező — a kód később is módosítható, de egyedi'
@@ -235,7 +267,7 @@ function TCH_Form({ open, oktato, onClose, onSaved }) {
         )}
 
         <div className="flex justify-end gap-2 pt-2">
-          <button className={U_btnGhost} onClick={onClose} disabled={busy}>Mégse</button>
+          <button className={U_btnGhost} onClick={zarhat} disabled={busy}>Mégse</button>
           <button className={U_btnPrimary} onClick={ment} disabled={!ok}>
             {busy ? 'Mentés…' : (uj ? 'Oktató létrehozása' : 'Mentés')}
           </button>
@@ -271,8 +303,14 @@ function TCH_CourseAdd({ open, teacherId, onClose, onDone }) {
     finally { setBusy(false); }
   };
 
+  const zarhatKurzus = () => {
+    if (busy) return;
+    if (kurzus && !window.confirm('A kiválasztott kurzus elvész. Biztosan bezárod?')) return;
+    onClose();
+  };
+
   return (
-    <UModal open={open} onClose={busy ? () => {} : onClose} max="max-w-xl"
+    <UModal open={open} onClose={zarhatKurzus} max="max-w-xl"
       icon={<Lucide.Link2 size={20} />} title="Kurzus hozzárendelése"
       subtitle="A részarány dönti el, bekerül-e az oktató a kampány jogosultjai közé">
       <div className="space-y-4">
@@ -308,7 +346,7 @@ function TCH_CourseAdd({ open, teacherId, onClose, onDone }) {
         )}
 
         <div className="flex justify-end gap-2 pt-1">
-          <button className={U_btnGhost} onClick={onClose} disabled={busy}>Mégse</button>
+          <button className={U_btnGhost} onClick={zarhatKurzus} disabled={busy}>Mégse</button>
           <button className={U_btnPrimary} onClick={ment} disabled={!kurzus || busy}>
             {busy ? 'Mentés…' : 'Hozzárendelés'}
           </button>
@@ -388,6 +426,246 @@ function TCH_LinkForm({ open, teacher, onClose, onDone }) {
 }
 
 /* ------------------------------------------------------------
+   Egy kurzus sora az oktató lapján — helyben szerkeszthető, és lenyitva
+   megmutatja, kik járnak rá.
+
+   MIÉRT ITT VAN A NÉVSOR
+     A kurzus hallgatói MINDEN oktatójához tartoznak: a részarány nem osztja
+     szét a névsort, csak azt mondja meg, ki mekkora részt visz. Ezért a
+     „hozzá tartozó diákok" a kurzus teljes névsora — pontosan azt hívjuk le,
+     amit a kurzusnyilvántartás is (echo_course_students).
+   ------------------------------------------------------------ */
+function TCH_CourseRow({ k, teacherId, busy, onChanged, onRemove }) {
+  const [nyit, setNyit]     = useState(false);
+  const [szerk, setSzerk]   = useState(false);
+  const [share, setShare]   = useState(k.share_pct == null ? '' : String(Number(k.share_pct)));
+  const [szerep, setSzerep] = useState(k.role || 'oktato');
+  const [ment, setMent]     = useState(false);
+  const [err, setErr]       = useState('');
+
+  const [diak, setDiak]     = useState(null);
+  const [dTolt, setDTolt]   = useState(false);
+  const [dErr, setDErr]     = useState('');
+  const [dQ, setDQ]         = useState('');
+
+  /* A SZERKESZTŐ MEZŐI KÖVESSÉK A FRISS ADATOT. A useState kezdőértéke csak az
+     ELSŐ rendereléskor számít: ha a szülő újratölt (mentés, kurzusváltozás),
+     vagy ugyanaz a kurzus egy MÁSIK oktató lapján jelenik meg, a mezőkben a
+     régi részarány és szerep maradna — és mentéskor AZT írnánk rá a friss
+     rekordra. Amíg a sor szerkesztés alatt van, nem nyúlunk hozzá: a felhasználó
+     félkész beírását nem szabad kirántani alóla. */
+  useEffect(() => {
+    if (szerk) return;
+    setShare(k.share_pct == null ? '' : String(Number(k.share_pct)));
+    setSzerep(k.role || 'oktato');
+  }, [k.course_id, k.share_pct, k.role, teacherId, szerk]);
+
+  // A névsort CSAK lenyitáskor kérjük le — egy oktatónak akár 14 kurzusa is
+  // lehet, azokat előre betölteni felesleges kör lenne.
+  useEffect(() => {
+    if (!nyit) return;
+    let el = true;
+    const t = setTimeout(() => {
+      setDTolt(true);
+      TCH_rpc('echo_course_students', { p_course: k.course_id, p_q: dQ || null, p_limit: 500 })
+        .then(r => { if (el) { setDiak(Array.isArray(r) ? r : []); setDErr(''); } })
+        .catch(e => { if (el) { setDiak([]); setDErr(TCH_msg(e)); } })
+        .finally(() => { if (el) setDTolt(false); });
+    }, dQ ? 250 : 0);
+    return () => { el = false; clearTimeout(t); };
+  }, [nyit, dQ, k.course_id]);
+
+  const sz = TCH_SZEREP[k.role] || { cimke: k.role || '—', tone: 'slate' };
+
+  const mentes = async () => {
+    /* AZ ÜRES MEZŐ NEM 0 ÉS NEM 100. A szerver oldalán a beszúrás
+       coalesce(p_share, 100)-at ír, az ütközés-ág pedig ezt az értéket veszi
+       át — vagyis egy null CSENDBEN 100%-ra állítaná a részarányt. Egy 15%-os
+       oktató így hirtelen 100%-ossá válna, és bekerülne olyan kampányba,
+       ahonnan a küszöb szándékosan kihagyta. Ezért az üres mezőt „ne
+       változtass"-ként kezeljük: a meglévő értéket küldjük vissza. */
+    const eredeti = k.share_pct == null ? null : Number(k.share_pct);
+    const kuldott = share === '' ? eredeti : Number(share);
+    if (share !== '' && (isNaN(kuldott) || kuldott < 0 || kuldott > 100)) {
+      setErr('A részarány 0 és 100 közötti szám lehet.');
+      return;
+    }
+    setMent(true); setErr('');
+    try {
+      await TCH_api.courseSet(teacherId, k.course_id, kuldott, szerep, false);
+      setSzerk(false);
+      onChanged && onChanged();
+    } catch (e) { setErr(TCH_msg(e)); }
+    finally { setMent(false); }
+  };
+
+  const megse = () => {
+    setShare(k.share_pct == null ? '' : String(Number(k.share_pct)));
+    setSzerep(k.role || 'oktato');
+    setSzerk(false); setErr('');
+  };
+
+  return (
+    <>
+      <tr className={'border-b border-slate-50 ' + (nyit ? 'bg-slate-50/70' : '')}>
+        <td className="px-6 py-3">
+          <button type="button" onClick={() => setNyit(v => !v)}
+            className="flex items-start gap-2 text-left group">
+            <Lucide.ChevronRight size={15}
+              className={'mt-0.5 flex-none text-slate-400 transition-transform '
+                         + (nyit ? 'rotate-90' : '')} />
+            <span>
+              <span className="block font-semibold text-slate-700 group-hover:text-primary transition-colors">
+                {k.name}
+              </span>
+              <span className="block text-[11px] text-slate-400">{k.code}</span>
+            </span>
+          </button>
+        </td>
+        <td className="px-6 py-3 text-slate-500">{k.term}</td>
+
+        <td className="px-6 py-3">
+          {szerk ? (
+            <select className={U_input + ' py-1.5 text-[13px]'} value={szerep}
+              onChange={e => setSzerep(e.target.value)} disabled={ment || busy}>
+              {/* Ha a rekordban a háromnál több szerep van (külső importból
+                  jöhet ilyen), a SAJÁTJÁT is felkínáljuk — különben a mentés
+                  csendben átírná valami másra, vagy a szerver visszadobná. */}
+              {(Object.keys(TCH_SZEREP).indexOf(szerep) < 0 && szerep
+                ? [szerep].concat(Object.keys(TCH_SZEREP))
+                : Object.keys(TCH_SZEREP)).map(x => (
+                <option key={x} value={x}>{(TCH_SZEREP[x] && TCH_SZEREP[x].cimke) || x}</option>
+              ))}
+            </select>
+          ) : <UBadge tone={sz.tone}>{sz.cimke}</UBadge>}
+        </td>
+
+        <td className="px-6 py-3">
+          {szerk ? (
+            <input type="number" min="0" max="100" value={share} disabled={ment || busy}
+              onChange={e => setShare(e.target.value)}
+              className={U_input + ' py-1.5 text-[13px] w-24'} />
+          ) : (
+            <span className="text-slate-600 font-semibold">
+              {k.share_pct == null ? '—' : Number(k.share_pct) + '%'}
+            </span>
+          )}
+        </td>
+
+        <td className="px-6 py-3">
+          <div className="flex items-center justify-end gap-1.5">
+            {szerk ? (
+              <>
+                <button onClick={mentes} disabled={ment || busy}
+                  className="px-2.5 py-1.5 rounded-lg bg-primary text-white text-[12px] font-bold hover:bg-primary/90 disabled:opacity-50">
+                  {ment ? 'Mentés…' : 'Mentés'}
+                </button>
+                <button onClick={megse} disabled={ment || busy}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[12px] font-bold hover:bg-slate-200 disabled:opacity-50">
+                  Mégse
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setSzerk(true)} disabled={busy}
+                  title="Részarány és szerep módosítása"
+                  className="text-slate-400 hover:text-primary transition-colors disabled:opacity-40 p-1">
+                  <Lucide.Pencil size={15} />
+                </button>
+                <button onClick={() => onRemove(k.course_id)} disabled={busy}
+                  title="Levétel a kurzusról"
+                  className="text-slate-400 hover:text-red-600 transition-colors disabled:opacity-40 p-1">
+                  <Lucide.Trash2 size={15} />
+                </button>
+              </>
+            )}
+          </div>
+        </td>
+      </tr>
+
+      {err && (
+        <tr className="border-b border-slate-50">
+          <td colSpan={5} className="px-6 pb-3">
+            <div className="text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+              {err}
+            </div>
+          </td>
+        </tr>
+      )}
+
+      {nyit && (
+        <tr className="border-b border-slate-100 bg-slate-50/70">
+          <td colSpan={5} className="px-6 pb-5 pt-1">
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
+                <div>
+                  <span className="text-[12px] font-black text-slate-700">
+                    A kurzus hallgatói
+                    {/* Hibánál NEM írunk létszámot: a „0 fő" azt állítaná, hogy
+                        a kurzuson nincs hallgató, holott csak a lekérés bukott.
+                        A 500 a szerverhívás korlátja — ha pont annyi jött, azt
+                        megmondjuk, nehogy a szám döntési alapnak látsszon. */}
+                    {!dErr && diak && (
+                      <span className="text-slate-400">
+                        {' · '}{diak.length >= 500 ? 'az első 500' : diak.length + ' fő'}
+                      </span>
+                    )}
+                  </span>
+                  <span className="block text-[11px] text-slate-400">
+                    Ők értékelik ezt az oktatót ezen a kurzuson.
+                  </span>
+                </div>
+                <input value={dQ} onChange={e => setDQ(e.target.value)}
+                  placeholder="Keresés a névsorban…"
+                  className="px-3 py-1.5 text-[12px] bg-slate-50 border border-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 w-56" />
+              </div>
+
+              {dTolt && !diak && <div className="px-4 py-4 text-[12px] text-slate-400">Névsor betöltése…</div>}
+              {dErr && <div className="px-4 py-4 text-[12px] text-red-600">{dErr}</div>}
+              {diak && diak.length === 0 && !dTolt && !dErr && (
+                <div className="px-4 py-5 text-[12px] text-slate-400">
+                  {dQ ? 'Nincs találat a keresésre.' : 'Erre a kurzusra egyetlen hallgató sincs felvéve.'}
+                </div>
+              )}
+
+              {diak && diak.length > 0 && (
+                <div className="max-h-80 overflow-y-auto">
+                  <table className="w-full text-[13px]">
+                    <thead className="sticky top-0 bg-white">
+                      <tr className="text-left text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                        <th className="px-4 py-2">Hallgató</th>
+                        <th className="px-4 py-2">Félév</th>
+                        <th className="px-4 py-2">Állapot</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diak.map((d, i) => (
+                        <tr key={(d.profile_id || '') + i} className="border-b border-slate-50 last:border-0">
+                          <td className="px-4 py-2">
+                            <span className="block font-semibold text-slate-700">{d.nev}</span>
+                            <span className="block text-[11px] text-slate-400">{d.email}</span>
+                          </td>
+                          <td className="px-4 py-2 text-slate-500">{d.term}</td>
+                          <td className="px-4 py-2">
+                            <UBadge tone={d.status === 'active' ? 'green' : 'slate'}>
+                              {d.status === 'active' ? 'aktív' : (d.status || '—')}
+                            </UBadge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------
    Egy oktató lapja
    ------------------------------------------------------------ */
 function TCH_Detail({ id, user, onChanged, onDeleted }) {
@@ -400,6 +678,9 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
   const [uzenet, setUzenet] = useState('');
   const [busy, setBusy]     = useState(false);
 
+  /* Helyben frissítés (mentés, kurzusváltozás, fiók-kötés után). A `d`-t
+     SZÁNDÉKOSAN nem nullázza: ilyenkor ugyanarról az oktatóról van szó, és
+     nem akarjuk, hogy a lap villanjon egyet. */
   const tolts = () => {
     setTolt(true);
     TCH_api.get(id)
@@ -407,7 +688,27 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
       .catch(e => setErr(TCH_msg(e)))
       .finally(() => setTolt(false));
   };
-  useEffect(() => { if (id) tolts(); }, [id]);
+
+  /* OKTATÓVÁLTÁS — ez MÁS, mint a helyben frissítés, és korábban nem volt az.
+     A hiba, amit javít: a `d` a betöltés alatt (és hibás betöltésnél VÉGLEG) az
+     ELŐZŐ oktató rekordja maradt, miközben a lista már a másikat jelölte. A lap
+     minden gombja `d.id`-re dolgozik, tehát az „Inaktiválás" és a „Végleges
+     törlés" a rossz oktatóra futott volna — a törlés visszafordíthatatlanul.
+     Két őr kell hozzá:
+       1. a `d` azonnali nullázása, hogy a régi adat ne látszódjon tovább;
+       2. elavulás-jelző, mert két gyors kattintásnál a válaszok fordított
+          sorrendben is visszaérhetnek, és a régi kérés felülírná az újat.
+     A `key={valasztott}` a hívó oldalon ugyanezt erősíti meg. */
+  useEffect(() => {
+    if (!id) return;
+    let el = true;
+    setD(null); setErr(''); setUzenet(''); setTolt(true);
+    TCH_api.get(id)
+      .then(r => { if (el) { setD(r); setErr(''); } })
+      .catch(e => { if (el) setErr(TCH_msg(e)); })
+      .finally(() => { if (el) setTolt(false); });
+    return () => { el = false; };
+  }, [id]);
 
   if (tolt && !d) return <div className="p-8 text-sm text-slate-400">Betöltés…</div>;
   if (err && !d)  return <div className="p-8 text-sm text-red-600">{err}</div>;
@@ -523,9 +824,20 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
               </div>
             )}
           </div>
-          <button className={U_btnGhost} onClick={() => setLink(true)} disabled={busy}>
-            <Lucide.UserCheck size={15} /> {d.fiok ? 'Kötés bontása' : 'Összeköt'}
-          </button>
+          {/* A fiók-kötés szerveroldali feltétele az echo.can_grant(): admin
+              vagy ECHO SYSADMIN. Egy ügyintézőnek (ADMISSIONS/FINANCE) a gomb
+              végigvezetné a keresésen, és csak a végén közölné, hogy nem
+              szabad — ezért nála meg sem jelenik, hanem megmondjuk, kitől
+              kérje. */}
+          {['SUPERADMIN','ADMIN'].includes(user.role) ? (
+            <button className={U_btnGhost} onClick={() => setLink(true)} disabled={busy}>
+              <Lucide.UserCheck size={15} /> {d.fiok ? 'Kötés bontása' : 'Összeköt'}
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-400 max-w-[190px] text-right">
+              A fiók-kötést rendszergazda végzi.
+            </span>
+          )}
         </div>
       </div>
 
@@ -537,13 +849,23 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
               Kurzusai <span className="text-slate-400 font-bold">({(d.kurzusok || []).length})</span>
             </h4>
             <p className="text-[12px] text-slate-500 mt-0.5">
-              Ez alapján kerül be a kampányok jogosultjai közé.
+              Ez alapján kerül be a kampányok jogosultjai közé. Nyisd le a kurzust
+              a hallgatói névsorért, vagy a ceruzával írd át a részarányt és a szerepet.
             </p>
           </div>
           <button className={U_btnGhost} onClick={() => setKurzus(true)} disabled={busy}>
             <Lucide.Plus size={15} /> Kurzus hozzárendelése
           </button>
         </div>
+
+        {/* A levétel hibája ITT kell hogy megjelenjen, nem a lap tetején: a
+            táblázat több száz pixerrel lejjebb van, és a felhasználó azt látná,
+            hogy a kuka gomb „nem csinál semmit". */}
+        {err && (
+          <div className="mx-6 mt-4 text-[13px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
+            {err}
+          </div>
+        )}
 
         {(d.kurzusok || []).length === 0 ? (
           <UEmpty icon={<Lucide.BookOpen size={26} />} title="Nincs kurzusa"
@@ -561,30 +883,10 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
                 </tr>
               </thead>
               <tbody>
-                {d.kurzusok.map(k => {
-                  const sz = TCH_SZEREP[k.role] || { cimke: k.role || '—', tone: 'slate' };
-                  return (
-                    <tr key={k.course_id} className="border-b border-slate-50 last:border-0">
-                      <td className="px-6 py-3">
-                        <span className="block font-semibold text-slate-700">{k.name}</span>
-                        <span className="block text-[11px] text-slate-400">{k.code}</span>
-                      </td>
-                      <td className="px-6 py-3 text-slate-500">{k.term}</td>
-                      <td className="px-6 py-3"><UBadge tone={sz.tone}>{sz.cimke}</UBadge></td>
-                      <td className="px-6 py-3 text-slate-600 font-semibold">
-                        {k.share_pct == null ? '—' : Number(k.share_pct) + '%'}
-                      </td>
-                      <td className="px-6 py-3 text-right">
-                        <button
-                          onClick={() => kurzusLe(k.course_id)} disabled={busy}
-                          title="Levétel a kurzusról"
-                          className="text-slate-400 hover:text-red-600 transition-colors disabled:opacity-40">
-                          <Lucide.Trash2 size={15} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {d.kurzusok.map(k => (
+                  <TCH_CourseRow key={k.course_id} k={k} teacherId={d.id} busy={busy}
+                    onChanged={tolts} onRemove={kurzusLe} />
+                ))}
               </tbody>
             </table>
           </div>
@@ -624,6 +926,14 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
             </button>
           </div>
         )}
+
+        {/* A szerver a törlésnél PONTOSAN megmondja, mi tartozik az oktatóhoz —
+            ez a magyarázat a gomb mellett ér valamit, nem a lap tetején. */}
+        {err && ['SUPERADMIN','ADMIN'].includes(user.role) && (
+          <div className="mt-3 text-[13px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
+            {err}
+          </div>
+        )}
       </div>
 
       <TCH_Form open={szerk} oktato={d} onClose={() => setSzerk(false)}
@@ -650,6 +960,8 @@ function TCH_View({ user }) {
   const [valasztott, setValasztott] = useState(null);
   const [ujForm, setUjForm] = useState(false);
 
+  /* Kézi frissítés (mentés, törlés után). Az elavulás-jelzőt a lenti effekt
+     adja — ide nem kell, mert nincs mellette másik, versengő kérés. */
   const tolts = () => {
     setTolt(true);
     TCH_api.list(q, allapot, org)
@@ -658,9 +970,20 @@ function TCH_View({ user }) {
       .finally(() => setTolt(false));
   };
 
+  /* SZŰRÉSVÁLTÁS. Gépelés közben több kérés is útnak indulhat, és ezek NEM
+     feltétlenül a kiküldés sorrendjében érnek vissza — elavulás-jelző nélkül
+     egy korábbi, tágabb keresés eredménye ülne rá a frissebbre, és a lista
+     tartósan mást mutatna, mint amit a szűrők állítanak. */
   useEffect(() => {
-    const t = setTimeout(tolts, 250);
-    return () => clearTimeout(t);
+    let el = true;
+    const t = setTimeout(() => {
+      setTolt(true);
+      TCH_api.list(q, allapot, org)
+        .then(r => { if (el) { setSor(Array.isArray(r) ? r : []); setErr(''); } })
+        .catch(e => { if (el) { setSor([]); setErr(TCH_msg(e)); } })
+        .finally(() => { if (el) setTolt(false); });
+    }, 250);
+    return () => { el = false; clearTimeout(t); };
   }, [q, allapot, org]);
 
   const osszesen = React.useMemo(() => ({
@@ -784,9 +1107,21 @@ function TCH_View({ user }) {
         )}
       </div>
 
-      {/* a kiválasztott oktató lapja */}
+      {/* A szerver 200 sornál vág. Enélkül a hiányzó oktatókat a felhasználó
+          úgy értené, hogy nincsenek — pedig csak nem fértek bele. */}
+      {sor.length >= 200 && (
+        <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2.5">
+          A lista az első 200 oktatót mutatja. Szűkíts a kereséssel vagy a
+          szervezeti egységgel, ha nem találod, akit keresel.
+        </p>
+      )}
+
+      {/* A kiválasztott oktató lapja.
+          A key KÖTELEZŐ: enélkül oktatóváltáskor a komponens nem épül újra, és
+          a belső állapota (a betöltött rekord, a nyitott modálisok) az előző
+          oktatóé maradna — a lap gombjai pedig mind arra dolgoznának. */}
       {valasztott && (
-        <TCH_Detail id={valasztott} user={user}
+        <TCH_Detail key={valasztott} id={valasztott} user={user}
           onChanged={tolts}
           onDeleted={() => { setValasztott(null); tolts(); }} />
       )}

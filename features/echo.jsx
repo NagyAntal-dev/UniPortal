@@ -37,6 +37,102 @@
    0. Nyelv és adat-eredetű szöveg
    ------------------------------------------------------------ */
 
+/* A hírfolyam „Kitöltés" gombja ezen a kulcson adja át, melyik kurzust
+   akarta a hallgató. sessionStorage: a lapfülhöz kötött, és magától elmúlik —
+   nem akarunk tartós nyomot hagyni arról, ki mire készül. */
+const ECHO_ATADAS_KULCS = 'echo_megnyitando';
+
+/* ============================================================
+   A HALLGATÓ SAJÁT MÁSOLATA A BEKÜLDÖTT VÁLASZAIRÓL
+
+   MIÉRT NEM A SZERVERRŐL JÖN
+     Mert onnan NEM JÖHET. A beküldött válasz szándékosan nem köthető vissza
+     a hallgatóhoz, három egymást erősítő rétegben — MÉRVE:
+       1. az echo.response táblában EGYETLEN oszlop sincs, ami a hallgatóra
+          mutatna (campaign, course, teacher, template_version, scope,
+          attendance_band, answers — és semmi más);
+       2. a beküldés külön, munkamenet nélküli anon klienssel megy, tehát a
+          JWT el sem jut a szerverig (lásd ECHO_anonClient);
+       3. a beküldés után az echo.shuffle_responses() fizikailag újrarendezi
+          a sorokat, hogy még a beszúrási sorrend se áruljon el semmit.
+     Ha ezt a másolatot a szerveren tárolnánk a hallgatóhoz kötve, mind a
+     három réteg értelmét vesztené: aki az adatbázist látja, össze tudná
+     párosítani a nevet a válasszal. Ezért a másolat KIZÁRÓLAG a hallgató
+     saját böngészőjében él.
+
+   MIT JELENT EZ A HALLGATÓNAK
+     A másolat az ő gépén, az ő böngészőjében marad. Másik gépen, másik
+     böngészőben, vagy a böngészőadatok törlése után NEM lesz meg. Ezt a
+     felület KIMONDJA — nem hagyjuk abban a hitben, hogy a rendszer őrzi.
+   ============================================================ */
+const ECHO_MASOLAT_KULCS = 'echo_valaszaim';
+
+function ECHO_masolatMind() {
+  try { return JSON.parse(localStorage.getItem(ECHO_MASOLAT_KULCS) || '{}') || {}; }
+  catch (e) { return {}; }
+}
+
+function ECHO_masolatKulcs(campaignId, courseId) { return campaignId + '|' + courseId; }
+
+function ECHO_masolatGet(campaignId, courseId) {
+  const m = ECHO_masolatMind();
+  return m[ECHO_masolatKulcs(campaignId, courseId)] || null;
+}
+
+/* Olvasható kérdés–válasz párokat épít a kitöltésből. A nyers payload
+   kulcs-érték párjai a hallgatónak semmit nem mondanának. */
+function ECHO_masolatTetelek(compiled, teachers, ans, tans, lang) {
+  const ki = [];
+  const opcioCimke = (q, v) => {
+    const o = (q.options || []).find(x => String(x.value) === String(v));
+    return o ? ECHO_txt(o, lang) : String(v);
+  };
+  const ertek = (q, v) => {
+    if (v === undefined || v === null || v === '') return null;
+    if (Array.isArray(v)) return v.length ? v.map(x => opcioCimke(q, x)).join(', ') : null;
+    if (q.type === 'single' || q.type === 'multi' || q.type === 'skip') return opcioCimke(q, v);
+    return String(v);
+  };
+
+  ((compiled && compiled.sections) || []).forEach(sec => {
+    const szakasz = ECHO_txt(sec, lang);
+    (sec.questions || []).forEach(q => {
+      if (q.repeat === 'teacher') {
+        // Oktatónként külön válasz — az oktató nevével együtt mentjük.
+        (teachers || []).forEach(t => {
+          const v = (tans && tans[t.id]) ? tans[t.id][q.id] : undefined;
+          const e = ertek(q, v);
+          if (e !== null) ki.push({ szakasz, kerdes: ECHO_txt(q, lang), kire: t.name, valasz: e });
+        });
+        return;
+      }
+      if (q.repeat) return;             // célonkénti ismétlés — összevontan megy be
+      const e = ertek(q, ans ? ans[q.id] : undefined);
+      if (e !== null) ki.push({ szakasz, kerdes: ECHO_txt(q, lang), valasz: e });
+    });
+  });
+  return ki;
+}
+
+function ECHO_masolatMent(course, compiled, teachers, ans, tans, lang) {
+  try {
+    const m = ECHO_masolatMind();
+    m[ECHO_masolatKulcs(course.campaign_id, course.course_id)] = {
+      mentve:  new Date().toISOString(),
+      kurzus:  course.course_name,
+      kod:     course.course_code,
+      kampany: course.campaign_name,
+      tetelek: ECHO_masolatTetelek(compiled, teachers, ans, tans, lang),
+    };
+    localStorage.setItem(ECHO_MASOLAT_KULCS, JSON.stringify(m));
+    return true;
+  } catch (e) {
+    // Privát ablak, tele tárhely, letiltott sütik — a beküldés ettől még
+    // sikeres volt, ezért NEM dobunk hibát. Csak nem lesz másolat.
+    return false;
+  }
+}
+
 // A fejléc nyelvváltója ezt a kulcsot írja (app.jsx setupI18n).
 function ECHO_lang() {
   try { return (localStorage.getItem('nje_lang') || 'hu') === 'en' ? 'en' : 'hu'; }
@@ -1621,6 +1717,14 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
                             ECHO_buildPayload(compiled, teachers, ans, tans, hasGoals, goalItems));
       ticketRef.current = null;   // elkoltottuk, tobbe nem hasznalhato
 
+      /* A HALLGATÓ SAJÁT MÁSOLATA — kizárólag a böngészőjében. A szerver
+         szándékosan nem tudja, ki mit válaszolt (lásd a fájl elején az
+         ECHO_MASOLAT_KULCS magyarázatát), ezért ha a hallgató később vissza
+         akarja olvasni a válaszait, ez az EGYETLEN mód, ami nem rontja el az
+         anonimitást. Ha nem sikerül (privát ablak, tele tárhely), az nem hiba:
+         a beküldés attól még megtörtént. */
+      ECHO_masolatMent(course, compiled, teachers, ans, tans, lang);
+
       // 3) A PISZKOZAT ELDOBASA — kulon, AZONOSITOTT keresben, a bekuldes UTAN.
       //    Miert nem az echo_submit teszi: az anon jogon fut, es szandekosan
       //    nem tudja, ki kuldott be (lasd 22_echo_draft.sql fejlec). Ez a hivas
@@ -1967,6 +2071,7 @@ function ECHO_StudentView({ user }) {
   const [refreshing, setRefreshing] = useState(false);
   const [mode, setMode] = useState(null);     // { kind:'goals'|'fill', course }
   const [localDone, setLocalDone] = useState({});  // campaign|course -> true
+  const [masolatNyit, setMasolatNyit] = useState(null);  // melyik kurzus masolatat nezzuk
 
   const load = async (background) => {
     if (background) setRefreshing(true);
@@ -1980,6 +2085,28 @@ function ECHO_StudentView({ user }) {
     } finally { setRefreshing(false); }
   };
   useEffect(() => { load(false); }, []);
+
+  /* ÁTADÁS A HÍRFOLYAMBÓL. A hírfolyam kártyáján a „Kitöltés" gomb ide navigál,
+     és sessionStorage-ban hagyja, MELYIK kurzust akarta a hallgató. Ha itt
+     megtaláljuk a betöltött sorok között, egyből a kitöltőt nyitjuk — így a
+     gomb tényleg elindítja a kitöltést, nem csak a listáig visz.
+     A kulcsot AZONNAL töröljük: egy oldalfrissítés ne nyissa meg újra. */
+  useEffect(() => {
+    if (!rows || !rows.length || mode) return;
+    let cel = null;
+    try {
+      const nyers = sessionStorage.getItem(ECHO_ATADAS_KULCS);
+      if (nyers) { cel = JSON.parse(nyers); sessionStorage.removeItem(ECHO_ATADAS_KULCS); }
+    } catch (e) { cel = null; }
+    if (!cel) return;
+    const c = rows.find(x => x.campaign_id === cel.campaign_id && x.course_id === cel.course_id);
+    // Csak akkor nyitjuk, ha TÉNYLEG kitölthető — a kártya és a kattintás közt
+    // lejárhatott a kampány, és akkor a listát kell mutatni, nem egy hibát.
+    if (c && c.is_open &&
+        (c.allapot === 'kitoltheto' || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott')) {
+      setMode({ kind: 'fill', course: c });
+    }
+  }, [rows]);
 
   const key = (c) => c.campaign_id + '|' + c.course_id;
 
@@ -2013,12 +2140,38 @@ function ECHO_StudentView({ user }) {
   const goals  = rows.filter(c => c.allapot === 'celkituzes');
   const rest   = rows.filter(c => open.indexOf(c) < 0 && goals.indexOf(c) < 0);
 
+  /* A TEENDŐ MINDIG FELÜL. A csoport eddig a szerver sorrendjében jött, ami a
+     hallgatónak semmit nem jelent: elsőre nem az látszott, amivel dolga van.
+     Három szint, ebben a sorrendben:
+       1. amit ELKEZDETT, de nem fejezett be — ez a legsürgetőbb, mert a
+          piszkozat lejár (echo.draft.expires_at), és a munkája veszne el;
+       2. amihez HOZZÁ SEM KEZDETT;
+       3. azon belül a KÖZELEBBI HATÁRIDŐ előbb — akinek holnap zár, azt
+          nem szabad a lista aljára tenni.
+     A rendezés másolaton dolgozik: a .sort() helyben rendez, és a `rows`
+     tömböt a `rest` számítása még használja. */
+  // MÉRVE az echo_my_courses() visszatérő soraiból: has_draft, closes_at,
+  // course_name. A has_draft pontosabb jelzés, mint az allapot szövege — az
+  // 'elkezdte' a szerveren mást jelent (ticket), a piszkozat viszont épp azt,
+  // hogy a hallgató válaszai félbemaradtak.
+  const surgosseg = (c) => (c.has_draft || c.allapot === 'folyamatban'
+                            || c.allapot === 'felbehagyott') ? 0 : 1;
+  const hatarido  = (c) => {
+    const t = Date.parse(c.closes_at || '');
+    return isNaN(t) ? Number.MAX_SAFE_INTEGER : t;
+  };
+  const openSorted = open.slice().sort((a, b) =>
+    (surgosseg(a) - surgosseg(b)) ||
+    (hatarido(a)  - hatarido(b))  ||
+    String(a.course_name || '').localeCompare(String(b.course_name || ''), 'hu'));
+
   const Card = ({ c }) => {
     const doneNow = !!localDone[key(c)];
     const allapot = doneNow ? 'kitoltve' : c.allapot;
     const canFill = !doneNow && c.is_open &&
       (c.allapot === 'kitoltheto' || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott');
     const canGoals = c.is_goals_open;
+    const masolat = ECHO_masolatGet(c.campaign_id, c.course_id);
     return (
       <div className="bg-white rounded-3xl border border-slate-100 p-5 hover:border-slate-200 transition-all">
         <div className="flex items-start justify-between gap-3 mb-3">
@@ -2060,7 +2213,16 @@ function ECHO_StudentView({ user }) {
               <Lucide.Target size={16} /> {c.goals_saved ? 'Célok szerkesztése' : 'Célok megadása'}
             </button>
           )}
-          {!canFill && !canGoals && (
+          {/* SAJÁT MÁSOLAT. Csak akkor jelenik meg, ha a hallgató ezen a
+              böngészőn küldte be — a szerver nem tudja, ki mit válaszolt. */}
+          {masolat && (
+            <button onClick={() => setMasolatNyit(c)}
+              className={(canFill || canGoals ? U_btnGhost : U_btnPrimary) + ' flex-1 py-3.5'}>
+              <Lucide.FileText size={16} /> A válaszaim
+            </button>
+          )}
+
+          {!canFill && !canGoals && !masolat && (
             <div className="flex-1 text-xs font-bold text-slate-400 py-3">
               {(ECHO_STATE[allapot] || ECHO_STATE.nem_nyitott).hint}
             </div>
@@ -2116,12 +2278,90 @@ function ECHO_StudentView({ user }) {
           subtitle="Amikor egy kampány megnyílik, a véleményezhető kurzusaid itt jelennek meg." />
       )}
 
-      <Group title="Kitölthető most" icon="ClipboardList" items={open}
+      <Group title="Kitölthető most" icon="ClipboardList" items={openSorted}
         subtitle="A félév végi értékelés. Névtelen — a válaszaid nem köthetők vissza hozzád." />
       <Group title="Félév eleji célmeghatározás" icon="Target" items={goals}
         subtitle="1–3 saját cél és 1–3 oktatói elvárás. Csak Te látod." />
       <Group title="Lezárt és kész kurzusok" icon="Archive" items={rest} />
+
+      <ECHO_SajatValaszok course={masolatNyit} onClose={() => setMasolatNyit(null)} />
     </div>
+  );
+}
+
+/* ------------------------------------------------------------
+   „A válaszaim" — a hallgató saját, BÖNGÉSZŐBEN tárolt másolata.
+   ------------------------------------------------------------ */
+function ECHO_SajatValaszok({ course, onClose }) {
+  if (!course) return null;
+  const m = ECHO_masolatGet(course.campaign_id, course.course_id);
+  if (!m) return null;
+
+  const datum = (() => {
+    try { return new Date(m.mentve).toLocaleString('hu-HU',
+      { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+    catch (e) { return String(m.mentve || '').slice(0, 16); }
+  })();
+
+  // Szakaszonként csoportosítva, ahogy kitöltéskor is látta.
+  const szakaszok = [];
+  (m.tetelek || []).forEach(t => {
+    let sz = szakaszok.find(x => x.nev === t.szakasz);
+    if (!sz) { sz = { nev: t.szakasz, sorok: [] }; szakaszok.push(sz); }
+    sz.sorok.push(t);
+  });
+
+  return (
+    <UModal open={!!course} onClose={onClose} max="max-w-2xl"
+      icon={<Lucide.FileText size={20} />} title="A válaszaim"
+      subtitle={course.course_name}>
+      <div className="space-y-4">
+        {/* Mondatonként külön elem: a nyelvváltó a TELJES szövegcsomópontot
+            keresi a szótárban, egy mondat közepébe tett <strong> pedig
+            darabokra vágná, és a darabok fordítatlanul maradnának. */}
+        <div className="text-[12px] text-slate-600 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
+          <span className="block font-bold text-slate-800 mb-1">
+            Ez a másolat csak ezen a böngészőn van meg.
+          </span>
+          <span className="block">
+            A beküldött értékelés névtelen: a rendszer nem tárolja, ki mit válaszolt, ezért a válaszaidat nem tudja visszaadni.
+          </span>
+          <span className="block mt-1">
+            Ezt a másolatot a beküldéskor a saját gépeden mentettük el. Másik gépen, másik böngészőben, vagy a böngészőadatok törlése után nem lesz meg.
+          </span>
+          <span className="block mt-1.5 text-slate-400">Mentve: {datum}</span>
+        </div>
+
+        {szakaszok.length === 0 ? (
+          <p className="text-sm text-slate-400">A másolat üres.</p>
+        ) : (
+          <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
+            {szakaszok.map((sz, i) => (
+              <div key={i}>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                  <ECHO_Src>{sz.nev}</ECHO_Src>
+                </h4>
+                <div className="space-y-2">
+                  {sz.sorok.map((t, j) => (
+                    <div key={j} className="bg-white border border-slate-100 rounded-2xl px-4 py-3">
+                      <p className="text-[13px] text-slate-500">
+                        <ECHO_Src>{t.kerdes}</ECHO_Src>
+                        {t.kire && <span className="font-bold text-primary"> · <ECHO_Src>{t.kire}</ECHO_Src></span>}
+                      </p>
+                      <p className="text-sm font-bold text-slate-800 mt-1"><ECHO_Src>{t.valasz}</ECHO_Src></p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end pt-1">
+          <button className={U_btnPrimary} onClick={onClose}>Bezárás</button>
+        </div>
+      </div>
+    </UModal>
   );
 }
 
