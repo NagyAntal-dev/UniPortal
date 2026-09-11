@@ -106,6 +106,22 @@ const MENU_ITEMS = [
   { id: AppView.DORM_STUDENT, label: 'Szállásom', icon: <Lucide.BedDouble size={20} /> },
 ];
 
+/* Az oldalsáv TÉMAKÖREI. Csak a sok menüpontot látó (ügyintézői) nézetben
+   jelennek meg fejlécként; a hallgató rövid, lapos listát kap. A csoporton
+   belüli sorrend is innen jön. Ami egyik csoportban sincs, az „Egyéb” alá
+   kerül — így egy új menüpont sosem tűnik el csak azért, mert kimaradt innen.
+   A jogosultságokon ez NEM változtat: a csoportosítás a már szűrt listán fut. */
+const MENU_GROUPS = [
+  { key: 'altalanos', label: 'Általános',                 ids: [AppView.FEED, AppView.ASSISTANT] },
+  { key: 'kepzes',    label: 'Képzés és oktatás',         ids: [AppView.PROGRAMS, AppView.TRAININGS, AppView.COURSES, AppView.TEACHERS] },
+  { key: 'felveteli', label: 'Felvételi',                 ids: [AppView.ADMISSIONS_CORE, AppView.EVALUATION, AppView.INTERVIEWS, AppView.IMMIGRATION, AppView.STUDENT_PORTAL] },
+  { key: 'partner',   label: 'Partnerek és kommunikáció', ids: [AppView.AGENT_PORTAL, AppView.ENGAGEMENT_CRM, AppView.MARKETING_LEADS] },
+  { key: 'penzugy',   label: 'Pénzügy és elemzés',        ids: [AppView.FINANCE, AppView.REPORTS, AppView.INTELLIGENCE] },
+  { key: 'echo',      label: 'Minőségbiztosítás (ECHO)',  ids: [AppView.ECHO_STUDENT, AppView.ECHO_ADMIN, AppView.ECHO_TEACHER] },
+  { key: 'kollegium', label: 'Kollégium és szállás',      ids: [AppView.DORM_OPS, AppView.DORM_MAINTENANCE, AppView.DORM_STUDENT] },
+  { key: 'rendszer',  label: 'Rendszer',                  ids: [AppView.SYSTEM_ADMIN, AppView.REGISTRATIONS] },
+];
+
 
 /* ============================================================================
    STÁTUSZMODELL — EGYETLEN FORRÁS (C1 + C2)
@@ -1463,21 +1479,38 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <nav className={`flex-1 mt-4 space-y-1 overflow-y-auto overflow-x-hidden custom-scrollbar ${collapsed ? 'px-2' : 'p-4'}`}>
-        {menuItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveView(item.id)}
-            className={itemClass(activeView === item.id)}
-            title={collapsed ? item.label : undefined}
-            aria-current={activeView === item.id ? 'page' : undefined}
-          >
-            {activeMark(activeView === item.id)}
-            <span className={`${activeView === item.id ? 'text-white' : 'text-white/50 group-hover:text-white'}`}>
-              {item.icon}
-            </span>
-            {!collapsed && <span className="font-bold text-xs uppercase tracking-tight text-left">{item.label}</span>}
-          </button>
-        ))}
+        {(() => {
+          const gomb = (item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveView(item.id)}
+              className={itemClass(activeView === item.id)}
+              title={collapsed ? item.label : undefined}
+              aria-current={activeView === item.id ? 'page' : undefined}
+            >
+              {activeMark(activeView === item.id)}
+              <span className={`${activeView === item.id ? 'text-white' : 'text-white/50 group-hover:text-white'}`}>
+                {item.icon}
+              </span>
+              {!collapsed && <span className="font-bold text-xs uppercase tracking-tight text-left">{item.label}</span>}
+            </button>
+          );
+          // Csoportosítás csak a hosszú (ügyintézői) menüben; a hallgató lapos listát kap.
+          const csoportos = !!currentUser && currentUser.role !== 'STUDENT' && menuItems.length >= 9;
+          if (!csoportos) return menuItems.map(gomb);
+          const byId = {}; menuItems.forEach(it => { byId[it.id] = it; });
+          const csoportok = MENU_GROUPS.map(g => ({ ...g, elemek: g.ids.map(id => byId[id]).filter(Boolean) }));
+          const benne = new Set(); csoportok.forEach(g => g.elemek.forEach(it => benne.add(it.id)));
+          const egyeb = menuItems.filter(it => !benne.has(it.id));
+          if (egyeb.length) csoportok.push({ key: 'egyeb', label: 'Egyéb', elemek: egyeb });
+          return csoportok.filter(g => g.elemek.length).map((g, gi) => (
+            <div key={g.key} role="group" aria-label={g.label} data-menu-csoport={g.key}
+                 className={gi ? (collapsed ? 'pt-2 mt-2 border-t border-white/15' : 'pt-4') : ''}>
+              {!collapsed && <div className="px-4 pb-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-white/55 select-none">{g.label}</div>}
+              <div className="space-y-1">{g.elemek.map(gomb)}</div>
+            </div>
+          ));
+        })()}
         <button
           onClick={onOpenProfile}
           className={itemClass(false)}
@@ -2502,6 +2535,10 @@ const AdmissionsCore = ({ user }) => {
   const [msgSent, setMsgSent] = useState(false);
   // Közös keresés/szűrés/rendezés a Jelentkezések nézet két listájához.
   const [szuro, setSzuro] = useState(ADM_SZURO_URES);
+  // Felvételi levél: az ügyintéző nézi meg, szerkeszti, és ő küldi ki.
+  const [levelSzerk, setLevelSzerk] = useState(null);   // { id, L } — a szerkesztés alatti példány
+  const [levelUzenet, setLevelUzenet] = useState(null); // { id, tone, text }
+  const [levelBusy, setLevelBusy] = useState(false);
   const [rendA, setRendA] = useState({ col: 'frissitve', dir: 'desc' });
   const [rendB, setRendB] = useState({ col: 'nev', dir: 'asc' });
   /* A Programok menüből indított jelentkezés program_id-t hordoz: a program
@@ -2658,6 +2695,10 @@ const AdmissionsCore = ({ user }) => {
       } else {
         pct = p.done ? 100 : Math.round(((p.maxReached || 0) / Math.max(SD.length - 1, 1)) * 100);
         stLabel = p.done ? 'Felvéve' : (SD[p.step] ? SD[p.step].label : '—');
+        // A levél-lépésnél az a lényeg, vár-e kiküldésre — így a listában és a szűrőben is kereshető.
+        if (!p.done && SD[p.step] && SD[p.step].id === 'letter' && JourneyShared.letterSent) {
+          stLabel = JourneyShared.letterSent(p) ? 'Levél kiküldve' : ((p.data && p.data.letter && p.data.letter.fileNumber) ? 'Levél kiküldésre vár' : 'Felvételi levél');
+        }
         lepesSzoveg = `${p.done ? SD.length : (p.maxReached || 0) + 1}/${SD.length}`;
         allapot = p.done ? 'accepted' : ('step:' + (SD[p.step] ? SD[p.step].id : '?'));
         allapotRend = p.done ? 90 : 10 + (Number(p.step) || 0);
@@ -2766,6 +2807,51 @@ const AdmissionsCore = ({ user }) => {
       setDetailFull(withOwner);
     };
 
+    /* ---- Felvételi levél: mentés (tervezet), kiküldés, visszavonás ----
+       KÖZVETLEN update a csendes spSaveProc helyett: itt tudnunk kell, hogy a
+       kiküldés tényleg átment-e (RLS esetén 0 érintett sor, hiba nélkül). */
+    const LetterDoc = JourneyShared.LetterDoc;
+    const levelMent = async (proc, ujLevel, extra, siker) => {
+      setLevelBusy(true); setLevelUzenet(null);
+      const ujData = { ...(proc.data || {}), letter: ujLevel };
+      const most = new Date().toISOString();
+      try {
+        if (!String(proc.id || '').startsWith('PROC-demo')) {
+          if (!window.sb) throw new Error('Nincs kapcsolat az adatbázissal.');
+          const { data: sorok, error } = await sb.from('admission_processes').update({ data: ujData, ...(extra || {}), updated_at: most }).eq('id', proc.id).select('id');
+          if (error) throw error;
+          if (!sorok || !sorok.length) throw new Error('nincs jogosultságod ehhez a jelentkezéshez, vagy az már nem létezik.');
+        }
+        const owner = proc._owner || 'demo';
+        try { const k = 'nje_processes_' + owner; const arr = JSON.parse(localStorage.getItem(k) || '[]'); const i = Array.isArray(arr) ? arr.findIndex(x => x.id === proc.id) : -1; if (i >= 0) { arr[i] = { ...arr[i], ...(extra || {}), data: ujData }; localStorage.setItem(k, JSON.stringify(arr)); } } catch (e) {}
+        const kesz = { ...proc, ...(extra || {}), data: ujData, updatedAt: most };
+        setJourneyProcs(ps => ps.map(x => x.id === proc.id ? kesz : x));
+        setDetailFull(kesz);
+        setLevelUzenet({ id: proc.id, tone: 'ok', text: siker });
+        return true;
+      } catch (e) {
+        setLevelUzenet({ id: proc.id, tone: 'error', text: 'A mentés nem sikerült: ' + ((e && e.message) || e) });
+        return false;
+      } finally { setLevelBusy(false); }
+    };
+    const levelKuld = async (proc) => {
+      const L = (proc.data && proc.data.letter) || {};
+      if (typeof window !== 'undefined' && window.confirm && !window.confirm('Kiküldöd a felvételi levelet ' + pName(proc) + ' részére? A hallgató azonnal látja, és a folyamata lezárul.')) return;
+      const ok = await levelMent(proc, { ...L, status: 'sent', sentAt: new Date().toISOString(), sentBy: (user && (user.name || user.email)) || 'Ügyintéző' }, { done: true },
+        'A levelet kiküldtük. A hallgató a Felvételi folyamatban látja, és üzenetet is kapott róla.');
+      if (!ok) return;
+      const owner = proc._owner || 'demo';
+      const msg = { id: 'msg-staff-' + Date.now().toString(36), processId: proc.id, owner, applicant: pName(proc), sender: (user && user.name) || 'Ügyintéző', subject: 'Feltételes felvételi levél kiállítva', preview: 'A Conditional Acceptance Letter (' + (L.fileNumber || '') + ') elkészült. A Felvételi folyamat → Felvételi levél lépésnél megtekintheted és kinyomtathatod.', attachments: [], date: todayStr(), read: false, tone: 'success' };
+      try { const k = 'nje_messages_' + owner; const arr = JSON.parse(localStorage.getItem(k) || '[]'); localStorage.setItem(k, JSON.stringify([msg, ...(Array.isArray(arr) ? arr : [])])); } catch (e) {}
+      spSaveMsg(msg);
+      setThread(t => [...t, msg]);
+    };
+    const levelVissza = async (proc) => {
+      const L = (proc.data && proc.data.letter) || {};
+      if (typeof window !== 'undefined' && window.confirm && !window.confirm('Visszavonod a kiküldést? A hallgató addig nem látja a levelet, amíg újra ki nem küldöd.')) return;
+      await levelMent(proc, { ...L, status: 'draft', revokedAt: new Date().toISOString() }, { done: false }, 'A kiküldést visszavontuk — a levél újra tervezet, szerkeszthető.');
+    };
+
     if (detailFull) {
       const p = detailFull;
       const nm = pName(p);
@@ -2835,6 +2921,78 @@ const AdmissionsCore = ({ user }) => {
               {(ex.name || ex.passportNumber) && (
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6"><div className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Kinyert adatok (útlevél)</div><div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-sm"><div><span className="text-slate-400 text-xs">Név</span><div className="font-bold text-slate-700">{ex.name || '—'}</div></div><div><span className="text-slate-400 text-xs">Útlevélszám</span><div className="font-bold text-slate-700">{ex.passportNumber || '—'}</div></div><div><span className="text-slate-400 text-xs">Ország</span><div className="font-bold text-slate-700">{ex.country || '—'}</div></div><div><span className="text-slate-400 text-xs">Szül. dátum</span><div className="font-bold text-slate-700">{ex.birthDate || '—'}</div></div><div><span className="text-slate-400 text-xs">Neme</span><div className="font-bold text-slate-700">{genderLabel(ex.gender) || '—'}</div></div></div></div>
               )}
+              {/* Felvételi levél — az ügyintéző nézi meg, szerkeszti és küldi ki. */}
+              {(() => {
+                const L = (p.data && p.data.letter) || {};
+                const kiment = JourneyShared.letterSent(p);
+                const levelLepes = (SD[p.step] || {}).id === 'letter';
+                const szerk = levelSzerk && levelSzerk.id === p.id ? levelSzerk.L : null;
+                const uz = levelUzenet && levelUzenet.id === p.id ? levelUzenet : null;
+                const v = JourneyShared.letterValues(p, szerk || L);
+                const setMezo = (k, val) => setLevelSzerk(x => ({ ...x, L: { ...x.L, [k]: val } }));
+                const inCls = 'w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none';
+                const lbl = 'text-[10px] font-bold uppercase tracking-wide text-slate-400 block mb-1';
+                const mezo = (k, cim, tipus) => (
+                  <div><label className={lbl}>{cim}</label><input type={tipus || 'text'} className={inCls} value={szerk[k] != null ? szerk[k] : (v[k] != null ? v[k] : '')} onChange={e => setMezo(k, e.target.value)} /></div>
+                );
+                const elonezet = { ...p, data: { ...(p.data || {}), letter: szerk || L } };
+                return (
+                  <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6" data-level-kartya="1">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Lucide.FileCheck size={16} className="text-primary" />
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Felvételi levél</span>
+                        {L.fileNumber && <span className="font-mono text-[11px] font-bold text-slate-500">{L.fileNumber}</span>}
+                        {L.fileNumber && (kiment
+                          ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">{L.sentAt ? 'Kiküldve · ' + ADM_datum(L.sentAt) : 'Kiküldve'}</span>
+                          : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Tervezet — kiküldésre vár</span>)}
+                      </div>
+                      {L.fileNumber && !szerk && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {!kiment && <button disabled={levelBusy} onClick={() => { setLevelUzenet(null); setLevelSzerk({ id: p.id, L: { ...L } }); }} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 inline-flex items-center gap-1.5 disabled:opacity-50"><Lucide.Pencil size={13} /> Szerkesztés</button>}
+                          {!kiment && <button disabled={levelBusy} onClick={() => levelKuld(p)} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 inline-flex items-center gap-1.5 disabled:opacity-50"><Lucide.Send size={13} /> Kiküldés a hallgatónak</button>}
+                          {kiment && <button onClick={() => window.print()} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 inline-flex items-center gap-1.5"><Lucide.Printer size={13} /> Nyomtatás</button>}
+                          {kiment && <button disabled={levelBusy} onClick={() => levelVissza(p)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 inline-flex items-center gap-1.5 disabled:opacity-50"><Lucide.Undo2 size={13} /> Kiküldés visszavonása</button>}
+                        </div>
+                      )}
+                    </div>
+                    {uz && <div role={uz.tone === 'error' ? 'alert' : 'status'} className={'mb-4 rounded-xl px-3 py-2.5 text-[12px] font-semibold border ' + (uz.tone === 'error' ? 'bg-red-50 border-red-100 text-red-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700')}>{uz.text}</div>}
+                    {!L.fileNumber ? (
+                      levelLepes ? (
+                        <div className="rounded-xl border border-dashed border-slate-200 p-5 text-center">
+                          <p className="text-sm text-slate-500">A jelentkező a Felvételi levél lépésnél tart, de a levéltervezet még nem készült el.</p>
+                          <button disabled={levelBusy} onClick={() => levelMent(p, JourneyShared.makeLetterDraft(p), null, 'A levéltervezet elkészült — nézd át, és küldd ki.')} className="mt-3 px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1.5"><Lucide.Plus size={14} /> Levéltervezet létrehozása</button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-400 max-w-[75ch]">A levél akkor készül el, amikor a jelentkező eléri a Felvételi levél lépést. Ezután itt nézheted át, szerkesztheted és küldheted ki.</p>
+                      )
+                    ) : (
+                      <div className={szerk ? 'grid xl:grid-cols-5 gap-5' : ''}>
+                        {szerk && (
+                          <div className="xl:col-span-2 space-y-3">
+                            <div><label className={lbl}>Felvett szak</label><select className={inCls} value={szerk.programId || (v.prog && v.prog.id) || ''} onChange={e => setMezo('programId', e.target.value)}>{v.valaszthato.map(pr => <option key={pr.id} value={pr.id}>{pr.code} · {pr.name}</option>)}</select></div>
+                            {mezo('name', 'Név')}
+                            <div className="grid grid-cols-2 gap-3">{mezo('passport', 'Útlevélszám')}{mezo('country', 'Ország')}</div>
+                            <div className="grid grid-cols-2 gap-3">{mezo('startTerm', 'Kezdés')}{mezo('deadline', 'Befizetési határidő')}</div>
+                            <div className="grid grid-cols-2 gap-3">{mezo('tuition', 'Tandíj / félév (EUR)', 'number')}{mezo('applicationFee', 'Jelentkezési díj (EUR)', 'number')}</div>
+                            <div className="grid grid-cols-2 gap-3">{mezo('dormitoryFee', 'Kollégiumi díj / félév (EUR)', 'number')}{mezo('dormitoryDeposit', 'Kollégiumi kaució (EUR)', 'number')}</div>
+                            <div><label className={lbl}>Kiegészítő bekezdés (nem kötelező)</label><textarea rows={3} className={inCls + ' resize-y'} value={szerk.note || ''} onChange={e => setMezo('note', e.target.value)} /></div>
+                            <div className="grid grid-cols-2 gap-3">{mezo('signerName', 'Aláíró neve')}{mezo('signerTitle', 'Aláíró beosztása')}</div>
+                            <div><label className={lbl}>Kelt</label><input className={inCls} value={szerk.issuedAt || ''} onChange={e => setMezo('issuedAt', e.target.value)} /></div>
+                            <div className="flex gap-2 pt-1">
+                              <button onClick={() => setLevelSzerk(null)} className="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100">Mégse</button>
+                              <button disabled={levelBusy} onClick={async () => { if (await levelMent(p, { ...szerk, status: 'draft' }, null, 'A módosítások mentve. A levél még nem ment ki.')) setLevelSzerk(null); }} className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50">Mentés</button>
+                            </div>
+                          </div>
+                        )}
+                        <div className={(szerk ? 'xl:col-span-3 ' : '') + 'max-h-[760px] overflow-auto rounded-xl bg-slate-50 p-3'}>
+                          {LetterDoc ? <LetterDoc proc={elonezet} /> : null}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div className="space-y-6">
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
@@ -7210,6 +7368,83 @@ const AdmissionsHub = (() => {
     );
   }
 
+  /* ---- Felvételi levél: EGY megjelenítés a hallgatónak és az ügyintézőnek ----
+     A levél adatai a data.letter-ben: iktatószám, kelt, felvett szak, állapot
+     (draft = tervezet, sent = kiküldve) és az ügyintéző által felülírt mezők.
+     Ami nincs felülírva, az a jelentkezés adataiból és a díjtáblából jön — így
+     egy régi, mezők nélküli levél ugyanúgy jelenik meg, mint eddig. */
+  const LETTER_DEFAULTS = { startTerm: 'September 2026', deadline: '15th July 2026', signerName: 'Krix Orsolya', signerTitle: 'International Office · John von Neumann University' };
+  function letterValues(proc, L) {
+    const data = (proc && proc.data) || {};
+    const ex = data.extracted || {}; const acc = data.account || {};
+    L = L || {};
+    const sel = (data.programs || []).map(pid => PROGRAMS.find(x => x.id === pid)).filter(Boolean);
+    const prog = PROGRAMS.find(x => x.id === L.programId) || sel[0] || null;
+    const num = (v, d) => (v === '' || v == null || isNaN(Number(v))) ? d : Number(v);
+    const tuition = num(L.tuition, prog ? prog.tuition : 0);
+    const applicationFee = num(L.applicationFee, FEES.application);
+    const dormitoryFee = num(L.dormitoryFee, FEES.dormitorySemester);
+    const dormitoryDeposit = num(L.dormitoryDeposit, FEES.dormitoryDeposit);
+    return {
+      prog, valaszthato: sel.length ? sel : PROGRAMS,
+      name: L.name || ex.name || acc.fullName || '—',
+      passport: L.passport || ex.passportNumber || '—',
+      country: L.country || ex.country || acc.country || '—',
+      startTerm: L.startTerm || LETTER_DEFAULTS.startTerm,
+      deadline: L.deadline || LETTER_DEFAULTS.deadline,
+      signerName: L.signerName || LETTER_DEFAULTS.signerName,
+      signerTitle: L.signerTitle || LETTER_DEFAULTS.signerTitle,
+      note: L.note || '',
+      tuition, applicationFee, dormitoryFee, dormitoryDeposit,
+      firstTwo: tuition * 2, total: tuition * 2 + applicationFee + dormitoryFee,
+    };
+  }
+  // Kiküldött-e: új levélnél az állapot dönt; a régi (állapot nélküli) levél a
+  // lezárt folyamatban kiküldöttnek számít — azt a hallgató eddig is látta.
+  const letterSent = (proc) => { const L = (proc && proc.data && proc.data.letter) || {}; return L.status === 'sent' || (!L.status && !!(proc && proc.done) && !!L.fileNumber); };
+  const makeLetterDraft = (proc) => {
+    const data = (proc && proc.data) || {};
+    const first = (data.programs || []).map(pid => PROGRAMS.find(x => x.id === pid)).find(Boolean);
+    return { fileNumber: makeFileNumber('CAL'), issuedAt: todayStr(), programId: first ? first.id : '', status: 'draft', createdAt: new Date().toISOString() };
+  };
+  function LetterDoc({ proc }) {
+    const L = (proc && proc.data && proc.data.letter) || {};
+    const v = letterValues(proc, L);
+    if (!v.prog) return <div className="text-slate-400 text-sm">Nincs kiválasztott szak — a levél nem állítható össze.</div>;
+    const eur = (n) => 'EUR ' + Number(n || 0).toLocaleString('en-US');
+    return (
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm mx-auto max-w-3xl" data-no-i18n="1">
+        <div className="p-6 sm:p-10 text-slate-800" style={{ fontFamily: 'Georgia, serif' }}>
+          <div className="flex items-start justify-between pb-5 border-b-2 border-slate-900">
+            <div><div className="font-black text-slate-900">John von Neumann University</div><div className="text-xs text-slate-500">Neumann János Egyetem · Kecskemét, Hungary</div></div>
+            <div className="text-right text-xs text-slate-500"><div className="font-bold text-slate-700">File number</div><div className="font-mono">{L.fileNumber}</div></div>
+          </div>
+          <h3 className="text-center text-xl font-bold tracking-[0.18em] uppercase mt-8 mb-7" style={{ fontFamily: 'Inter, sans-serif' }}>Conditional Acceptance Letter</h3>
+          <div className="space-y-1.5 text-[15px]"><p><strong>Date:</strong> {L.issuedAt}</p><p><strong>Name:</strong> {v.name}</p><p><strong>Passport number:</strong> {v.passport}</p><p><strong>Country:</strong> {v.country}</p></div>
+          <p className="mt-6 text-[15px]">Dear {v.name},</p>
+          <p className="mt-3 text-[15px]">Your application for admission to John von Neumann University has been reviewed. Your status is as follows:</p>
+          <div className="my-4 pl-4 border-l-2 border-primary text-[15px] space-y-1"><p><strong>Academic program:</strong> [{v.prog.code}] {v.prog.name}</p><p><strong>Tuition fee:</strong> {eur(v.tuition)} / semester</p><p><strong>Length:</strong> {v.prog.semesters} semesters ({v.prog.ects} ECTS)</p></div>
+          <p className="text-[15px]">You have submitted all necessary documents and met all stated requirements. We confirm that you are <strong>CONDITIONALLY ADMITTED</strong> to the program starting in {v.startTerm}. The Final Letter of Admission will be issued once your documents meet the legal requirements.</p>
+          {v.note && <p className="mt-4 text-[15px] whitespace-pre-line">{v.note}</p>}
+          <p className="mt-4 font-bold text-[15px]">To receive the Final Letter of Admission, please transfer the following fees:</p>
+          <div className="overflow-x-auto"><table className="w-full text-[15px] my-3" style={{ fontFamily: 'Inter, sans-serif' }}><tbody>
+            <tr className="border-b border-slate-100"><td className="py-1.5">Application fee</td><td className="py-1.5 text-right font-semibold tabular-nums">{eur(v.applicationFee)}</td></tr>
+            <tr className="border-b border-slate-100"><td className="py-1.5">Tuition fee — first two semesters</td><td className="py-1.5 text-right font-semibold tabular-nums">{eur(v.firstTwo)}</td></tr>
+            <tr className="border-b border-slate-100"><td className="py-1.5">Dormitory fee — one semester</td><td className="py-1.5 text-right font-semibold tabular-nums">{eur(v.dormitoryFee)}</td></tr>
+            <tr><td className="py-2 font-black">Altogether</td><td className="py-2 text-right font-black text-primary tabular-nums">{eur(v.total)}</td></tr>
+          </tbody></table></div>
+          <p className="text-[15px]">Final payment deadline: <strong>{v.deadline}</strong>. A dormitory deposit of {eur(v.dormitoryDeposit)} is payable after arrival.</p>
+          <div className="mt-4 rounded-xl bg-slate-50 p-4 text-[13px]" style={{ fontFamily: 'Inter, sans-serif' }}><div className="font-bold text-slate-700 mb-1">Bank details</div><div>Bank: {FEES.bank.name} · 1056 Budapest, Váci street 38., Hungary</div><div>Account holder: Neumann János Egyetem</div><div>IBAN: <span className="font-mono">{FEES.bank.iban}</span> · SWIFT: <span className="font-mono">{FEES.bank.swift}</span></div></div>
+          <p className="mt-5 text-[15px]">Yours sincerely,</p>
+          <div className="mt-8 flex items-end justify-between gap-4 flex-wrap">
+            <div><div className="w-56 border-b border-slate-400 pb-1 mb-1 flex items-end h-12"><span className="text-primary italic text-lg" style={{ fontFamily: 'Georgia, serif' }}>{v.signerName}</span></div><div className="text-sm font-bold text-slate-900" style={{ fontFamily: 'Inter, sans-serif' }}>{v.signerName}</div><div className="text-xs text-slate-500" style={{ fontFamily: 'Inter, sans-serif' }}>{v.signerTitle}</div></div>
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 border border-dashed border-slate-300 rounded-lg px-2.5 py-1.5" style={{ fontFamily: 'Inter, sans-serif' }}><Lucide.PenTool size={13} /> Flintsign aláírás — később</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const AdmissionsJourney = ({ user, process, onChange, onExit }) => {
     const step = process.step || 0;
     const maxReached = process.maxReached || 0;
@@ -7222,14 +7457,26 @@ const AdmissionsHub = (() => {
 
     const setData = (u) => onChange({ data: (typeof u === 'function') ? u(data) : u });
     const setDone = (v) => onChange({ done: v });
+    /* A MEGTEKINTETT lépés helyi állapot. A korábbi fázisok böngészése nem írja
+       át a haladást (process.step): sem a hallgató lépéssávját, sem azt, amit az
+       ügyintéző a listában lát. A haladás csak a „Tovább” gombbal nő. */
+    const [view, setView] = useState(step);
+    useEffect(() => { setView(step); }, [step]);
     useEffect(() => {
-      if (STEP_DEFS[step].id === 'math' && !mathQs) setMathQs(generateMathTest());
-    }, [step]);
+      if (STEP_DEFS[view] && STEP_DEFS[view].id === 'math' && !mathQs) setMathQs(generateMathTest());
+    }, [view]);
 
     const set = (patch) => onChange({ data: { ...data, ...patch } });
-    const goTo = (i) => onChange({ step: i });
-    const next = () => { const n = Math.min(step + 1, STEP_DEFS.length - 1); onChange({ step: n, maxReached: Math.max(maxReached, n) }); };
-    const back = () => onChange({ step: Math.max(step - 1, 0) });
+    const goTo = (i) => setView(i);
+    // Előrelépés: EZ növeli a haladást. A levél lépésre érve elkészül a
+    // levéltervezet, amelyet az iroda ellenőriz, szükség szerint módosít és kiküld.
+    const next = () => {
+      const n = Math.min(step + 1, STEP_DEFS.length - 1);
+      const patch = { step: n, maxReached: Math.max(maxReached, n) };
+      if (STEP_DEFS[n].id === 'letter' && !(data.letter && data.letter.fileNumber)) patch.data = { ...data, letter: makeLetterDraft(process) };
+      onChange(patch);
+    };
+    const back = () => setView(v => Math.max(v - 1, 0));
     const reset = () => { setMathQs(null); onChange({ step: 0, maxReached: 0, data: { account: data.account }, done: false }); };
 
     const acc = data.account || {};
@@ -7238,7 +7485,9 @@ const AdmissionsHub = (() => {
     const chk = data.check || {};
     const mt = data.math || {};
     const iv = data.interview || {};
-    const readOnly = done;
+    // Korábbi, már teljesített lépés: csak megtekintés, módosítás nélkül.
+    const multbeli = !done && view < step;
+    const readOnly = done || multbeli;
 
     if (done && !reviewing) {
       return (
@@ -7261,14 +7510,15 @@ const AdmissionsHub = (() => {
       <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm mb-8 overflow-x-auto">
         <div className="flex items-center min-w-[680px]">
           {STEP_DEFS.map((s, i) => {
-            const dn = done ? true : i < step, ac = i === step, re = done ? true : i <= maxReached;
+            // A színek a HALADÁST mutatják (step), a keret azt, amit éppen nézel (view).
+            const dn = done ? true : i < step, ac = !done && i === step, re = done ? true : i <= maxReached, nezett = i === view;
             return (
               <React.Fragment key={s.id}>
-                <button disabled={!re} onClick={() => re && goTo(i)} className="flex flex-col items-center gap-2 group">
-                  <div className={'w-11 h-11 rounded-2xl flex items-center justify-center transition-all ' + (dn ? 'bg-emerald-500 text-white' : ac ? 'bg-primary text-white shadow-lg shadow-primary/20 scale-110' : re ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-300')}>
+                <button disabled={!re} onClick={() => re && goTo(i)} aria-current={nezett ? 'step' : undefined} className="flex flex-col items-center gap-2 group">
+                  <div className={'w-11 h-11 rounded-2xl flex items-center justify-center transition-all ' + (dn ? 'bg-emerald-500 text-white' : ac ? 'bg-primary text-white shadow-lg shadow-primary/20' : re ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-300') + (nezett ? ' ring-4 ring-primary/25 scale-110' : '')}>
                     {dn ? <Lucide.Check size={18} /> : <s.Icon size={18} />}
                   </div>
-                  <span className={'text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ' + (ac ? 'text-primary' : 'text-slate-400')}>{s.label}</span>
+                  <span className={'text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ' + (nezett ? 'text-primary' : 'text-slate-400')}>{s.label}</span>
                 </button>
                 {i < STEP_DEFS.length - 1 && <div className={'flex-1 h-0.5 mx-1 -mt-5 ' + (i < step ? 'bg-emerald-400' : 'bg-slate-100')}></div>}
               </React.Fragment>
@@ -7280,7 +7530,7 @@ const AdmissionsHub = (() => {
 
     /* ---- step content ---- */
     const renderStep = () => {
-      const id = STEP_DEFS[step].id;
+      const id = STEP_DEFS[view].id;
       if (id === 'register') {
         const upd = (k, v) => set({ account: { ...acc, [k]: v } });
         return (
@@ -7420,9 +7670,10 @@ const AdmissionsHub = (() => {
           };
           reader.readAsDataURL(file);
         };
-        const setEx = (k, v) => set({ extracted: { ...ex, [k]: v } });
+        // A „Kinyert adatok” panel a hallgató elől kikerült: az útlevélből kiolvasott
+        // adatokat (data.extracted) az ügyintéző látja és ellenőrzi a részletes nézetben.
         return (
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="max-w-3xl">
             <div className="space-y-3">
               <p className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 px-1">
                 <Lucide.Info size={13} className="flex-none" />
@@ -7445,26 +7696,6 @@ const AdmissionsHub = (() => {
                   </div>
                 );
               })}
-            </div>
-            <div>
-              {ex ? (
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><div className="flex items-center gap-2 font-bold text-slate-800"><Lucide.Sparkles size={18} className="text-primary" /> Kinyert adatok</div><span className="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">{ex.confidence}% biztos</span></div>
-                  <p className="text-xs text-slate-400 mb-4">Az útlevélből automatikusan kinyert mezők — ellenőrizhető és javítható.</p>
-                  <div className="space-y-3">
-                    <div><label className={labelCls}>Név (útlevél szerint)</label><input className={inputCls} value={ex.name || ''} disabled={readOnly} onChange={e => setEx('name', e.target.value)} /></div>
-                    <div><label className={labelCls}>Útlevélszám</label><input className={inputCls} value={ex.passportNumber || ''} disabled={readOnly} onChange={e => setEx('passportNumber', e.target.value)} /></div>
-                    <div className="grid grid-cols-2 gap-3"><div><label className={labelCls}>Ország</label><input className={inputCls} value={ex.country || ''} disabled={readOnly} onChange={e => setEx('country', e.target.value)} /></div><div><label className={labelCls}>Szül. dátum</label><input type="date" className={inputCls} value={ex.birthDate || ''} disabled={readOnly} onChange={e => setEx('birthDate', e.target.value)} /></div></div>
-                    <div><label className={labelCls}>Neme</label><select className={inputCls} value={ex.gender || ''} disabled={readOnly} onChange={e => setEx('gender', e.target.value)}><option value="">Nincs megadva</option>{GENDER_OPTIONS.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}</select></div>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-white p-5 sm:p-8 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-center h-full min-h-[220px]">
-                  <Lucide.ScanLine size={32} className="text-slate-300 mb-3" />
-                  <div className="font-bold text-slate-500">AI adatkinyerés</div>
-                  <p className="text-xs text-slate-400 mt-1 max-w-xs">Töltse fel az útlevelet — a rendszer kiolvassa a nevet, útlevélszámot és állampolgárságot.</p>
-                </div>
-              )}
             </div>
           </div>
         );
@@ -7553,7 +7784,7 @@ const AdmissionsHub = (() => {
             </div>
             <p className="text-slate-500 text-sm mb-4">A foglaláskor automatikusan létrejön a Microsoft Teams meeting.</p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {SLOTS.map(s => (<div key={s.id} onClick={() => book(s)} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-primary/40 cursor-pointer transition-all"><div className="flex items-center gap-2 text-primary font-bold"><Lucide.Calendar size={16} /> {s.day}</div><div className="text-2xl font-black text-slate-800 mt-1">{s.time}</div><div className="text-xs text-slate-400 mt-1">{s.who}</div></div>))}
+              {SLOTS.map(s => (<div key={s.id} onClick={() => { if (!readOnly) book(s); }} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-primary/40 cursor-pointer transition-all"><div className="flex items-center gap-2 text-primary font-bold"><Lucide.Calendar size={16} /> {s.day}</div><div className="text-2xl font-black text-slate-800 mt-1">{s.time}</div><div className="text-xs text-slate-400 mt-1">{s.who}</div></div>))}
             </div></div>
         );
         return (
@@ -7565,56 +7796,29 @@ const AdmissionsHub = (() => {
               <div><div className="text-xs text-slate-400 font-bold uppercase">Platform</div><div className="font-bold text-slate-800 flex items-center gap-1.5"><Lucide.Video size={15} /> MS Teams</div></div>
             </div>
             <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 flex items-center gap-3"><Lucide.Link size={16} className="text-slate-400" /><span className="font-mono text-xs text-slate-500 truncate flex-1">{iv.teamsUrl}</span><span className="text-[10px] font-bold px-2 py-1 rounded-full bg-sky-50 text-sky-700">automatikus</span></div>
-            <button onClick={() => set({ interview: {} })} className="text-xs text-slate-400 hover:text-slate-600 mt-4">Időpont módosítása</button>
+            {!readOnly && <button onClick={() => set({ interview: {} })} className="text-xs text-slate-400 hover:text-slate-600 mt-4">Időpont módosítása</button>}
           </div>
         );
       }
       if (id === 'letter') {
-        const selPrograms = (data.programs || []).map(pid => PROGRAMS.find(p => p.id === pid)).filter(Boolean);
         const L = data.letter || {};
-        const admittedId = L.programId || (selPrograms[0] && selPrograms[0].id);
-        const prog = PROGRAMS.find(p => p.id === admittedId) || selPrograms[0];
-        if (!prog) return <div className="text-slate-400 text-sm">Válasszon legalább egy szakot a 2. lépésben.</div>;
-        const name = (ex && ex.name) || acc.fullName || '—';
-        const passport = (ex && ex.passportNumber) || '—';
-        const country = (ex && ex.country) || acc.country || '—';
-        const firstTwo = prog.tuition * 2, total = firstTwo + FEES.application + FEES.dormitorySemester;
+        if (!letterSent(process)) {
+          return (
+            <div className="bg-white p-6 sm:p-10 rounded-3xl border border-slate-100 shadow-sm text-center max-w-xl mx-auto">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4"><Lucide.Clock size={26} /></div>
+              <h4 className="text-lg font-black text-slate-800">A felvételi leveled előkészítés alatt</h4>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed max-w-[60ch] mx-auto">Minden lépést teljesítettél. A Nemzetközi Iroda most ellenőrzi és véglegesíti a feltételes felvételi leveledet, majd kiküldi. Amint megérkezett, itt látod és ki is nyomtathatod — erről üzenetet is kapsz.</p>
+            </div>
+          );
+        }
         return (
           <div>
-            <div className="flex flex-wrap items-center gap-4 mb-5 bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-              <span className="text-xs font-bold text-slate-500 uppercase">Felvett szak</span>
-              <select value={admittedId} onChange={e => set({ letter: { ...L, programId: e.target.value } })} className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold focus:border-primary outline-none">{selPrograms.map(p => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</select>
+            <div className="flex flex-wrap items-center gap-3 mb-5 bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+              <span className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1"><Lucide.CheckCircle2 size={12} />{L.sentAt ? 'Kiküldve · ' + ADM_datum(L.sentAt) : 'Kiküldve'}</span>
               <div className="flex-1"></div>
               <span className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-primary/10 text-primary inline-flex items-center gap-1"><Lucide.Hash size={12} />{L.fileNumber}</span>
             </div>
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm mx-auto max-w-3xl">
-              <div className="p-6 sm:p-10 text-slate-800" style={{ fontFamily: 'Georgia, serif' }}>
-                <div className="flex items-start justify-between pb-5 border-b-2 border-slate-900">
-                  <div><div className="font-black text-slate-900">John von Neumann University</div><div className="text-xs text-slate-500">Neumann János Egyetem · Kecskemét, Hungary</div></div>
-                  <div className="text-right text-xs text-slate-500"><div className="font-bold text-slate-700">Iktatószám</div><div className="font-mono">{L.fileNumber}</div></div>
-                </div>
-                <h3 className="text-center text-xl font-bold tracking-[0.18em] uppercase mt-8 mb-7" style={{ fontFamily: 'Inter, sans-serif' }}>Conditional Acceptance Letter</h3>
-                <div className="space-y-1.5 text-[15px]"><p><strong>Date:</strong> {L.issuedAt}</p><p><strong>Name:</strong> {name}</p><p><strong>Passport number:</strong> {passport}</p><p><strong>Country:</strong> {country}</p></div>
-                <p className="mt-6 text-[15px]">Dear {name},</p>
-                <p className="mt-3 text-[15px]">Your application for admission to John von Neumann University has been reviewed. Your status is as follows:</p>
-                <div className="my-4 pl-4 border-l-2 border-primary text-[15px] space-y-1"><p><strong>Academic program:</strong> [{prog.code}] {prog.name}</p><p><strong>Tuition fee:</strong> EUR {prog.tuition.toLocaleString()} / semester</p><p><strong>Length:</strong> {prog.semesters} semesters ({prog.ects} ECTS)</p></div>
-                <p className="text-[15px]">You have submitted all necessary documents and met all stated requirements. We confirm that you are <strong>CONDITIONALLY ADMITTED</strong> to the program starting in September 2026. The Final Letter of Admission will be issued once your documents meet the legal requirements.</p>
-                <p className="mt-4 font-bold text-[15px]">To receive the Final Letter of Admission, please transfer the following fees:</p>
-                <div className="overflow-x-auto"><table className="w-full text-[15px] my-3" style={{ fontFamily: 'Inter, sans-serif' }}><tbody>
-                  <tr className="border-b border-slate-100"><td className="py-1.5">Application fee</td><td className="py-1.5 text-right font-semibold">EUR {FEES.application.toLocaleString()}</td></tr>
-                  <tr className="border-b border-slate-100"><td className="py-1.5">Tuition fee — first two semesters</td><td className="py-1.5 text-right font-semibold">EUR {firstTwo.toLocaleString()}</td></tr>
-                  <tr className="border-b border-slate-100"><td className="py-1.5">Dormitory fee — one semester</td><td className="py-1.5 text-right font-semibold">EUR {FEES.dormitorySemester.toLocaleString()}</td></tr>
-                  <tr><td className="py-2 font-black">Altogether</td><td className="py-2 text-right font-black text-primary">EUR {total.toLocaleString()}</td></tr>
-                </tbody></table></div>
-                <p className="text-[15px]">Final payment deadline: <strong>15th July 2026</strong>. A dormitory deposit of EUR {FEES.dormitoryDeposit} is payable after arrival.</p>
-                <div className="mt-4 rounded-xl bg-slate-50 p-4 text-[13px]" style={{ fontFamily: 'Inter, sans-serif' }}><div className="font-bold text-slate-700 mb-1">Bank details</div><div>Bank: {FEES.bank.name} · 1056 Budapest, Váci street 38., Hungary</div><div>Account holder: Neumann János Egyetem</div><div>IBAN: <span className="font-mono">{FEES.bank.iban}</span> · SWIFT: <span className="font-mono">{FEES.bank.swift}</span></div></div>
-                <p className="mt-5 text-[15px]">Yours sincerely,</p>
-                <div className="mt-8 flex items-end justify-between">
-                  <div><div className="w-56 border-b border-slate-400 pb-1 mb-1 flex items-end h-12"><span className="text-primary italic text-lg" style={{ fontFamily: 'Georgia, serif' }}>Orsolya Krix</span></div><div className="text-sm font-bold text-slate-900" style={{ fontFamily: 'Inter, sans-serif' }}>Krix Orsolya</div><div className="text-xs text-slate-500" style={{ fontFamily: 'Inter, sans-serif' }}>International Office · John von Neumann University</div></div>
-                  <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 border border-dashed border-slate-300 rounded-lg px-2.5 py-1.5" style={{ fontFamily: 'Inter, sans-serif' }}><Lucide.PenTool size={13} /> Flintsign aláírás — később</div>
-                </div>
-              </div>
-            </div>
+            <LetterDoc proc={process} />
           </div>
         );
       }
@@ -7642,10 +7846,8 @@ const AdmissionsHub = (() => {
         set({ math: { ...mt, submitted: true, score, passed: score >= 3 } });
         return;
       }
-      if (id === 'letter') {
-        if (!data.letter || !data.letter.fileNumber) { set({ letter: { ...(data.letter || {}), fileNumber: makeFileNumber('CAL'), issuedAt: '2026.06.29' } }); return; }
-        setDone(true); return;
-      }
+      // A levelet az iroda küldi ki; a hallgató csak a kiküldött levél után zárja le a folyamatot.
+      if (id === 'letter') { if (letterSent(process)) setDone(true); return; }
       next();
     };
     const primaryLabel = (() => {
@@ -7653,14 +7855,14 @@ const AdmissionsHub = (() => {
       if (id === 'register') return 'Fiók létrehozása';
       if (id === 'check') return canNext ? 'Tovább' : 'Jóváhagyásra vár';
       if (id === 'math') return (mt.submitted && mt.passed) ? 'Tovább' : 'Beadás és pontozás';
-      if (id === 'letter') return (data.letter && data.letter.fileNumber) ? 'Folyamat lezárása' : 'Levél kiállítása';
+      if (id === 'letter') return 'Folyamat lezárása';
       return 'Tovább';
     })();
     const mathAllFilled = STEP_DEFS[step].id === 'math' && mathQs ? mathQs.every((q, qi) => q.fields.every(f => ((mt.answers || {})[qi + '.' + f.key] || '') !== '')) : true;
     const primaryDisabled = (() => {
       const id = STEP_DEFS[step].id;
       if (id === 'math') return mt.submitted ? !mt.passed : !mathAllFilled;
-      if (id === 'letter') return false;
+      if (id === 'letter') return !letterSent(process);
       return !canNext;
     })();
 
@@ -7670,7 +7872,7 @@ const AdmissionsHub = (() => {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Felvételi folyamat · {step + 1} / {STEP_DEFS.length}</p>
-            <h3 className="text-2xl font-black text-slate-800">{STEP_DEFS[step].label === 'Adatok' ? 'Jelentkezői adatok' : STEP_DEFS[step].id === 'check' ? 'Dokumentum-ellenőrzés' : STEP_DEFS[step].id === 'math' ? 'Matematika szintfelmérő' : STEP_DEFS[step].id === 'letter' ? 'Conditional Acceptance Letter' : STEP_DEFS[step].id === 'documents' ? 'Dokumentumok feltöltése' : STEP_DEFS[step].id === 'programs' ? 'Szakválasztás' : 'Online interjú foglalása'}</h3>
+            <h3 className="text-2xl font-black text-slate-800">{STEP_DEFS[view].label === 'Adatok' ? 'Jelentkezői adatok' : STEP_DEFS[view].id === 'check' ? 'Dokumentum-ellenőrzés' : STEP_DEFS[view].id === 'math' ? 'Matematika szintfelmérő' : STEP_DEFS[view].id === 'letter' ? 'Conditional Acceptance Letter' : STEP_DEFS[view].id === 'documents' ? 'Dokumentumok feltöltése' : STEP_DEFS[view].id === 'programs' ? 'Szakválasztás' : 'Online interjú foglalása'}</h3>
           </div>
           <button onClick={reset} className="text-xs text-slate-400 hover:text-slate-600 inline-flex items-center gap-1.5"><Lucide.RotateCcw size={13} /> Újraindítás</button>
         </div>
@@ -7681,15 +7883,25 @@ const AdmissionsHub = (() => {
           </div>
         )}
         <Stepper />
+        {multbeli && (
+          <div className="mb-5 rounded-2xl bg-sky-50 border border-sky-200 px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-sky-900"><Lucide.Eye size={18} className="flex-none" /><div><div className="font-bold text-sm">Egy korábbi lépést nézel</div><div className="text-xs text-sky-800/80">Itt megnézheted, mit adtál meg. A haladásod nem változik, és ebben a nézetben nem módosíthatsz.</div></div></div>
+            <button onClick={() => setView(step)} className="bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 px-4 py-2 rounded-xl font-bold text-xs inline-flex items-center gap-1.5">Vissza az aktuális lépéshez <Lucide.ChevronRight size={14} /></button>
+          </div>
+        )}
         {renderStep()}
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-100">
-          <div>{step > 0 && <button onClick={back} className="text-slate-600 hover:bg-slate-100 px-5 py-2.5 rounded-xl font-bold text-sm inline-flex items-center gap-2"><Lucide.ChevronLeft size={16} /> Vissza</button>}</div>
+          <div>{view > 0 && <button onClick={back} className="text-slate-600 hover:bg-slate-100 px-5 py-2.5 rounded-xl font-bold text-sm inline-flex items-center gap-2"><Lucide.ChevronLeft size={16} /> Vissza</button>}</div>
           <div className="flex items-center gap-4">
-            {STEP_DEFS[step].id === 'letter' && (data.letter && data.letter.fileNumber) && <button onClick={() => window.print()} className="text-slate-600 hover:bg-slate-100 px-5 py-2.5 rounded-xl font-bold text-sm inline-flex items-center gap-2"><Lucide.Printer size={16} /> Nyomtatás</button>}
+            {STEP_DEFS[view].id === 'letter' && letterSent(process) && <button onClick={() => window.print()} className="text-slate-600 hover:bg-slate-100 px-5 py-2.5 rounded-xl font-bold text-sm inline-flex items-center gap-2"><Lucide.Printer size={16} /> Nyomtatás</button>}
             {done && reviewing ? (
-              step < STEP_DEFS.length - 1
-                ? <button onClick={next} className="bg-primary text-white px-7 py-3 rounded-2xl font-bold hover:bg-primary/90 transition-all inline-flex items-center gap-2 shadow-lg shadow-primary/20">Tovább <Lucide.ChevronRight size={18} /></button>
+              view < STEP_DEFS.length - 1
+                ? <button onClick={() => setView(view + 1)} className="bg-primary text-white px-7 py-3 rounded-2xl font-bold hover:bg-primary/90 transition-all inline-flex items-center gap-2 shadow-lg shadow-primary/20">Tovább <Lucide.ChevronRight size={18} /></button>
                 : <button onClick={() => setReviewing(false)} className="bg-slate-900 text-white px-7 py-3 rounded-2xl font-bold hover:bg-slate-800 transition-all inline-flex items-center gap-2"><Lucide.Check size={18} /> Bezárás</button>
+            ) : multbeli ? (
+              <button onClick={() => setView(step)} className="bg-slate-900 text-white px-7 py-3 rounded-2xl font-bold hover:bg-slate-800 transition-all inline-flex items-center gap-2">Vissza az aktuális lépéshez <Lucide.ChevronRight size={18} /></button>
+            ) : (STEP_DEFS[step].id === 'letter' && !letterSent(process)) ? (
+              <span className="text-sm font-bold text-slate-400 inline-flex items-center gap-2"><Lucide.Clock size={16} /> Kiküldésre vár</span>
             ) : (
               <button onClick={onPrimary} disabled={primaryDisabled} className="bg-primary text-white px-7 py-3 rounded-2xl font-bold hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all inline-flex items-center gap-2 shadow-lg shadow-primary/20">{primaryLabel} <Lucide.ChevronRight size={18} /></button>
             )}
@@ -7718,7 +7930,7 @@ const AdmissionsHub = (() => {
                 {previewDoc.entry && (previewDoc.entry.path || previewDoc.entry.dataUrl) ? (
                   <DocViewer entry={previewDoc.entry} fileName={previewDoc.fileName} />
                 ) : (
-                  <div className="bg-white border border-slate-200 rounded-xl mx-auto max-h-[55vh] aspect-[3/4] w-full max-w-xs flex flex-col items-center justify-center text-center p-6"><previewDoc.d.Icon size={48} className="text-slate-300 mb-4" /><div className="font-mono text-xs text-slate-400">{previewDoc.fileName}</div><div className="font-bold text-slate-700 mt-2">{previewDoc.d.label}</div>{previewDoc.d.id === 'passport' && ex && <div className="mt-4 text-xs text-slate-500 space-y-0.5"><div>{ex.name}</div><div>{ex.passportNumber}</div><div>{ex.country}</div></div>}<div className="mt-4 text-[10px] text-slate-300">Nincs csatolt fájl</div></div>
+                  <div className="bg-white border border-slate-200 rounded-xl mx-auto max-h-[55vh] aspect-[3/4] w-full max-w-xs flex flex-col items-center justify-center text-center p-6"><previewDoc.d.Icon size={48} className="text-slate-300 mb-4" /><div className="font-mono text-xs text-slate-400">{previewDoc.fileName}</div><div className="font-bold text-slate-700 mt-2">{previewDoc.d.label}</div><div className="mt-4 text-[10px] text-slate-300">Nincs csatolt fájl</div></div>
                 )}
                 {previewDoc.entry && (previewDoc.entry.path || previewDoc.entry.dataUrl) && <div className="mt-3 text-right"><DocDownloadLink entry={previewDoc.entry} fileName={previewDoc.fileName} className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5"><Lucide.Download size={14} /> Letöltés</DocDownloadLink></div>}
               </div>
@@ -7876,7 +8088,7 @@ const AdmissionsHub = (() => {
       </div>
     );
   };
-  JourneyShared = { PROGRAMS, STEP_DEFS, DOC_TYPES, COUNTRIES, seedProcesses };
+  JourneyShared = { PROGRAMS, STEP_DEFS, DOC_TYPES, COUNTRIES, seedProcesses, FEES, LetterDoc, letterValues, letterSent, makeLetterDraft };
   return AdmissionsHub;
 })();
 
@@ -11361,7 +11573,12 @@ const App: React.FC = () => {
      menüpontja is látszik, annál marad a régi név — két azonos felirat ne legyen. */
   if (!filteredMenuItems.some(i => i.id === AppView.TRAININGS)) {
     const k = filteredMenuItems.findIndex(i => i.id === AppView.STUDENT_PORTAL);
-    if (k >= 0) filteredMenuItems[k] = { ...filteredMenuItems[k], label: 'Képzések', icon: <Lucide.GraduationCap size={20} /> };
+    if (k >= 0) {
+      // A Képzések közvetlenül a Programok alá kerül: a két kínálat egymás mellett.
+      const [kepzes] = filteredMenuItems.splice(k, 1);
+      const pIdx = filteredMenuItems.findIndex(i => i.id === AppView.PROGRAMS);
+      filteredMenuItems.splice(pIdx >= 0 ? pIdx + 1 : k, 0, { ...kepzes, label: 'Képzések', icon: <Lucide.GraduationCap size={20} /> });
+    }
   }
 
   const renderContent = () => {
@@ -11677,6 +11894,8 @@ Object.assign(HU_EN, {
   'Új dokumentumtípus':'New document type','Dokumentumtípus szerkesztése':'Edit document type','Megnevezés magyarul (kötelező)':'Name in Hungarian (required)','Megnevezés angolul (nem kötelező)':'Name in English (optional)','Elrejtés az új választások elől':'Hide from new selections','Módosítás mentése':'Save changes','Típus létrehozása':'Create type','Az új típus minden program és képzés szerkesztésekor választható lesz.':'The new type becomes selectable when editing any programme or degree.','A név minden programnál és jelentkezésnél megváltozik.':'The name changes in every programme and application.','egyedi':'custom','rejtett':'hidden','Az 58_program_doc_types.sql migráció még nem futott le — egyedi dokumentumtípus addig nem vehető fel.':'Migration 58_program_doc_types.sql has not been run yet — custom document types cannot be added until then.','Új dokumentumtípust csak rendszergazda vehet fel.':'Only an administrator can add a document type.','A módosítás nem ment át — dokumentumtípust csak rendszergazda módosíthat.':'The change was not saved — only an administrator can edit a document type.','Ilyen nevű dokumentumtípus már van.':'A document type with this name already exists.','A megnevezés 2–120 karakter legyen.':'The name must be 2–120 characters.','A magyar megnevezés legalább 2 karakter.':'The Hungarian name must be at least 2 characters.','Nincs kapcsolat az adatbázissal.':'No connection to the database.',
   'Keresés: név, e-mail, azonosító, program…':'Search: name, email, ID, programme…','Név, e-mail, program…':'Name, email, programme…','Minden program':'All programmes','Minden folyamatállapot':'All process states','Hallgató tölti ki':'Applicant is filling in','Irodai lépés':'Office step','Dokumentumok: mind':'Documents: all','Hiányzik dokumentum':'Missing documents','Frissítve':'Updated','Nincs a szűrésnek megfelelő folyamat.':'No process matches the filters.','Folyamatállapot':'Process state',
   'Elfelejtettem a jelszavam':'Forgot your password?','Elfelejtett jelszó':'Forgot password','Add meg az e-mail-címet, amellyel belépsz. Küldünk egy linket, amellyel új jelszót állíthatsz be.':'Enter the email address you sign in with. We will send you a link to set a new password.','Link küldése':'Send link','Küldés…':'Sending…','← Vissza a bejelentkezéshez':'← Back to sign in','Túl sok kérés. Kérjük, várj egy percet, mielőtt újabb linket kérsz.':'Too many requests. Please wait a minute before requesting another link.','A kérés nem sikerült. Kérjük, próbáld újra.':'The request failed. Please try again.',
+  'Egy korábbi lépést nézel':'You are viewing an earlier step','Itt megnézheted, mit adtál meg. A haladásod nem változik, és ebben a nézetben nem módosíthatsz.':'Here you can review what you submitted. Your progress does not change, and nothing can be edited in this view.','Vissza az aktuális lépéshez':'Back to the current step','Kiküldésre vár':'Awaiting sending','A felvételi leveled előkészítés alatt':'Your acceptance letter is being prepared','Minden lépést teljesítettél. A Nemzetközi Iroda most ellenőrzi és véglegesíti a feltételes felvételi leveledet, majd kiküldi. Amint megérkezett, itt látod és ki is nyomtathatod — erről üzenetet is kapsz.':'You have completed every step. The International Office is now reviewing and finalising your conditional acceptance letter and will then send it. Once it arrives you will see it here and can print it — you will also get a message about it.','Kiküldve':'Sent','Tervezet — kiküldésre vár':'Draft — awaiting sending','Kiküldés a hallgatónak':'Send to the applicant','Kiküldés visszavonása':'Revoke sending','Levéltervezet létrehozása':'Create letter draft','A jelentkező a Felvételi levél lépésnél tart, de a levéltervezet még nem készült el.':'The applicant is at the acceptance letter step, but the draft has not been created yet.','A levél akkor készül el, amikor a jelentkező eléri a Felvételi levél lépést. Ezután itt nézheted át, szerkesztheted és küldheted ki.':'The letter is created when the applicant reaches the acceptance letter step. You can then review, edit and send it here.','Tandíj / félév (EUR)':'Tuition / semester (EUR)','Jelentkezési díj (EUR)':'Application fee (EUR)','Kollégiumi díj / félév (EUR)':'Dormitory fee / semester (EUR)','Kollégiumi kaució (EUR)':'Dormitory deposit (EUR)','Kiegészítő bekezdés (nem kötelező)':'Additional paragraph (optional)','Aláíró neve':'Signatory name','Aláíró beosztása':'Signatory title','Kelt':'Date of issue','A módosítások mentve. A levél még nem ment ki.':'Changes saved. The letter has not been sent yet.','A levéltervezet elkészült — nézd át, és küldd ki.':'The letter draft is ready — review it and send it.','A levelet kiküldtük. A hallgató a Felvételi folyamatban látja, és üzenetet is kapott róla.':'The letter has been sent. The applicant sees it in the admission process and has received a message about it.','A kiküldést visszavontuk — a levél újra tervezet, szerkeszthető.':'Sending revoked — the letter is a draft again and can be edited.','Levél kiküldésre vár':'Letter awaiting sending','Levél kiküldve':'Letter sent','Nincs kiválasztott szak — a levél nem állítható össze.':'No programme selected — the letter cannot be assembled.',
+  'Általános':'General','Képzés és oktatás':'Programmes & teaching','Felvételi':'Admissions','Partnerek és kommunikáció':'Partners & communication','Pénzügy és elemzés':'Finance & analytics','Minőségbiztosítás (ECHO)':'Quality assurance (ECHO)','Kollégium és szállás':'Dormitory & housing','Rendszer':'System',
   'Személyes adatok':'Personal details','Angol nyelvtudás':'English proficiency','Online interjú':'Online interview','Beadás és ellenőrzés':'Submit & review','Útlevél (adatoldal)':'Passport (data page)','Érettségi bizonyítvány + leckekönyv':'Secondary-school certificate + transcript','Alapdiploma + leckekönyv':'Bachelor degree + transcript','Mesterdiploma + leckekönyv':'Master degree + transcript','Önéletrajz (CV)':'Curriculum vitae (CV)','Portfólió / munkaminták':'Portfolio / work samples','Kutatási terv':'Research proposal','Ajánlólevél':'Recommendation letter','Előkészítő':'Preparatory','Rövid kurzus':'Short course','Tanulmányi kirándulás':'Educational excursion','Mesterképzés (MA · MBA)':'Master (MA · MBA)','Doktori (PhD)':'Doctoral (PhD)','Piszkozat':'Draft','Bírálat alatt':'In review','Elfogadva':'Accepted','Várólistán':'Waitlisted',
   'A képzés felvételi lépései':'Admission steps for this programme','Szükséges dokumentumok':'Required documents','A jelentkezés lezárult':'Applications closed','Jelentkezés folytatása':'Continue application','Jelentkezem':'Apply now','Vissza a képzésekhez':'Back to programmes','Mentés és kilépés':'Save & exit later','Erősítsd meg a kapcsolattartási adataidat ehhez a jelentkezéshez.':'Confirm your contact information for this application.','Telefon':'Phone','Állampolgárság szerinti ország':'Country of citizenship','pl. Nigéria':'e.g. Nigeria','Ezek a fájlok kötelezőek ehhez a képzéshez.':'These files are required for this programme.','Add meg az angol nyelvvizsgád adatait (B2 vagy magasabb ajánlott).':'Tell us about your English certificate (B2 or higher recommended).','Bizonyítvány':'Certificate','Válassz…':'Select…','Oktatás nyelve':'Medium of instruction','Egyéb':'Other','Pontszám / szint':'Score / level','Miért ezt a képzést választod? Legalább ~40 karakter (egy rövid bekezdés ideális).':'Why this programme? Minimum ~40 characters (a short paragraph is ideal).','Tisztelt Felvételi Bizottság! …':'Dear Admissions Committee, …','Online interjú foglalása':'Book an online interview','Regisztrációs díj':'Registration fee','Foglald le a helyed — ez a díj erősíti meg a regisztrációdat.':'Secure your place — this fee confirms your registration.','A jelentkezés feldolgozásához egyszeri, vissza nem térítendő jelentkezési díj szükséges.':'A one-time, non-refundable application fee is required to process your application.','Nincs fizetendő díj — minden rendben.':"No fee required — you're all set.",'Kártya':'Card','Banki átutalás':'Bank transfer','Fizetés kártyával':'Pay by card','Banki átutalás rögzítése':'Mark bank transfer','Teszt üzemmód — valódi terhelés nem történik.':'Test mode — no real charge is made.','Jelentkezés beadva':'Application submitted','Ellenőrzés és beadás':'Review & submit','A jelentkezésed a felvételi csoportnál van.':'Your application is with the admissions team.','Ellenőrizd, hogy minden kész, majd add be bírálatra.':'Check everything is complete, then submit for review.','Kész':'Complete','Hiányos':'Incomplete','Jelentkezés beadása':'Submit application','A beadáshoz minden lépést teljesíts':'Complete all steps to submit','Ismeretlen lépés.':'Unknown step.','Három rövid feladat. A megfeleléshez legalább 2 helyes válasz kell.':'Three short tasks. You need at least 2 correct to pass.','Válaszok beadása':'Submit answers','Minden szint':'All levels','Keresés a képzések között…':'Search programmes…','Nincs találat':'No results','Próbálj másik szintet vagy keresőkifejezést.':'Try a different level or search term.','Az adatok és a képzés felvételi folyamatának beállítása':"Configure details and this programme's admission flow",'Képzés neve':'Programme name','Kar':'Faculty','Fokozat megnevezése':'Degree label','Tandíj / szemeszter (EUR)':'Tuition / semester (EUR)','Időtartam (szemeszter)':'Duration (semesters)','Létszámkeret':'Capacity','Jelentkezési határidő':'Application deadline','Címkék (vesszővel elválasztva)':'Tags (comma-separated)','Összefoglaló':'Summary','Képzés borítóképe':'Programme image','Feltöltött kép ✓':'Uploaded image ✓','Kép URL (https://…)':'Image URL (https://…)','Felvételi folyamat — lépések':'Admission flow — steps','Sorrend':'Order','Jelentkezés nyitva':'Applications open','Képzés mentése':'Save programme','Időtartam':'Duration','Nyelv':'Language',
   // Hírfolyam (features/feed.jsx)
@@ -12231,6 +12450,8 @@ Object.assign(HU_EN, {
 });
 HU_EN_PHRASES.push(
   [/· elkezdte /g, '· started '],
+  [/^Kiküldve · (.+)$/g, 'Sent · $1'],
+  [/A mentés nem sikerült: /g, 'Saving failed: '],
   [/^Ha létezik fiók ezzel a címmel \((.+)\), elküldtük rá a linket\. Nézd meg a beérkező leveleidet \(és a spam mappát is\)\. A link egyszer használható, és egy idő után lejár\.$/g, 'If an account exists for this address ($1), we have sent it a link. Check your inbox (and the spam folder). The link works once and expires after a while.'],
   [/^Link küldése \((\d+)\)$/g, 'Send link ($1)'],
   // Egy korábbi általános szabály a „7 folyamat”-ot előbb „7 process(es)”-re fordítja,
