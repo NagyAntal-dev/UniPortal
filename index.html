@@ -801,6 +801,16 @@
     lucide.createIcons();
     // A visszaállító oldal „Új link kérése” gombja ide mutat: index.html#forgot
     if (location.hash === '#forgot') { openAuth('login'); showForgot(); }
+    /* Egy lejárt vagy már felhasznált e-mailes link hibával ide jöhet vissza
+       (#error_code=otp_expired…). Eddig ilyenkor semmi nem történt; most
+       megmondjuk, mi a teendő, és eltüntetjük a hibát a címsorból. */
+    (() => {
+      const hp = new URLSearchParams(location.hash.replace(/^#/, ''));
+      if (!hp.get('error_code') && !hp.get('error')) return;
+      openAuth('login');
+      showErr('loginError', 'This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link with “Forgot password?”.');
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    })();
   </script>
 </body>
 </html>
