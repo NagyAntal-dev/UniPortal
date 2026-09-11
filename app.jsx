@@ -11704,6 +11704,12 @@ Object.assign(HU_EN, {
   'Nincs jogosultságod ide feltölteni. Jelentkezz ki és be újra; ha így sem megy, szólj az ügyintézőnek.':
     'You are not allowed to upload here. Sign out and back in; if it still fails, contact the admissions office.',
   'A fájl túl nagy — legfeljebb 20 MB lehet.':'The file is too large — the limit is 20 MB.',
+  /* Programok: a megkezdett jelentkezések kiemelése */
+  'Folytatandó':'To continue',
+  'A jelentkezés már nem folytatható':'This application can no longer be continued',
+  'Egy megkezdett jelentkezésed vár folytatásra':'One started application is waiting to be continued',
+  'Elöl, kiemelve látod őket.':'They are shown first, highlighted.',
+  'ma jár le a határidő':'the deadline is today',
   'A törlés nem sikerült.':'The deletion failed.',
   'A dokumentumok betöltése nem sikerült.':'Loading the documents failed.',
   'A fájl nagyobb 20 MB-nál.':'The file is larger than 20 MB.',
@@ -11975,6 +11981,13 @@ Object.assign(HU_EN, {
 });
 HU_EN_PHRASES.push(
   [/· elkezdte /g, '· started '],
+  [/^(\d+) megkezdett jelentkezésed vár folytatásra$/g, '$1 started applications are waiting to be continued'],
+  // A korábbi, általános szabályok („3 lépés” → „3 steps”, „2 dokumentum” → „2 docs”)
+  // előbb futnak, ezért a már félig lefordított alakot is el kell fogadni.
+  [/(\d+)\/(\d+) (?:lépés|steps) kész/g, '$1/$2 steps done'],
+  [/(\d+)\/(\d+) (?:dokumentum|docs) feltöltve/g, '$1/$2 documents uploaded'],
+  [/(\d+)\/(\d+) (?:dokumentum|docs)\b/g, '$1/$2 documents'],
+  [/még (\d+) nap a határidőig/g, '$1 days left until the deadline'],
   [/\bmegnyílik: /g, 'opens: '],
   [/\bMegnyílik: /g, 'Opens: '],
   [/\baz ablak lejárt: /g, 'the window has closed: '],

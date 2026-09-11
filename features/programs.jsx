@@ -577,11 +577,64 @@ function PROG_MathStep({ data, setData }) {
 }
 
 /* ---------- student catalog ---------- */
+/* A HALLGATÓ SZEMSZÖGÉBŐL: hol tart ezen a programon.
+     tier 0 = FOLYTATANDÓ — megkezdte, és a program még nyitva: ezek állnak ELÖL
+     tier 1 = BEADVA      — a hallgatónak most nincs vele teendője
+     tier 2 = LEZÁRULT    — megkezdte, de a program közben lezárult
+     tier 3 = még nem kezdte el
+   A feltöltött dokumentumot a TÁROLÓBELI ÚTVONAL (path) jelzi. A régi
+   bejegyzések csak a fájl nevét őrizték, maga a fájl nem került fel — azokat
+   nem számoljuk feltöltöttnek, mert az ügyintéző sem látja őket. */
+function PROG_myState(p, mine) {
+  if (!mine) return { tier: 3 };
+  const docs = (mine.data && mine.data.docs) || {};
+  const kell = p.required_docs || [];
+  const feltoltve = kell.filter(d => docs[d] && docs[d].path).length;
+  const lepesek = (p.steps || []).filter(s => s !== 'review');
+  const lepes = Math.min(Number(mine.step_index) || 0, lepesek.length);
+  const alap = { feltoltve, kell: kell.length, lepes, osszes: lepesek.length };
+  if (mine.status && mine.status !== 'draft') return { tier: 1, ...alap };
+  if (!p.is_open) return { tier: 2, ...alap };
+  return { tier: 0, ...alap };
+}
+
+// A számot EGY szövegcsomópontba építjük: a {a}/{b} JSX-alak több csomópontra
+// törne, és a nyelvváltó kifejezés-mintája nem találna rá.
+function PROG_hataridoSzoveg(p) {
+  const d = DL_daysLeft(p.deadline);
+  if (d == null || d < 0) return null;
+  return { szoveg: d === 0 ? 'ma jár le a határidő' : `még ${d} nap a határidőig`, surgos: d <= 7 };
+}
+
 function PROG_Catalog({ programs, myApps, onOpen, onContinue }) {
   const [level, setLevel] = useState('all');
   const [q, setQ] = useState('');
   const list = programs.filter(p => (level === 'all' || p.level === level) && (!q || (p.name + ' ' + p.faculty).toLowerCase().includes(q.toLowerCase())));
   const chips = [['all', 'Minden szint'], ...Object.entries(PROG_LEVELS)];
+
+  /* SORREND. A folytatandók elöl, azon belül a KÖZELEBBI HATÁRIDŐ előbb —
+     akinek holnap zár, az ne a lista közepén várjon. Utánuk a beadottak és a
+     lezárultak (a legutóbb módosított elöl), végül a többi program változatlan
+     sorrendben. A rendezés a SZŰRT listán fut, tehát a szint- és a keresőszűrő
+     ugyanúgy működik, mint eddig. */
+  const ordered = list
+    .map((p, i) => { const mine = myApps.find(a => a.program_id === p.id); return { p, i, mine, st: PROG_myState(p, mine) }; })
+    .sort((a, b) => {
+      if (a.st.tier !== b.st.tier) return a.st.tier - b.st.tier;
+      if (a.st.tier === 0) {
+        const da = DL_daysLeft(a.p.deadline), db = DL_daysLeft(b.p.deadline);
+        const na = da == null ? 1e9 : da, nb = db == null ? 1e9 : db;
+        if (na !== nb) return na - nb;
+      }
+      if (a.st.tier <= 2) {
+        const ta = Date.parse((a.mine && a.mine.updated_at) || '') || 0;
+        const tb = Date.parse((b.mine && b.mine.updated_at) || '') || 0;
+        if (ta !== tb) return tb - ta;
+      }
+      return a.i - b.i;
+    });
+  const folytatando = ordered.filter(x => x.st.tier === 0).length;
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -590,23 +643,55 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue }) {
       <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-5 custom-scrollbar">
         {chips.map(([k, label]) => <button key={k} onClick={() => setLevel(k)} className={'flex-none px-4 py-2 rounded-full text-[13px] font-bold transition-all ' + (level === k ? 'bg-slate-900 text-white' : 'bg-white border border-slate-100 text-slate-500 hover:border-slate-300')}>{label}</button>)}
       </div>
+
+      {folytatando > 0 && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Lucide.PlayCircle size={18} className="text-amber-600 flex-none mt-0.5" />
+          <div>
+            <p className="text-sm font-black text-amber-900">{folytatando === 1 ? 'Egy megkezdett jelentkezésed vár folytatásra' : `${folytatando} megkezdett jelentkezésed vár folytatásra`}</p>
+            <p className="text-[12px] text-amber-800/80">Elöl, kiemelve látod őket.</p>
+          </div>
+        </div>
+      )}
+
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
-        {list.map(p => { const mine = myApps.find(a => a.program_id === p.id); const dleft = DL_daysLeft(p.deadline); return (
-          <div key={p.id} className="group bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md hover:border-slate-200 transition-all">
+        {ordered.map(({ p, mine, st }) => {
+          const kiemelt = st.tier === 0;
+          const hd = kiemelt ? PROG_hataridoSzoveg(p) : null;
+          const stat = mine ? (PROG_STATUS[mine.status] || PROG_STATUS.draft) : null;
+          return (
+          <div key={p.id} className={'group bg-white rounded-3xl border shadow-sm flex flex-col overflow-hidden hover:shadow-md transition-all '
+            + (kiemelt ? 'border-amber-300 ring-2 ring-amber-200' : st.tier === 1 ? 'border-blue-200' : 'border-slate-100 hover:border-slate-200')}>
             <div className="relative h-32">
               <PROG_Banner program={p} className="h-full" />
               <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
                 <UBadge tone={PROG_LEVEL_TONE[p.level]} className="!bg-white/90 backdrop-blur">{p.degree}</UBadge>
-                {!p.is_open ? <UBadge tone="red" className="!bg-white/90 backdrop-blur">Lezárva</UBadge> : mine ? <UBadge tone={PROG_STATUS[mine.status].tone} className="!bg-white/90 backdrop-blur">{PROG_STATUS[mine.status].label}</UBadge> : null}
+                {kiemelt ? <UBadge tone="amber" className="!bg-white/90 backdrop-blur">Folytatandó</UBadge>
+                  : st.tier === 1 ? <UBadge tone={stat.tone} className="!bg-white/90 backdrop-blur">{stat.label}</UBadge>
+                  : !p.is_open ? <UBadge tone="red" className="!bg-white/90 backdrop-blur">Lezárva</UBadge> : null}
               </div>
             </div>
+            {kiemelt && (
+              <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-100 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-amber-800">
+                <span>{`${st.lepes}/${st.osszes} lépés kész`}</span>
+                {st.kell > 0 && <span>{`${st.feltoltve}/${st.kell} dokumentum feltöltve`}</span>}
+                {hd && <span className={hd.surgos ? 'text-red-600' : ''}>{hd.szoveg}</span>}
+              </div>
+            )}
+            {st.tier === 2 && (
+              <div className="px-5 py-2.5 bg-red-50 border-b border-red-100 text-[11px] font-bold text-red-700">A jelentkezés már nem folytatható</div>
+            )}
             <div className="p-5 flex flex-col flex-1">
               <h3 className="font-black text-slate-900 tracking-tight leading-snug">{p.name}</h3>
               <p className="text-[12px] text-slate-400 font-semibold mt-1">{p.faculty}</p>
               <p className="text-sm text-slate-500 mt-3 leading-relaxed line-clamp-3 flex-1">{p.summary}</p>
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-50">
                 <div><div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Tandíj</div><div className="font-black text-slate-800">{DL_money(p.tuition)}{p.tuition ? <span className="text-[11px] text-slate-400 font-bold">/sem</span> : ''}</div></div>
-                <button onClick={() => mine ? onContinue(p, mine) : onOpen(p)} className={'text-sm font-bold ' + (mine ? 'text-primary' : 'text-slate-500 group-hover:text-primary') + ' flex items-center gap-1 transition-colors'}>{mine ? 'Folytatás' : 'Megtekintés'} <Lucide.ArrowRight size={15} /></button>
+                {kiemelt ? (
+                  <button onClick={() => onContinue(p, mine)} className={U_btnPrimary + ' py-2 px-4 text-[13px]'}>Folytatás <Lucide.ArrowRight size={15} /></button>
+                ) : (
+                  <button onClick={() => mine ? onContinue(p, mine) : onOpen(p)} className={'text-sm font-bold ' + (mine ? 'text-primary' : 'text-slate-500 group-hover:text-primary') + ' flex items-center gap-1 transition-colors'}>{(st.tier === 1 || st.tier === 2) ? 'Megnyitás' : mine ? 'Folytatás' : 'Megtekintés'} <Lucide.ArrowRight size={15} /></button>
+                )}
               </div>
             </div>
           </div>
@@ -773,7 +858,11 @@ const ProgramsView = ({ user, scope = 'programs' }) => {
   const refetch = async () => { const [p, a] = await Promise.all([PROG_loadPrograms(), PROG_loadApps()]); setPrograms(p); setApps(a); };
   useEffect(() => { refetch(); }, []);
 
-  const myApps = (apps || []).filter(a => a.applicant_email === (user && user.email));
+  /* Kis-nagybetű független egyezés: a beszúrás kisbetűsít (owner_email), itt
+     viszont eddig a nyers e-mailt hasonlítottuk. Eltérő írásmódnál a hallgató
+     nem látta a saját piszkozatát — és minden kattintás ÚJ piszkozatot szúrt be. */
+  const sajatEmail = String((user && user.email) || '').toLowerCase();
+  const myApps = (apps || []).filter(a => sajatEmail && String(a.applicant_email || '').toLowerCase() === sajatEmail);
 
   const openApply = async (program) => {
     let app = myApps.find(a => a.program_id === program.id);
@@ -817,20 +906,36 @@ const ProgramsView = ({ user, scope = 'programs' }) => {
       {!staff && (
         <>
           <PROG_Catalog programs={programs} myApps={myApps} onOpen={setDetail} onContinue={(p, a) => setApplying({ program: p, app: a })} />
-          {myApps.length > 0 && (
+          {myApps.length > 0 && (() => {
+            // Ugyanaz a rangsor, mint a katalógusban — a két helyen ne álljon más sorrendben ugyanaz.
+            const sorok = myApps
+              .map(a => ({ a, p: programs.find(x => x.id === a.program_id) }))
+              .filter(x => x.p)
+              .map(x => ({ ...x, st: PROG_myState(x.p, x.a) }))
+              .sort((x, y) => (x.st.tier - y.st.tier) ||
+                ((Date.parse(y.a.updated_at || '') || 0) - (Date.parse(x.a.updated_at || '') || 0)));
+            return (
             <div className="mt-10">
               <h2 className="text-lg font-black text-slate-900 mb-4">Jelentkezéseim</h2>
               <div className="grid sm:grid-cols-2 gap-3">
-                {myApps.map(a => { const p = programs.find(x => x.id === a.program_id); if (!p) return null; return (
-                  <button key={a.id} onClick={() => setApplying({ program: p, app: a })} className="text-left bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-4 hover:border-primary transition-colors">
-                    <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-none"><Lucide.GraduationCap size={20} /></div>
-                    <div className="min-w-0 flex-1"><div className="font-bold text-slate-800 truncate">{p.name}</div><div className="text-[11px] text-slate-400">{p.degree}</div></div>
-                    <UBadge tone={PROG_STATUS[a.status].tone}>{PROG_STATUS[a.status].label}</UBadge>
+                {sorok.map(({ a, p, st }) => { const stat = PROG_STATUS[a.status] || PROG_STATUS.draft; return (
+                  <button key={a.id} onClick={() => setApplying({ program: p, app: a })}
+                    className={'text-left bg-white rounded-2xl border shadow-sm p-4 flex items-center gap-4 transition-colors '
+                      + (st.tier === 0 ? 'border-amber-300 ring-1 ring-amber-200 hover:border-amber-400' : 'border-slate-100 hover:border-primary')}>
+                    <div className={'w-11 h-11 rounded-2xl flex items-center justify-center flex-none ' + (st.tier === 0 ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary')}><Lucide.GraduationCap size={20} /></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-slate-800 truncate">{p.name}</div>
+                      <div className="text-[11px] text-slate-400">{st.tier === 0 ? (`${st.lepes}/${st.osszes} lépés kész` + (st.kell ? ` · ${st.feltoltve}/${st.kell} dokumentum` : '')) : p.degree}</div>
+                    </div>
+                    {st.tier === 0 ? <UBadge tone="amber">Folytatandó</UBadge>
+                      : st.tier === 2 ? <UBadge tone="red">Lezárva</UBadge>
+                      : <UBadge tone={stat.tone}>{stat.label}</UBadge>}
                   </button>
                 ); })}
               </div>
             </div>
-          )}
+            );
+          })()}
         </>
       )}
 
