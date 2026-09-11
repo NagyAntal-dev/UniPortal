@@ -1713,8 +1713,11 @@ const AgentPortal: React.FC<AgentPortalProps> = ({ user }) => {
         : (s.status === 'Conditionally accepted' || s.status === 'Nominated' || s.status === 'Documents checked' || s.status === 'Submitted'))
       .reduce((acc, s) => {
         const agency = agencies.find(a => a.id === s.agentId);
-        const rate = agency ? agency.commissionRate : 0;
-        return acc + (s.tuitionFee * (rate / 100));
+        // Hiányzó tandíj vagy jutalékkulcs 0-nak számít — különben egyetlen hiányos
+        // sor NaN-ná tette a teljes összeget, és a csempén „€NaN” állt.
+        const rate = Number(agency && agency.commissionRate) || 0;
+        const fee = Number(s.tuitionFee) || 0;
+        return acc + fee * (rate / 100);
       }, 0);
   };
 
@@ -2471,6 +2474,8 @@ return AgentPortal;
    független: „kovacs” megtalálja „Kovács”-ot. */
 const ADM_norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const ADM_SZURO_URES = { q: '', program: '', allapot: '', dok: '' };
+// „2026.06.27” és ISO dátum egyaránt → ezredmásodperc (ismeretlennél üres, az a végére rendeződik).
+const ADM_ts = (s) => { const d = Date.parse(String(s || '').replace(/^(\d{4})\.(\d{2})\.(\d{2})\.?/, '$1-$2-$3')); return isNaN(d) ? '' : d; };
 const ADM_datum = (s) => {
   const d = new Date(s);
   if (!s || isNaN(d.getTime())) return '—';
@@ -2722,7 +2727,9 @@ const AdmissionsCore = ({ user }) => {
       (!szuro.dok || (szuro.dok === 'hianyos' ? x.missing.length > 0 : x.missing.length === 0))
     ), rendA, {
       nev: x => ADM_norm(x.nev), szak: x => ADM_norm(x.progs[0] && x.progs[0].name), folyamat: x => x.pct,
-      hiany: x => x.missing.length, allapot: x => x.allapotRend, frissitve: x => x.frissitve,
+      // Időbélyegként: a régi sorok „2026.06.27”, az újak ISO alakban jönnek — szövegként a pont
+      // a kötőjel UTÁN rendeződne, és a régi sorok a legfrissebbek elé kerülnének.
+      hiany: x => x.missing.length, allapot: x => x.allapotRend, frissitve: x => ADM_ts(x.frissitve),
     });
     // Az alsó lista: a keresés és a program mindkettőre hat, a státusz-gombok csak erre.
     const diakQ = students.filter(st =>
