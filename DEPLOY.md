@@ -7,14 +7,14 @@ Ez a leírás a teljes UniPortal-rendszer saját szerveres telepítéséről sz�
 ## Röviden
 
 ```sh
-git clone https://github.com/kecskemetadatkozpont/UniPortal.git /opt/UniPortal
+unzip UniPortal-docker-*.zip -d /opt            # a kapott csomagból: /opt/UniPortal
 cd /opt/UniPortal
 ./init-env.sh https://uniportal.nje.hu          # egyszer: .env erős, véletlen titkokkal
 docker compose up -d --build                    # indítás és minden frissítés
 ./deploy/make-superadmin.sh te@nje.hu --create  # első rendszergazda
 ```
 
-A `docker compose` parancsokat mindig a tároló gyökeréből futtasd: a `.env` ott van, és az tölti be a UniPortal-réteget is.
+A csomag helyett a nyilvános tárolóból is dolgozhatsz: `git clone https://github.com/kecskemetadatkozpont/UniPortal.git /opt/UniPortal`. A `docker compose` parancsokat mindig a UniPortal-könyvtár gyökeréből futtasd: a `.env` ott van, és az tölti be a UniPortal-réteget is.
 
 ## 1. Mi indul el
 
@@ -38,17 +38,19 @@ A Supabase-szolgáltatások a hivatalos self-host csomagból jönnek, **rögzít
 
 - Linux szerver (amd64 vagy arm64), legalább **4 GB RAM** (8 GB ajánlott) és **20 GB** szabad lemez.
 - **Docker Engine 24+** és **Docker Compose v2.24.4+**. Ellenőrzés: `docker compose version`. A régi, kötőjeles `docker-compose` (v1) nem jó.
-- `git` és `openssl`.
+- `unzip` (a csomag kibontásához) vagy `git`, valamint `openssl`.
 - Kimenő internet a képek letöltéséhez. A felhasználók böngészőjének néhány nyilvános CDN-t is el kell érnie (lásd *Ismert korlátok*).
 - Éles üzemhez **domain + HTTPS** (5. pont) és **SMTP** (6. pont).
 
 ## 3. Telepítés
 
 ```sh
-git clone https://github.com/kecskemetadatkozpont/UniPortal.git /opt/UniPortal
+unzip UniPortal-docker-*.zip -d /opt      # vagy: git clone https://github.com/kecskemetadatkozpont/UniPortal.git /opt/UniPortal
 cd /opt/UniPortal
 ./init-env.sh https://uniportal.nje.hu
 ```
+
+A csomagot közvetlenül a szerveren bontsd ki. Ha Windows-on vagy a macOS Finderével bontják ki, a szkriptek elveszíthetik a futtatási jogukat; ekkor: `chmod +x init-env.sh deploy/*.sh`.
 
 Az `init-env.sh`-t **egyszer** kell futtatni. A `.env.example` alapján létrehozza a `.env`-et: erős, véletlen titkokat generál (adatbázis-jelszó, JWT-titok, API-kulcsok, Studio-jelszó), és beállítja a nyilvános címet. A paraméter az a cím, amelyen a felhasználók elérik a rendszert. HTTPS-proxy mögött ez a `https://…` cím. Helyi próbánál elhagyható, ekkor `http://localhost:8080` lesz.
 
@@ -163,11 +165,13 @@ Utána futtasd: `docker compose up -d`. Az `auth` az új beállításokkal indul
 
 ```sh
 cd /opt/UniPortal
-sudo ./deploy/backup.sh          # előtte mentés
-git pull
+sudo ./deploy/backup.sh                            # előtte mentés
+unzip -o /tmp/UniPortal-docker-<új>.zip -d /opt    # az új csomag a régi fölé (git esetén: git pull)
 docker compose up -d --build
-docker compose logs migrate      # mi futott le
+docker compose logs migrate                        # mi futott le
 ```
+
+A csomagban nincs `.env`, adatbázis, feltöltött fájl és mentés, ezért a kibontás csak a programfájlokat írja felül.
 
 A `migrate` csak az új migrációkat futtatja; a nyilvántartás az `uniportal_meta.migrations` táblában van. Egy már lefutott, de utólag módosított migrációt nem futtat újra, csak figyelmeztet.
 
@@ -220,6 +224,7 @@ Az áthozott mentés személyes adatokat tartalmaz: kezeld a GDPR szerint.
 | Tünet | Teendő |
 |---|---|
 | A `docker compose` a `.env` hiányára panaszkodik | Még nem futott az `./init-env.sh`. |
+| `./init-env.sh: Permission denied` | A csomagot nem a szerveren bontották ki. Futtasd: `chmod +x init-env.sh deploy/*.sh`. |
 | `migrate` → `exited (1)` | `docker compose logs migrate`: kiírja a hibás fájlt és az SQL-hibát. A javítás után `docker compose up -d`. |
 | A `web` nem indul | Megvárja a `migrate` sikeres lefutását és az `api-gw` egészséges állapotát: `docker compose ps`. |
 | „HIBA: a .env titkai nincsenek kitöltve” | A `.env`-ben `CHANGE_ME` maradt. Új telepítésnél töröld a `.env`-et, és futtasd újra az `./init-env.sh`-t. |
