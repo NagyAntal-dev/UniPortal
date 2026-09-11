@@ -14,7 +14,9 @@
 #    szűrői így nem tudják előre elhasználni az egyszer használható linket.
 #    A sablont a web szolgáltatja: deploy/web/email/recovery.html
 #
-# 3) WhatsApp: a whatsapp-send / whatsapp-webhook függvények titkai a .env-ből.
+# 3) Edge Functions: a UniPortal függvényei közvetlenül a supabase/functions
+#    könyvtárból, csak olvasásra csatolva — nincs másolat, ami elavulhatna.
+#    Új függvénynél ide kell egy újabb sor. A titkaik a .env WHATSAPP_* soraiból.
 # ============================================================================
 services:
   api-gw:
@@ -29,6 +31,9 @@ services:
       GOTRUE_MAILER_TEMPLATES_RECOVERY: http://web:8080/email/recovery.html
       GOTRUE_MAILER_SUBJECTS_RECOVERY: "Új jelszó beállítása · Reset your password — UniPortal"
   functions:
+    volumes:
+      - ./supabase/functions/whatsapp-send:/home/deno/functions/whatsapp-send:ro,z
+      - ./supabase/functions/whatsapp-webhook:/home/deno/functions/whatsapp-webhook:ro,z
     environment:
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}

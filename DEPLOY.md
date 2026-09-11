@@ -265,7 +265,7 @@ Ekkor a Supabase Dashboardon (*Authentication → URL Configuration*) az új cí
 ## Fejlesztőknek
 
 - **Új migráció:** hozd létre a `supabase/NN_leiras.sql` fájlt, **és** vegyél fel egy sort a `deploy/migrate/manifest.txt`-be (a sorrend számít). Lefutott migrációt ne módosíts, hanem írj újat.
-- **Edge Functions:** a `supabase/functions/*` módosítása után futtasd a `./deploy/sync-functions.sh`-t, és a `deploy/supabase/volumes/functions` változását is commitold.
+- **Edge Functions:** a függvények közvetlenül a `supabase/functions/<név>` könyvtárból futnak; a `deploy/compose.uniportal.yml` csatolja őket a functions-konténerbe. Új függvénynél vegyél fel oda egy újabb `volumes` sort.
 - **Supabase-verzió emelése:** írd át a REF-et a `deploy/vendor-supabase.sh`-ban, és futtasd. Utána vesd össze a `deploy/supabase/.env.example`-t a gyökér `.env.example`-lel, és próbáld ki tesztszerveren.
 - **Felület:** a Docker-kép maga csomagolja (`npm ci` + `node build.mjs`). A GitHub Pages-hez továbbra is a commitolt `app.bundle.js` kell.
 - **Futásidejű beállítás:** a `config.js`-t a web-konténer induláskor írja (`deploy/web/40-uniportal-config.sh`). GitHub Pages-en a tárolóbeli, üres `config.js` töltődik be, és az oldalak a felhős címet használják.
