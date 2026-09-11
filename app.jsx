@@ -2429,6 +2429,44 @@ const AgentPortal: React.FC<AgentPortalProps> = ({ user }) => {
 return AgentPortal;
 })();
 
+/* ===== Jelentkezések: keresés, szűrés, rendezés =====
+   A Jelentkezés és Felvételi nézet két listájának (élő folyamatok + multi-
+   program jelentkezések) közös szűrősávja. A keresés ékezet- és kisbetű-
+   független: „kovacs” megtalálja „Kovács”-ot. */
+const ADM_norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const ADM_SZURO_URES = { q: '', program: '', allapot: '', dok: '' };
+const ADM_datum = (s) => {
+  const d = new Date(s);
+  if (!s || isNaN(d.getTime())) return '—';
+  try { return d.toLocaleDateString(localStorage.getItem('nje_lang') === 'en' ? 'en-GB' : 'hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
+  catch (e) { return d.toISOString().slice(0, 10); }
+};
+// Stabil rendezés; az üres érték iránytól függetlenül a végére kerül.
+function ADM_rendez(lista, rend, kulcsok) {
+  const f = kulcsok[rend.col];
+  if (!f) return lista;
+  const irany = rend.dir === 'desc' ? -1 : 1;
+  const ures = (v) => v == null || v === '';
+  return lista.map((x, i) => ({ x, i, k: f(x) })).sort((a, b) => {
+    if (ures(a.k) !== ures(b.k)) return ures(a.k) ? 1 : -1;
+    const c = (typeof a.k === 'number' && typeof b.k === 'number') ? a.k - b.k
+      : String(a.k).localeCompare(String(b.k), 'hu', { sensitivity: 'base' });
+    return c ? c * irany : a.i - b.i;
+  }).map(o => o.x);
+}
+function ADM_Fej({ cim, oszlop, rend, setRend, className }) {
+  const aktiv = rend.col === oszlop;
+  return (
+    <th className={'px-6 py-4 ' + (className || '')} aria-sort={aktiv ? (rend.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" onClick={() => setRend(r => r.col === oszlop ? { col: oszlop, dir: r.dir === 'asc' ? 'desc' : 'asc' } : { col: oszlop, dir: 'asc' })}
+        className={'inline-flex items-center gap-1 uppercase tracking-wider font-bold hover:text-slate-600 transition-colors ' + (aktiv ? 'text-slate-700' : '')}>
+        {cim}
+        {aktiv ? (rend.dir === 'asc' ? <Lucide.ChevronUp size={12} /> : <Lucide.ChevronDown size={12} />) : <Lucide.ChevronDown size={12} className="opacity-30" />}
+      </button>
+    </th>
+  );
+}
+
 /* ===== AdmissionsCore ===== */
 const AdmissionsCore = (() => {
 type SubView = 'applications' | 'form_builder' | 'review' | 'offers';
@@ -2462,6 +2500,29 @@ const AdmissionsCore = ({ user }) => {
   const [aiReport, setAiReport] = useState(null);
   const [msgDraft, setMsgDraft] = useState({ subject: '', body: '', attachments: [] });
   const [msgSent, setMsgSent] = useState(false);
+  // Közös keresés/szűrés/rendezés a Jelentkezések nézet két listájához.
+  const [szuro, setSzuro] = useState(ADM_SZURO_URES);
+  const [rendA, setRendA] = useState({ col: 'frissitve', dir: 'desc' });
+  const [rendB, setRendB] = useState({ col: 'nev', dir: 'asc' });
+  /* A Programok menüből indított jelentkezés program_id-t hordoz: a program
+     nevét, lépésszámát és kötelező dokumentumait a programs táblából oldjuk
+     fel (az egyedi dokumentumtípusok nevével együtt). Csak olvasás — a
+     PROG_loadPrograms() hiányzó szakokat is felvinne, az itt nem kell. */
+  const [progKat, setProgKat] = useState({});
+  useEffect(() => {
+    let el = false;
+    (async () => {
+      if (!window.sb) return;
+      try {
+        const [res] = await Promise.all([
+          window.sb.from('programs').select('id,name,code,degree,level,steps,required_docs'),
+          typeof PROG_loadDocTypes === 'function' ? PROG_loadDocTypes() : null,
+        ]);
+        if (!el && res && Array.isArray(res.data)) { const m = {}; res.data.forEach(x => { m[x.id] = x; }); setProgKat(m); }
+      } catch (e) { /* a lista enélkül is működik, csak a program neve hiányzik */ }
+    })();
+    return () => { el = true; };
+  }, []);
 
   useEffect(() => {
     // Demo mintaadat kizárólag az admin nézethez, külön 'demo' kulcsban (sosem kerül diák székébe).
@@ -2568,7 +2629,76 @@ const AdmissionsCore = ({ user }) => {
     const DT = JourneyShared.DOC_TYPES || [];
     const PROGS = JourneyShared.PROGRAMS || [];
     const reqDocs = DT.filter(d => !d.optional);
-    const pName = (p) => (p.data && p.data.extracted && p.data.extracted.name) || (p.data && p.data.account && p.data.account.fullName) || 'Új jelentkező';
+    const pName = (p) => (p.data && p.data.extracted && p.data.extracted.name) || (p.data && p.data.account && p.data.account.fullName) || p.applicantName || 'Új jelentkező';
+
+    /* Minden folyamatsorból EGYSZER számolt, kereshető és rendezhető nézet.
+       A hallgatónál lévő (stage='student') jelentkezés a saját programja szerinti
+       lépésben és dokumentumlistával látszik — nem az irodai lánc „Szakok”
+       lépésében, ahol eddig tévesen állt. */
+    const procInfo = (p) => {
+      const cancelled = !!(p.data && p.data._cancelled);
+      const kat = p.programId ? progKat[p.programId] : null;
+      const progs = [
+        ...(p.programId ? [{ kulcs: ADM_norm(kat ? kat.name : p.programId), code: kat ? (kat.code || kat.degree || kat.name) : p.programId, name: kat ? kat.name : p.programId }] : []),
+        ...((p.data && p.data.programs) || []).map(id => PROGS.find(x => x.id === id)).filter(Boolean)
+          .map(pr => ({ kulcs: ADM_norm(pr.name), code: pr.code, name: pr.name })),
+      ];
+      const docs = (p.data && p.data.docs) || {};
+      const hallgatonal = p.stage === 'student' && !p.done;
+      const kell = (kat && Array.isArray(kat.required_docs))
+        ? kat.required_docs.map(id => ({ id, label: typeof PROG_docLabel === 'function' ? PROG_docLabel(id) : id }))
+        : reqDocs;
+      const missing = kell.filter(d => !(docs[d.id] && (docs[d.id].fileName || docs[d.id].path)));
+      let pct, stLabel, lepesSzoveg, allapot, allapotRend;
+      if (hallgatonal) {
+        const n = kat ? Math.max((kat.steps || []).filter(x => x !== 'review').length, 1) : 1;
+        const k = Math.min(Number(p.studentStep) || 0, n);
+        pct = Math.round((k / n) * 100); stLabel = 'Hallgató tölti ki'; lepesSzoveg = `${k}/${n}`;
+        allapot = 'student'; allapotRend = 0;
+      } else {
+        pct = p.done ? 100 : Math.round(((p.maxReached || 0) / Math.max(SD.length - 1, 1)) * 100);
+        stLabel = p.done ? 'Felvéve' : (SD[p.step] ? SD[p.step].label : '—');
+        lepesSzoveg = `${p.done ? SD.length : (p.maxReached || 0) + 1}/${SD.length}`;
+        allapot = p.done ? 'accepted' : ('step:' + (SD[p.step] ? SD[p.step].id : '?'));
+        allapotRend = p.done ? 90 : 10 + (Number(p.step) || 0);
+      }
+      if (cancelled) { allapot = 'cancelled'; allapotRend = 99; }
+      const email = (p.data && p.data.account && p.data.account.email) || p._owner || '';
+      const nev = pName(p);
+      return { p, nev, email, progs, missing, pct, stLabel, lepesSzoveg, allapot, allapotRend, cancelled, hallgatonal,
+        frissitve: p.updatedAt || p.createdAt || '',
+        kereso: ADM_norm([nev, email, p.id, stLabel, ...progs.map(x => x.name + ' ' + x.code)].join(' ')) };
+    };
+    const qN = ADM_norm(szuro.q);
+    const procAll = journeyProcs.map(procInfo);
+    const procLista = ADM_rendez(procAll.filter(x =>
+      (!qN || x.kereso.includes(qN)) &&
+      (!szuro.program || x.progs.some(pr => pr.kulcs === szuro.program)) &&
+      (!szuro.allapot || x.allapot === szuro.allapot) &&
+      (!szuro.dok || (szuro.dok === 'hianyos' ? x.missing.length > 0 : x.missing.length === 0))
+    ), rendA, {
+      nev: x => ADM_norm(x.nev), szak: x => ADM_norm(x.progs[0] && x.progs[0].name), folyamat: x => x.pct,
+      hiany: x => x.missing.length, allapot: x => x.allapotRend, frissitve: x => x.frissitve,
+    });
+    // Az alsó lista: a keresés és a program mindkettőre hat, a státusz-gombok csak erre.
+    const diakQ = students.filter(st =>
+      (!qN || ADM_norm([st.name, st.email, st.id, st.program, (STATUS_BY_CODE[st.status] || {}).hu, st.status].join(' ')).includes(qN)) &&
+      (!szuro.program || ADM_norm(st.program) === szuro.program));
+    const diakLista = ADM_rendez(diakQ.filter(st => statusFilter === 'All' || st.status === statusFilter), rendB, {
+      nev: st => ADM_norm(st.name), szak: st => ADM_norm(st.program),
+      dok: st => (statusOrder(st.status) >= statusOrder('Documents checked') ? 1 : 0),
+      ajanlas: st => ((st.recommendationLetters || []).filter(l => l.status === 'Verified').length),
+      allapot: st => statusOrder(st.status),
+    });
+    const programOpciok = (() => {
+      const m = new Map();
+      procAll.forEach(x => x.progs.forEach(pr => { if (pr.kulcs && !m.has(pr.kulcs)) m.set(pr.kulcs, pr.name); }));
+      students.forEach(st => { const k = ADM_norm(st.program); if (k && !m.has(k)) m.set(k, st.program); });
+      return [...m.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'hu'));
+    })();
+    const szurtE = !!(szuro.q || szuro.program || szuro.allapot || szuro.dok || statusFilter !== 'All');
+    const torolSzurok = () => { setSzuro(ADM_SZURO_URES); setStatusFilter('All'); };
+    const selCls = 'px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary lg:max-w-[15rem]';
     const sendMessage = (proc) => {
       const owner = proc._owner || 'demo';
       const key = 'nje_messages_' + owner;
@@ -2840,6 +2970,36 @@ const AdmissionsCore = ({ user }) => {
 
     return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Közös keresés és szűrés — mindkét listára hat; a státusz-gombok az alsó listán maradnak. */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="relative flex-1 min-w-0">
+            <Lucide.Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={szuro.q} onChange={e => { const v = e.target.value; setSzuro(x => ({ ...x, q: v })); }} placeholder="Keresés: név, e-mail, azonosító, program…"
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+          </div>
+          <select aria-label="Program" value={szuro.program} onChange={e => { const v = e.target.value; setSzuro(x => ({ ...x, program: v })); }} className={selCls}>
+            <option value="">Minden program</option>
+            {programOpciok.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+          </select>
+          <select aria-label="Folyamatállapot" value={szuro.allapot} onChange={e => { const v = e.target.value; setSzuro(x => ({ ...x, allapot: v })); }} className={selCls}>
+            <option value="">Minden folyamatállapot</option>
+            <option value="student">Hallgató tölti ki</option>
+            <option value="__iroda" disabled>Irodai lépés</option>
+            {SD.map(st => <option key={st.id} value={'step:' + st.id}>{'\u00a0\u00a0' + st.label}</option>)}
+            <option value="accepted">Felvéve</option>
+            <option value="cancelled">Megszakítva</option>
+          </select>
+          <select aria-label="Dokumentumok" value={szuro.dok} onChange={e => { const v = e.target.value; setSzuro(x => ({ ...x, dok: v })); }} className={selCls}>
+            <option value="">Dokumentumok: mind</option>
+            <option value="hianyos">Hiányzik dokumentum</option>
+            <option value="kesz">Minden feltöltve</option>
+          </select>
+          {szurtE && <button type="button" onClick={torolSzurok} className="px-3 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 inline-flex items-center gap-1.5 whitespace-nowrap"><Lucide.X size={15} /> Szűrők törlése</button>}
+        </div>
+        <p className="text-[12px] font-semibold text-slate-500">{`Találat: ${procLista.length}/${procAll.length} folyamat · ${diakLista.length}/${students.length} jelentkező`}</p>
+      </div>
+
       {/* Élő felvételi folyamat státusz */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-50 flex justify-between items-center">
@@ -2851,45 +3011,48 @@ const AdmissionsCore = ({ user }) => {
             <RefreshingBadge on={procsRefreshing} />
             {procsLoading
               ? <SkeletonBar w={82} h={26} className="rounded-full" />
-              : <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold">{journeyProcs.length} folyamat</span>}
+              : <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold">{szurtE ? `${procLista.length}/${procAll.length} folyamat` : `${procAll.length} folyamat`}</span>}
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
               <tr>
-                <th className="px-6 py-4">Jelentkező</th>
-                <th className="px-6 py-4">Szakok</th>
-                <th className="px-6 py-4">Folyamat</th>
-                <th className="px-6 py-4">Hiányzó dokumentumok</th>
-                <th className="px-6 py-4">Állapot</th>
+                <ADM_Fej cim="Jelentkező" oszlop="nev" rend={rendA} setRend={setRendA} />
+                <ADM_Fej cim="Szakok" oszlop="szak" rend={rendA} setRend={setRendA} />
+                <ADM_Fej cim="Folyamat" oszlop="folyamat" rend={rendA} setRend={setRendA} />
+                <ADM_Fej cim="Hiányzó dokumentumok" oszlop="hiany" rend={rendA} setRend={setRendA} />
+                <ADM_Fej cim="Állapot" oszlop="allapot" rend={rendA} setRend={setRendA} />
+                <ADM_Fej cim="Frissítve" oszlop="frissitve" rend={rendA} setRend={setRendA} />
                 {/* B2: a fejléc korábban „Művelet" volt — a cellában viszont
                     egy „Részletek" gomb áll, tehát a fejléc is ezt mondja. */}
                 <th className="px-6 py-4 text-right">Részletek</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {procsLoading && <SkeletonRows rows={6} cols={['62%', '38%', '70%', '80%', '52%', '34%']} />}
-              {!procsLoading && journeyProcs.map((p, idx) => {
-                const nm = pName(p);
-                const progs = ((p.data && p.data.programs) || []).map(id => { const pr = PROGS.find(x => x.id === id); return pr ? pr.code : null; }).filter(Boolean);
-                const docs = (p.data && p.data.docs) || {};
-                const missing = reqDocs.filter(d => !(docs[d.id] && docs[d.id].fileName));
-                const pct = p.done ? 100 : Math.round(((p.maxReached || 0) / Math.max(SD.length - 1, 1)) * 100);
-                const stLabel = p.done ? 'Felvéve' : (SD[p.step] ? SD[p.step].label : '—');
-                const cancelled = !!(p.data && p.data._cancelled);
+              {procsLoading && <SkeletonRows rows={6} cols={['62%', '38%', '70%', '80%', '52%', '40%', '34%']} />}
+              {!procsLoading && procLista.map((x, idx) => {
+                const p = x.p;
+                const cancelled = x.cancelled;
+                const szin = cancelled ? 'red' : p.done ? 'emerald' : x.hallgatonal ? 'amber' : 'primary';
+                const felirat = { red: 'text-red-500', emerald: 'text-emerald-600', amber: 'text-amber-600', primary: 'text-primary' }[szin];
+                const csik = { red: 'bg-red-300', emerald: 'bg-emerald-500', amber: 'bg-amber-400', primary: 'bg-primary' }[szin];
                 return (
                   <tr key={p.id || idx} className={'hover:bg-slate-50 transition-colors align-top' + (cancelled ? ' opacity-70' : '')}>
-                    <td className="px-6 py-4"><div className="flex items-center gap-3"><Face p={p} size={36} /><div className="min-w-0"><p className="font-semibold text-slate-800 truncate">{nm}</p><p className="text-xs text-slate-400 truncate">{(p.data && p.data.account && p.data.account.email) || p._owner || ''}</p></div></div></td>
-                    <td className="px-6 py-4"><div className="flex flex-wrap gap-1">{progs.length ? progs.map(c => <span key={c} className="px-2 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-bold">{c}</span>) : <span className="text-[10px] text-slate-400">—</span>}</div></td>
-                    <td className="px-6 py-4"><div className="w-32"><div className="flex items-center justify-between text-[10px] font-bold mb-1"><span className={cancelled ? 'text-red-500' : p.done ? 'text-emerald-600' : 'text-primary'}>{cancelled ? 'Megszakítva' : stLabel}</span><span className="text-slate-400">{(p.done ? SD.length : (p.maxReached || 0) + 1)}/{SD.length}</span></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={(cancelled ? 'bg-red-300' : p.done ? 'bg-emerald-500' : 'bg-primary') + ' h-full rounded-full'} style={{ width: pct + '%' }}></div></div></div></td>
-                    <td className="px-6 py-4">{missing.length ? <div className="flex flex-wrap gap-1 max-w-xs">{missing.map(d => <span key={d.id} className="px-2 py-0.5 bg-red-50 text-red-600 rounded text-[10px] font-bold inline-flex items-center gap-1"><ICONS.AlertCircle size={11} /> {d.label}</span>)}</div> : <span className="text-[10px] font-bold text-emerald-600 inline-flex items-center gap-1"><ICONS.CheckCircle size={12} /> Minden feltöltve</span>}</td>
-                    <td className="px-6 py-4"><span className={`text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${cancelled ? 'bg-red-50 text-red-600' : p.done ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/10 text-primary'}`}>{cancelled ? <><ICONS.XCircle size={11} /> Megszakítva</> : p.done ? 'Felvéve · levél kiállítva' : stLabel}</span></td>
+                    <td className="px-6 py-4"><div className="flex items-center gap-3"><Face p={p} size={36} /><div className="min-w-0"><p className="font-semibold text-slate-800 truncate">{x.nev}</p><p className="text-xs text-slate-400 truncate">{x.email}</p></div></div></td>
+                    <td className="px-6 py-4"><div className="flex flex-wrap gap-1">{x.progs.length ? x.progs.map((pr, i) => <span key={i} title={pr.name} className="px-2 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-bold">{pr.code}</span>) : <span className="text-[10px] text-slate-400">—</span>}</div></td>
+                    <td className="px-6 py-4"><div className="w-32"><div className="flex items-center justify-between text-[10px] font-bold mb-1"><span className={felirat}>{cancelled ? 'Megszakítva' : x.stLabel}</span><span className="text-slate-400">{x.lepesSzoveg}</span></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={csik + ' h-full rounded-full'} style={{ width: x.pct + '%' }}></div></div></div></td>
+                    <td className="px-6 py-4">{x.missing.length ? <div className="flex flex-wrap gap-1 max-w-xs">{x.missing.map(d => <span key={d.id} className="px-2 py-0.5 bg-red-50 text-red-600 rounded text-[10px] font-bold inline-flex items-center gap-1"><ICONS.AlertCircle size={11} /> {d.label}</span>)}</div> : <span className="text-[10px] font-bold text-emerald-600 inline-flex items-center gap-1"><ICONS.CheckCircle size={12} /> Minden feltöltve</span>}</td>
+                    <td className="px-6 py-4"><span className={`text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${cancelled ? 'bg-red-50 text-red-600' : p.done ? 'bg-emerald-50 text-emerald-600' : x.hallgatonal ? 'bg-amber-50 text-amber-700' : 'bg-primary/10 text-primary'}`}>{cancelled ? <><ICONS.XCircle size={11} /> Megszakítva</> : p.done ? 'Felvéve · levél kiállítva' : x.stLabel}</span></td>
+                    <td className="px-6 py-4 text-[12px] font-semibold text-slate-500 whitespace-nowrap tabular-nums">{ADM_datum(x.frissitve)}</td>
                     <td className="px-6 py-4 text-right"><button onClick={() => { setDetailProc(p); setMsgDraft({ subject: '', body: '' }); setMsgSent(false); }} className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-slate-800 inline-flex items-center gap-1.5"><ICONS.Eye size={13} /> Részletek</button></td>
                   </tr>
                 );
               })}
-              {journeyProcs.length === 0 && <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-400 text-sm">Nincs aktív felvételi folyamat.</td></tr>}
+              {!procsLoading && journeyProcs.length > 0 && procLista.length === 0 && (
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-400 text-sm">Nincs a szűrésnek megfelelő folyamat. <button type="button" onClick={torolSzurok} className="ml-1 font-bold text-primary hover:underline">Szűrők törlése</button></td></tr>
+              )}
+              {journeyProcs.length === 0 && <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-400 text-sm">Nincs aktív felvételi folyamat.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -2984,7 +3147,8 @@ const AdmissionsCore = ({ user }) => {
         {/* B1: státusz szerinti szűrés */}
         <div className="px-6 py-4 border-b border-slate-50 bg-slate-50/40">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Státusz szerinti szűrés</div>
-          <StatusFilterBar students={students} value={statusFilter} onChange={setStatusFilter} />
+          {/* A számlálók a keresésre és a programszűrőre is reagálnak. */}
+          <StatusFilterBar students={diakQ} value={statusFilter} onChange={setStatusFilter} />
         </div>
         {statusError && (
           <div className="mx-6 mt-4 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 flex items-start gap-2">
@@ -2995,22 +3159,20 @@ const AdmissionsCore = ({ user }) => {
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
               <tr>
-                <th className="px-6 py-4">Diák</th>
-                <th className="px-6 py-4">Választott Szakok</th>
-                <th className="px-6 py-4">Dokumentumok</th>
-                <th className="px-6 py-4">Ajánlások</th>
+                <ADM_Fej cim="Diák" oszlop="nev" rend={rendB} setRend={setRendB} />
+                <ADM_Fej cim="Választott Szakok" oszlop="szak" rend={rendB} setRend={setRendB} />
+                <ADM_Fej cim="Dokumentumok" oszlop="dok" rend={rendB} setRend={setRendB} />
+                <ADM_Fej cim="Ajánlások" oszlop="ajanlas" rend={rendB} setRend={setRendB} />
                 {/* C1: itt korábban egy „AI Státusz" oszlop volt, ami valójában
                     a felvételi státuszt mutatta két értékkel. Most a teljes
                     lánc és a három sáv látszik. */}
-                <th className="px-6 py-4">Felvételi állapot</th>
+                <ADM_Fej cim="Felvételi állapot" oszlop="allapot" rend={rendB} setRend={setRendB} />
                 <th className="px-6 py-4 text-right">Műveletek</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {isLoading && <SkeletonRows rows={5} cols={['58%', '46%', '64%', '40%', '56%', '30%']} />}
-              {!isLoading && students
-                .filter(student => statusFilter === 'All' || student.status === statusFilter)
-                .map(student => (
+              {!isLoading && diakLista.map(student => (
                 <tr key={student.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <p className="font-semibold text-slate-800">{student.name}</p>
@@ -3097,7 +3259,7 @@ const AdmissionsCore = ({ user }) => {
                   </td>
                 </tr>
               ))}
-              {!isLoading && !students.filter(st => statusFilter === 'All' || st.status === statusFilter).length && (
+              {!isLoading && !diakLista.length && (
                 <tr><td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-400">Nincs a szűrésnek megfelelő jelentkező.</td></tr>
               )}
             </tbody>
@@ -3373,7 +3535,10 @@ const AdmissionsCore = ({ user }) => {
         <div className="flex items-center gap-3 w-full md:w-56 md:flex-none">
           <div className="relative flex-1 min-w-0">
             <ICONS.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input type="text" placeholder="ID szerinti keresés..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+            {/* Eddig nem volt bekötve. Mostantól a Jelentkezések lista keresője;
+                más fülről gépelve oda is vált. */}
+            <input type="text" value={szuro.q} onChange={e => { const v = e.target.value; setSzuro(x => ({ ...x, q: v })); if (activeSubView !== 'applications') setActiveSubView('applications'); }}
+              placeholder="Név, e-mail, program…" className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
           </div>
         </div>
       </div>
@@ -6785,7 +6950,12 @@ async function spDeleteProc(id) { if (!window.sb || !id) return; try { await sb.
 // Minden Supabase-ből olvasott folyamat ITT megy át a lépéssorrend
 // átvezetésén (II/1.1) — így a lista, a részletnézet és a realtime frissítés
 // is ugyanazt az indexet látja.
-const spRow = (r) => migrateStepOrder({ id: r.id, createdAt: r.created_at, step: r.step || 0, maxReached: r.max_reached || 0, done: !!r.done, data: r.data || {}, _owner: r.owner_email || 'demo', updatedAt: r.updated_at });
+const spRow = (r) => migrateStepOrder({ id: r.id, createdAt: r.created_at, step: r.step || 0, maxReached: r.max_reached || 0, done: !!r.done, data: r.data || {}, _owner: r.owner_email || 'demo', updatedAt: r.updated_at,
+  // 37_merge_application_flows.sql: a Programok menüből indított jelentkezés
+  // program_id-t, nevet és hallgatói lépésszámlálót hordoz. Eddig ezek itt
+  // elvesztek, ezért a listában „Új jelentkező”-ként, szak nélkül látszott.
+  programId: r.program_id || (r.data && r.data.program_id) || null, stage: r.stage || 'office',
+  applicantName: r.applicant_name || '', studentStep: r.student_step || 0, submittedAt: r.submitted_at || null });
 
 /* Lists read from admission_process_list (migration 09), a view identical to
    the table except that embedded file bytes are stripped out of data.docs.
@@ -11460,6 +11630,7 @@ Object.assign(HU_EN, {
   'Kurzusok':'Courses','Kurzusnyilvántartás':'Course Registry','Képzések kezelése':'Degree Management','Programok kezelése':'Program Management','Képzési kínálat':'Study Programmes','Képzések':'Degrees','Programok':'Programs','Képzések (BSc, MSc, MA, MBA, PhD), a felvételi folyamataik és a jelentkezők kezelése.':'Manage degree programmes (BSc, MSc, MA, MBA, PhD), their admission flows and applicants.','Előkészítő programok, rövid kurzusok és tanulmányi kirándulások kezelése.':'Manage preparatory programmes, short courses and educational excursions.','Böngészd az NJE angol nyelvű képzéseit és jelentkezz online.':'Explore English-taught programmes at NJE and apply online.','Jelentkezők':'Applicants','Új képzés':'New degree','Új program':'New programme','Még nincs képzés':'No degrees yet','Még nincs program':'No programmes yet','Vedd fel az első képzést (BSc, MSc, MA, MBA vagy PhD).':'Add your first degree programme (BSc, MSc, MA, MBA or PhD).','Vegyél fel egy előkészítő programot, rövid kurzust vagy tanulmányi kirándulást.':'Add a preparatory programme, short course or educational excursion.','Jelentkezéseim':'My applications','Minden képzés':'All programmes','Még nincs jelentkezés':'No applications yet','A hallgatói jelentkezések itt fognak megjelenni.':'Applications from students will appear here.','Előrehaladás':'Progress','Beadva':'Submitted','Szint':'Level','Tandíj':'Tuition','Határidő':'Deadline','Nyitva':'Open','Lezárva':'Closed','Jelentkezés lezárása':'Close applications','Jelentkezés megnyitása':'Open applications','Program':'Program',
   'Eseti / rövid kurzus':'Ad-hoc / short course','Továbbképzés':'Further training','Céglátogatás':'Company visit','Minden típus':'All types','Keresés a programok között…':'Search programmes…','Program neve':'Programme name','Program mentése':'Save programme','Program borítóképe':'Programme image','Címke a kártyán':'Card label','Az adatok és a program jelentkezési folyamatának beállítása':"Configure details and this programme's application flow",'Programkínálat':'Programmes','Kisebb programok — céglátogatások, továbbképzések, eseti kurzusok, előkészítők és tanulmányi kirándulások — kezelése.':'Manage smaller programmes — company visits, further training, ad-hoc courses, preparatory programmes and study excursions.','Céglátogatások, továbbképzések, eseti kurzusok és más rövid programok — jelentkezz online.':'Company visits, further training, ad-hoc courses and other short programmes — apply online.','Vegyél fel egy céglátogatást, továbbképzést, eseti kurzust vagy tanulmányi kirándulást.':'Add a company visit, further training, ad-hoc course or study excursion.',
   'Új dokumentumtípus':'New document type','Dokumentumtípus szerkesztése':'Edit document type','Megnevezés magyarul (kötelező)':'Name in Hungarian (required)','Megnevezés angolul (nem kötelező)':'Name in English (optional)','Elrejtés az új választások elől':'Hide from new selections','Módosítás mentése':'Save changes','Típus létrehozása':'Create type','Az új típus minden program és képzés szerkesztésekor választható lesz.':'The new type becomes selectable when editing any programme or degree.','A név minden programnál és jelentkezésnél megváltozik.':'The name changes in every programme and application.','egyedi':'custom','rejtett':'hidden','Az 58_program_doc_types.sql migráció még nem futott le — egyedi dokumentumtípus addig nem vehető fel.':'Migration 58_program_doc_types.sql has not been run yet — custom document types cannot be added until then.','Új dokumentumtípust csak rendszergazda vehet fel.':'Only an administrator can add a document type.','A módosítás nem ment át — dokumentumtípust csak rendszergazda módosíthat.':'The change was not saved — only an administrator can edit a document type.','Ilyen nevű dokumentumtípus már van.':'A document type with this name already exists.','A megnevezés 2–120 karakter legyen.':'The name must be 2–120 characters.','A magyar megnevezés legalább 2 karakter.':'The Hungarian name must be at least 2 characters.','Nincs kapcsolat az adatbázissal.':'No connection to the database.',
+  'Keresés: név, e-mail, azonosító, program…':'Search: name, email, ID, programme…','Név, e-mail, program…':'Name, email, programme…','Minden program':'All programmes','Minden folyamatállapot':'All process states','Hallgató tölti ki':'Applicant is filling in','Irodai lépés':'Office step','Dokumentumok: mind':'Documents: all','Hiányzik dokumentum':'Missing documents','Frissítve':'Updated','Nincs a szűrésnek megfelelő folyamat.':'No process matches the filters.','Folyamatállapot':'Process state',
   'Személyes adatok':'Personal details','Angol nyelvtudás':'English proficiency','Online interjú':'Online interview','Beadás és ellenőrzés':'Submit & review','Útlevél (adatoldal)':'Passport (data page)','Érettségi bizonyítvány + leckekönyv':'Secondary-school certificate + transcript','Alapdiploma + leckekönyv':'Bachelor degree + transcript','Mesterdiploma + leckekönyv':'Master degree + transcript','Önéletrajz (CV)':'Curriculum vitae (CV)','Portfólió / munkaminták':'Portfolio / work samples','Kutatási terv':'Research proposal','Ajánlólevél':'Recommendation letter','Előkészítő':'Preparatory','Rövid kurzus':'Short course','Tanulmányi kirándulás':'Educational excursion','Mesterképzés (MA · MBA)':'Master (MA · MBA)','Doktori (PhD)':'Doctoral (PhD)','Piszkozat':'Draft','Bírálat alatt':'In review','Elfogadva':'Accepted','Várólistán':'Waitlisted',
   'A képzés felvételi lépései':'Admission steps for this programme','Szükséges dokumentumok':'Required documents','A jelentkezés lezárult':'Applications closed','Jelentkezés folytatása':'Continue application','Jelentkezem':'Apply now','Vissza a képzésekhez':'Back to programmes','Mentés és kilépés':'Save & exit later','Erősítsd meg a kapcsolattartási adataidat ehhez a jelentkezéshez.':'Confirm your contact information for this application.','Telefon':'Phone','Állampolgárság szerinti ország':'Country of citizenship','pl. Nigéria':'e.g. Nigeria','Ezek a fájlok kötelezőek ehhez a képzéshez.':'These files are required for this programme.','Add meg az angol nyelvvizsgád adatait (B2 vagy magasabb ajánlott).':'Tell us about your English certificate (B2 or higher recommended).','Bizonyítvány':'Certificate','Válassz…':'Select…','Oktatás nyelve':'Medium of instruction','Egyéb':'Other','Pontszám / szint':'Score / level','Miért ezt a képzést választod? Legalább ~40 karakter (egy rövid bekezdés ideális).':'Why this programme? Minimum ~40 characters (a short paragraph is ideal).','Tisztelt Felvételi Bizottság! …':'Dear Admissions Committee, …','Online interjú foglalása':'Book an online interview','Regisztrációs díj':'Registration fee','Foglald le a helyed — ez a díj erősíti meg a regisztrációdat.':'Secure your place — this fee confirms your registration.','A jelentkezés feldolgozásához egyszeri, vissza nem térítendő jelentkezési díj szükséges.':'A one-time, non-refundable application fee is required to process your application.','Nincs fizetendő díj — minden rendben.':"No fee required — you're all set.",'Kártya':'Card','Banki átutalás':'Bank transfer','Fizetés kártyával':'Pay by card','Banki átutalás rögzítése':'Mark bank transfer','Teszt üzemmód — valódi terhelés nem történik.':'Test mode — no real charge is made.','Jelentkezés beadva':'Application submitted','Ellenőrzés és beadás':'Review & submit','A jelentkezésed a felvételi csoportnál van.':'Your application is with the admissions team.','Ellenőrizd, hogy minden kész, majd add be bírálatra.':'Check everything is complete, then submit for review.','Kész':'Complete','Hiányos':'Incomplete','Jelentkezés beadása':'Submit application','A beadáshoz minden lépést teljesíts':'Complete all steps to submit','Ismeretlen lépés.':'Unknown step.','Három rövid feladat. A megfeleléshez legalább 2 helyes válasz kell.':'Three short tasks. You need at least 2 correct to pass.','Válaszok beadása':'Submit answers','Minden szint':'All levels','Keresés a képzések között…':'Search programmes…','Nincs találat':'No results','Próbálj másik szintet vagy keresőkifejezést.':'Try a different level or search term.','Az adatok és a képzés felvételi folyamatának beállítása':"Configure details and this programme's admission flow",'Képzés neve':'Programme name','Kar':'Faculty','Fokozat megnevezése':'Degree label','Tandíj / szemeszter (EUR)':'Tuition / semester (EUR)','Időtartam (szemeszter)':'Duration (semesters)','Létszámkeret':'Capacity','Jelentkezési határidő':'Application deadline','Címkék (vesszővel elválasztva)':'Tags (comma-separated)','Összefoglaló':'Summary','Képzés borítóképe':'Programme image','Feltöltött kép ✓':'Uploaded image ✓','Kép URL (https://…)':'Image URL (https://…)','Felvételi folyamat — lépések':'Admission flow — steps','Sorrend':'Order','Jelentkezés nyitva':'Applications open','Képzés mentése':'Save programme','Időtartam':'Duration','Nyelv':'Language',
   // Hírfolyam (features/feed.jsx)
@@ -12014,6 +12185,10 @@ Object.assign(HU_EN, {
 });
 HU_EN_PHRASES.push(
   [/· elkezdte /g, '· started '],
+  // Egy korábbi általános szabály a „7 folyamat”-ot előbb „7 process(es)”-re fordítja,
+  // ezért a már félig lefordított alakot is elfogadjuk.
+  [/^Találat: (\d+)\/(\d+) (?:folyamat|process\(es\)) · (\d+)\/(\d+) (?:jelentkező|applicant\(s\))$/g, 'Results: $1/$2 processes · $3/$4 applicants'],
+  [/^(\d+)(\/\d+)? (?:folyamat|process\(es\))$/g, '$1$2 processes'],
   [/^(\d+) megkezdett jelentkezésed vár folytatásra$/g, '$1 started applications are waiting to be continued'],
   // A korábbi, általános szabályok („3 lépés” → „3 steps”, „2 dokumentum” → „2 docs”)
   // előbb futnak, ezért a már félig lefordított alakot is el kell fogadni.
