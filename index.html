@@ -432,7 +432,7 @@
         <span class="w-px h-6 bg-slate-200"></span>
         <span class="text-xs font-bold tracking-wide text-slate-400">John von Neumann University · UniPortal Pro</span>
       </div>
-      <p class="text-xs text-slate-400">© 2026 John von Neumann University. Demo interface.</p>
+      <p class="text-xs text-slate-400">© 2026 John von Neumann University. Demo interface. · <a href="privacy.html" class="hover:text-primary-600 underline-offset-2 hover:underline">Privacy Notice</a> · <a href="terms.html" class="hover:text-primary-600 underline-offset-2 hover:underline">Terms of Use</a></p>
     </div>
   </footer>
 
@@ -480,6 +480,7 @@
         </div>
         <div id="loginError" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
         <button id="loginBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Sign in</button>
+        <p class="text-center text-[11px] text-slate-400"><a href="privacy.html" target="_blank" rel="noopener" class="hover:text-primary-600">Privacy Notice</a> · <a href="terms.html" target="_blank" rel="noopener" class="hover:text-primary-600">Terms of Use</a></p>
       </form>
 
       <!-- FORGOT PASSWORD — a Supabase egyszer használható linket küld, ami a reset-password.html-re visz -->
@@ -544,11 +545,14 @@
           <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Password</label>
           <input id="regPassword" type="password" required minlength="6" placeholder="At least 6 characters" class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
         </div>
+        <!-- Jogi elfogadások (59_legal_consents.sql). A lista a legal_document katalógusból
+             jön (az anon olvashatja); ha nem érhető el, a lenti beégetett tartalék látszik.
+             Külön jelölőnégyzetek, a választhatók alapból üresen — nem összecsomagolva. -->
+        <div id="regLegal" class="space-y-2"></div>
         <div id="regError" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
         <button id="regBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Create account</button>
         <p class="text-[11px] text-slate-400 text-center leading-relaxed">
-          You will need to confirm your email address, and an administrator approves every new account before it can be used.<br />
-          By signing up you accept the privacy policy.
+          You will need to confirm your email address, and an administrator approves every new account before it can be used.
         </p>
       </form>
 
@@ -676,6 +680,7 @@
       // Az ügynökségi blokk csak az 'agent' személynél látszik.
       const af = document.getElementById('agencyFields');
       if (af) af.classList.toggle('hidden', p !== 'agent');
+      renderLegal();   // az ügynöknek a partnerfeltételek is kötelezők
     }
     document.querySelectorAll('.persona-btn').forEach(b => b.addEventListener('click', () => setPersona(b.dataset.persona)));
     async function doLogin(e){
@@ -743,6 +748,55 @@
       }
       return false;
     }
+    /* ---- Jogi elfogadások a regisztrációnál ----
+       A bejelölt tételek a signUp metaadatába kerülnek (consents: { id: verzió });
+       a 59-es migráció auth.users-triggere ebből naplóz. A szövegek textContent-tel
+       kerülnek az oldalra (a katalógus tartalma nem kerül HTML-ként értelmezésre). */
+    const LEGAL_FALLBACK = [
+      { id: 'terms', kind: 'terms', version: '2026-09-11', required: true, roles: [], label_en: 'I have read and accept the Terms of Use.', url: 'terms.html' },
+      { id: 'privacy', kind: 'notice', version: '2026-09-11', required: true, roles: [], label_en: 'I have read the Privacy Notice.', url: 'privacy.html' },
+      { id: 'age16', kind: 'declaration', version: '2026-09-11', required: true, roles: [], label_en: 'I confirm that I am at least 16 years old.', url: 'privacy.html#kiskoru' },
+      { id: 'agent_terms', kind: 'terms', version: '2026-09-11', required: true, roles: ['AGENT'], label_en: "I accept the Partner Agency Terms and confirm that I submit applicants' data only after informing them and with their authorisation.", url: 'terms.html#partner' },
+      { id: 'marketing', kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: "I agree to receive emails about the university's programmes and events. I can withdraw this at any time.", url: 'privacy.html#marketing' },
+      { id: 'whatsapp', kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: 'I agree that the International Office may also contact me via WhatsApp (a Meta Platforms service). I can withdraw this at any time.', url: 'privacy.html#whatsapp' },
+    ];
+    let legalDocs = LEGAL_FALLBACK;
+    async function loadLegalDocs(){
+      try {
+        const { data, error } = await window.sb.from('legal_document').select('id,kind,version,required,roles,label_en,url,sort_order').eq('active', true).order('sort_order');
+        if (!error && Array.isArray(data) && data.length) legalDocs = data;
+      } catch (e) { /* tartalék marad */ }
+      renderLegal();
+    }
+    function renderLegal(){
+      const box = document.getElementById('regLegal'); if (!box) return;
+      const role = persona === 'agent' ? 'AGENT' : 'STUDENT';
+      const list = legalDocs.filter(d => !d.roles || !d.roles.length || d.roles.indexOf(role) >= 0);
+      const prev = {}; box.querySelectorAll('input[data-legal]').forEach(i => { prev[i.dataset.legal] = i.checked; });
+      box.innerHTML = '';
+      const row = (d) => {
+        const lab = document.createElement('label');
+        lab.className = 'flex items-start gap-2.5 text-[12px] text-slate-600 leading-relaxed cursor-pointer';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.className = 'mt-0.5 w-4 h-4 accent-primary-600 flex-none';
+        cb.dataset.legal = d.id; cb.dataset.version = d.version; cb.dataset.required = d.required ? '1' : '';
+        cb.checked = !!prev[d.id];
+        const span = document.createElement('span');
+        span.appendChild(document.createTextNode(d.label_en + ' '));
+        if (d.required) { const st = document.createElement('b'); st.className = 'text-red-500'; st.textContent = '*'; span.appendChild(st); span.appendChild(document.createTextNode(' ')); }
+        if (d.url) { const a = document.createElement('a'); a.href = d.url; a.target = '_blank'; a.rel = 'noopener'; a.className = 'font-bold text-primary-600 hover:underline whitespace-nowrap'; a.textContent = 'Read'; a.addEventListener('click', ev => ev.stopPropagation()); span.appendChild(a); }
+        lab.appendChild(cb); lab.appendChild(span); return lab;
+      };
+      list.filter(d => d.required).forEach(d => box.appendChild(row(d)));
+      const opt = list.filter(d => !d.required);
+      if (opt.length) {
+        const h = document.createElement('p');
+        h.className = 'pt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest';
+        h.textContent = 'Optional — you can change these later in your profile';
+        box.appendChild(h);
+        opt.forEach(d => box.appendChild(row(d)));
+      }
+    }
     async function doRegister(e){
       e.preventDefault();
       hideErr('regError');
@@ -754,7 +808,15 @@
       btn.disabled = true; const label = btn.textContent; btn.textContent = 'Creating…';
       // Az ügynökségi mezők a signUp metaadatába mennek; a handle_new_user()
       // trigger (29_agency.sql, 6. szakasz) ebből nyitja a pending agencies sort.
-      const meta = { name, role };
+      // Kötelező elfogadások: mind be kell legyen jelölve. A bejelöltek verzióval mennek a naplóba.
+      const boxes = Array.from(document.querySelectorAll('#regLegal input[data-legal]'));
+      if (boxes.some(b => b.dataset.required && !b.checked)) {
+        showErr('regError', 'Please accept the required items marked with *.');
+        btn.disabled = false; btn.textContent = label; return false;
+      }
+      const consents = {};
+      boxes.filter(b => b.checked).forEach(b => { consents[b.dataset.legal] = b.dataset.version; });
+      const meta = { name, role, consents };
       if (role === 'AGENT') {
         const agName = (document.getElementById('regAgencyName') || {}).value || '';
         const agCountry = (document.getElementById('regAgencyCountry') || {}).value || '';
@@ -799,6 +861,7 @@
     showDemo('review', false);
     startDemoCycle();
     lucide.createIcons();
+    loadLegalDocs();
     // A visszaállító oldal „Új link kérése” gombja ide mutat: index.html#forgot
     if (location.hash === '#forgot') { openAuth('login'); showForgot(); }
     /* Egy lejárt vagy már felhasznált e-mailes link hibával ide jöhet vissza

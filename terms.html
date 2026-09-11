@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<title>Felhasználási feltételek — UniPortal</title>
+<!-- Szándékosan NINCS külső betűtípus, CDN vagy szkript. -->
+<style>
+  :root { --ink:#0f172a; --muted:#475569; --soft:#64748b; --line:#e2e8f0; --bg:#f8fafc; --card:#ffffff; --accent:#b85200; --mark:#fff4d6; --markInk:#7a4a00; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e2e8f0; --muted:#cbd5e1; --soft:#94a3b8; --line:#1e293b; --bg:#0b1220; --card:#0f172a; --accent:#ff9842; --mark:#3a2a08; --markInk:#ffd98a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; }
+  .brand { font-weight:900; letter-spacing:.02em; color:var(--accent); text-decoration:none; }
+  .brand span { color:var(--ink); font-size:12px; letter-spacing:.16em; margin-left:8px; }
+  .lang button { border:1px solid var(--line); background:var(--card); color:var(--ink); padding:6px 12px; border-radius:10px; font-weight:700; cursor:pointer; }
+  .lang button[aria-pressed="true"] { background:var(--ink); color:var(--bg); }
+  .draft { border:1px solid #f59e0b; background:var(--mark); color:var(--markInk); border-radius:14px; padding:12px 16px; font-size:14px; margin: 12px 0 24px; }
+  h1 { font-size: clamp(28px, 4vw, 38px); line-height:1.15; margin: 8px 0 6px; text-wrap: balance; }
+  .meta { color:var(--soft); font-size:14px; }
+  h2 { font-size: 20px; margin: 36px 0 8px; scroll-margin-top: 16px; text-wrap: balance; }
+  p, li { color: var(--muted); }
+  ol.pts > li { margin: 6px 0; }
+  a { color: var(--accent); }
+  mark { background: var(--mark); color: var(--markInk); padding: 0 4px; border-radius: 4px; }
+  .partner { background:var(--card); border:1px solid var(--line); border-radius:16px; padding: 4px 22px 14px; margin-top: 36px; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--soft); display:flex; flex-wrap:wrap; gap: 14px; }
+  [hidden] { display:none !important; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">NJE<span>UNIPORTAL</span></a>
+    <div class="lang" role="group" aria-label="Nyelv / Language">
+      <button type="button" data-lang="hu" aria-pressed="true">Magyar</button>
+      <button type="button" data-lang="en" aria-pressed="false">English</button>
+    </div>
+  </header>
+
+<!-- ======================= MAGYAR ======================= -->
+<article lang="hu" data-lang-block="hu">
+  <h1>Felhasználási feltételek</h1>
+  <p class="meta">UniPortal felvételi és hallgatói platform · Verzió: <b>2026-09-11</b> · Hatályos: 2026. szeptember 11-től</p>
+  <div class="draft"><b>TERVEZET — jogi felülvizsgálat alatt.</b> A kiemelt <mark>[kitöltendő]</mark> részeket az Egyetem jogi osztálya tölti ki. A magyar változat az irányadó.</div>
+
+  <h2 id="hu-1">1. A szolgáltató és a platform</h2>
+  <p>A UniPortal platformot a <b>Neumann János Egyetem</b> (6000 Kecskemét, Izsáki út 10. <mark>[ellenőrizendő]</mark>; a továbbiakban: Egyetem) üzemelteti. A platformon keresztül a jelentkezők képzésekre és programokra jelentkeznek, dokumentumokat töltenek fel, kapcsolatot tartanak a Nemzetközi Irodával, kitöltik a kurzusértékelő kérdőíveket, és intézik kollégiumi ügyeiket; az Egyetem munkatársai és partnerügynökségei pedig ezekhez kapcsolódó feladataikat végzik. Kapcsolat: <mark>[kitöltendő e-mail-cím]</mark>.</p>
+  <p>E feltételek az elektronikus kereskedelmi szolgáltatások, valamint az információs társadalommal összefüggő szolgáltatások egyes kérdéseiről szóló 2001. évi CVIII. törvény és a Polgári Törvénykönyvről szóló 2013. évi V. törvény (Ptk.) 6:77–6:81. §-a szerinti általános szerződési feltételeknek minősülnek.</p>
+
+  <h2 id="hu-2">2. Elfogadás, verziók</h2>
+  <ol class="pts">
+    <li>A regisztrációhoz és a platform használatához e feltételek elfogadása és az <a href="privacy.html">Adatkezelési tájékoztató</a> megismerése szükséges. Az elfogadást a rendszer időbélyeggel és a dokumentum verziójával naplózza.</li>
+    <li>A feltételek minden változata verziószámot (dátumot) kap. Módosítás esetén a platform a következő bejelentkezéskor megjeleníti az új változatot; a platform további használatához annak elfogadása szükséges. Ha a felhasználó nem fogadja el, fiókja megszüntetését kérheti.</li>
+  </ol>
+
+  <h2 id="hu-3">3. Regisztráció és fiók</h2>
+  <ol class="pts">
+    <li>Regisztrálni csak a 16. életévét betöltött személy tud, saját nevében és valós adatokkal. 18 év alatti jelentkező szerződéses jognyilatkozatához a törvényes képviselő hozzájárulása is szükséges.</li>
+    <li>A regisztráció után az e-mail-címet meg kell erősíteni, és minden új fiókot az Egyetem rendszergazdája hagy jóvá. A jóváhagyásig a platform nem használható.</li>
+    <li>A felhasználó köteles jelszavát titokban tartani; a fiókjával végzett műveletekért felel. Ha jogosulatlan hozzáférést észlel, haladéktalanul jelezze az Egyetemnek, és változtassa meg jelszavát.</li>
+    <li>Egy személy egy fiókot használhat; a fiók nem ruházható át.</li>
+  </ol>
+
+  <h2 id="hu-4">4. A jelentkezők kötelezettségei</h2>
+  <ol class="pts">
+    <li>A jelentkező kizárólag valós, pontos és teljes adatot adhat meg, és csak eredeti, hiteles dokumentumot (vagy annak hű másolatát) tölthet fel. Az adatok változását késedelem nélkül jeleznie kell.</li>
+    <li>Hamis vagy megtévesztő adat, illetve hamisított dokumentum esetén az Egyetem a jelentkezést elutasíthatja, a már meghozott döntést visszavonhatja, és jogszabályban előírt esetben a hatóságot értesíti.</li>
+    <li>A felvételi eljárás szabályait, határidőit és díjait az adott képzés vagy program oldala és a vonatkozó egyetemi szabályzatok határozzák meg. A felvételi (feltételes felvételi) levél akkor érvényes, ha azt az Egyetem a platformon kiküldte.</li>
+    <li>A jelentkező csak olyan harmadik személy adatát adhatja meg (pl. ajánlólevél írója, vészhelyzeti kapcsolattartó), akit erről tájékoztatott.</li>
+  </ol>
+
+  <h2 id="hu-5">5. Az Egyetem munkatársai és oktatói</h2>
+  <p>A munkatársak és oktatók a platformhoz kizárólag munkakörükhöz szükséges mértékben férhetnek hozzá, és kötelesek a tudomásukra jutott személyes adatokat bizalmasan kezelni az Egyetem adatvédelmi és informatikai szabályzatai szerint. <mark>[kitöltendő: hivatkozás a belső szabályzatokra]</mark></p>
+
+  <h2 id="hu-6">6. Tiltott magatartások</h2>
+  <ul>
+    <li>más személy nevében, illetve más fiókjával történő belépés vagy jelentkezés;</li>
+    <li>a platform biztonsági, hozzáférés-korlátozó megoldásainak megkerülése, más felhasználók adataihoz való jogosulatlan hozzáférés kísérlete;</li>
+    <li>kártékony kód, jogsértő vagy sértő tartalom feltöltése;</li>
+    <li>a platform túlterhelése vagy automatizált, tömeges lekérdezése;</li>
+    <li>a kurzusértékelés névtelenségének megkerülésére irányuló kísérlet.</li>
+  </ul>
+  <p>Ilyen esetben az Egyetem a fiókot felfüggesztheti vagy megszüntetheti, és megteheti a szükséges jogi lépéseket.</p>
+
+  <h2 id="hu-7">7. Szellemi tulajdon</h2>
+  <p>A platform szoftvere, arculata és az Egyetem által közzétett tartalmak az Egyetem vagy jogosultjaik szellemi tulajdonát képezik. A felhasználó a feltöltött tartalmai felett jogosult marad; azokat az Egyetem kizárólag a felvételi és hallgatói ügyintézéshez, az <a href="privacy.html">Adatkezelési tájékoztatóban</a> írt célokra használja.</p>
+
+  <h2 id="hu-8">8. A szolgáltatás elérhetősége és a felelősség</h2>
+  <ol class="pts">
+    <li>Az Egyetem törekszik a platform folyamatos elérhetőségére, de karbantartás, hiba vagy külső szolgáltató kiesése miatt a szolgáltatás átmenetileg szünetelhet. Határidős ügyekben (pl. jelentkezési határidő) elérhetetlenség esetén a Nemzetközi Iroda méltányosan jár el.</li>
+    <li>Az Egyetem nem felel a felhasználó által megadott valótlan adatokból, a jelszó gondatlan kezeléséből vagy a felhasználó eszközének hibájából eredő kárért. Az Egyetem felelőssége a jogszabály által megengedett mértékig korlátozott; a szándékosan vagy súlyos gondatlansággal okozott, illetve az életet, testi épséget vagy egészséget megkárosító szerződésszegésért való felelősség nem korlátozható (Ptk. 6:152. §).</li>
+  </ol>
+
+  <h2 id="hu-9">9. Díjak</h2>
+  <p>A platform használata díjmentes. A jelentkezési díjat, a tandíjat és a kollégiumi díjakat az adott képzés vagy program oldala, a felvételi levél, illetve a külön megkötött szerződés tartalmazza.</p>
+
+  <h2 id="hu-10">10. Adatkezelés</h2>
+  <p>A személyes adatok kezelésére az <a href="privacy.html">Adatkezelési tájékoztató</a> vonatkozik. A választható hozzájárulások (pl. hírlevél, WhatsApp) e feltételek elfogadásától függetlenek, és a <i>Profilom → Adatvédelem és hozzájárulások</i> részben bármikor módosíthatók.</p>
+
+  <h2 id="hu-11">11. A fiók megszüntetése</h2>
+  <p>A felhasználó fiókja megszüntetését bármikor kérheti a <mark>[kitöltendő e-mail-cím]</mark> címen. A megszüntetés után az Egyetem a személyes adatokat az Adatkezelési tájékoztatóban írt megőrzési időkig kezeli (pl. jogszabályi megőrzési kötelezettség, folyamatban lévő eljárás). Az Egyetem a fiókot megszüntetheti, ha a felhasználó e feltételeket súlyosan megszegi.</p>
+
+  <h2 id="hu-12">12. Panaszkezelés, irányadó jog, jogvita</h2>
+  <p>Panaszát a <mark>[kitöltendő e-mail-cím]</mark> címen jelezheti; az Egyetem 30 napon belül érdemben válaszol. E feltételekre a magyar jog irányadó. A felek a vitákat elsősorban egyeztetéssel rendezik; ennek eredménytelensége esetén a hatáskörrel és illetékességgel rendelkező magyar bíróság jár el. Fogyasztónak minősülő felhasználó jogait a fogyasztóvédelmi jogszabályok is védik.</p>
+
+  <section class="partner" id="partner">
+    <h2>13. Partnerügynökségi feltételek</h2>
+    <p>E fejezet az „Agent” (ügynök) szerepkörben regisztráló partnerügynökségekre és munkatársaikra vonatkozik, a fenti feltételek mellett. Az Egyetemmel kötött külön partnerségi szerződés ezekkel ellentétes rendelkezése elsőbbséget élvez. <mark>[kitöltendő: a partnerségi szerződésminta hivatkozása]</mark></p>
+    <ol class="pts">
+      <li><b>Jóváhagyás.</b> Az önregisztrált ügynökség fiókját és ügynökségi adatait az Egyetem hagyja jóvá; a jóváhagyásig az ügynökség jelentkezőt nem lát és nem képviselhet.</li>
+      <li><b>Felhatalmazás és tájékoztatás.</b> Az ügynökség jelentkező adatait csak akkor adhatja meg és kezelheti a platformon, ha a jelentkező erre felhatalmazta, és előzetesen tájékoztatta őt arról, hogy adatai az Egyetemhez kerülnek; a tájékoztatásban az <a href="privacy.html">Adatkezelési tájékoztatóra</a> hivatkozik. A felhatalmazást az Egyetem kérésére igazolnia kell.</li>
+      <li><b>Szerep.</b> Az ügynökség a saját tevékenysége körében önálló adatkezelő; a jelentkező adataihoz csak a képviselt jelentkezők körében és csak a toborzáshoz, jelentkezéshez szükséges mértékben fér hozzá.</li>
+      <li><b>Adatbiztonság és titoktartás.</b> Az ügynökség a platform hozzáférését nem adja tovább, munkatársaival titoktartást vállaltat, a letöltött dokumentumokat biztonságosan kezeli, és a célhoz már nem szükséges másolatokat törli. Adatvédelmi incidensről haladéktalanul, de legfeljebb 24 órán belül értesíti az Egyetemet. <mark>[a határidő jogi egyeztetése]</mark></li>
+      <li><b>Valós adatok.</b> Az ügynökség nem tölthet fel hamis vagy hamisított dokumentumot, és nem tehet a jelentkező nevében tudomása szerint valótlan nyilatkozatot.</li>
+      <li><b>Jutalék.</b> A jutalék mértékét és elszámolását a partnerségi szerződés határozza meg; a platformon látható jutalékadatok tájékoztató jellegűek.</li>
+      <li><b>Megszűnés.</b> Az Egyetem az ügynökségi hozzáférést súlyos szerződésszegés, visszaélés vagy a jóváhagyás visszavonása esetén azonnal felfüggesztheti. Megszűnéskor az ügynökség a jelentkezők adatainak nála lévő másolatait — a jogszabályi megőrzési kötelezettség kivételével — törli.</li>
+    </ol>
+  </section>
+</article>
+
+<!-- ======================= ENGLISH ======================= -->
+<article lang="en" data-lang-block="en" hidden>
+  <h1>Terms of Use</h1>
+  <p class="meta">UniPortal admissions and student platform · Version: <b>2026-09-11</b> · Effective from 11 September 2026</p>
+  <div class="draft"><b>DRAFT — under legal review.</b> The highlighted <mark>[to be completed]</mark> parts are completed by the University's legal department. The Hungarian version prevails.</div>
+
+  <h2 id="en-1">1. The provider and the platform</h2>
+  <p>The UniPortal platform is operated by <b>John von Neumann University</b> (Neumann János Egyetem, Izsáki út 10., 6000 Kecskemét, Hungary <mark>[to be verified]</mark>; "the University"). On the platform, applicants apply for degrees and programmes, upload documents, communicate with the International Office, complete course evaluation questionnaires and handle dormitory matters, while the University's staff and partner agencies carry out their related tasks. Contact: <mark>[email to be completed]</mark>.</p>
+  <p>These terms are general terms and conditions under Hungarian Act CVIII of 2001 on electronic commerce and information society services, and Sections 6:77–6:81 of the Hungarian Civil Code (Act V of 2013).</p>
+
+  <h2 id="en-2">2. Acceptance and versions</h2>
+  <ol class="pts">
+    <li>Registration and use of the platform require accepting these terms and reading the <a href="privacy.html">Privacy Notice</a>. The system logs acceptance with a timestamp and the document version.</li>
+    <li>Every version of these terms has a version number (date). After a change, the platform shows the new version at your next sign-in; further use requires accepting it. If you do not accept it, you may ask for your account to be closed.</li>
+  </ol>
+
+  <h2 id="en-3">3. Registration and account</h2>
+  <ol class="pts">
+    <li>Only persons aged 16 or over may register, in their own name and with true data. Contractual declarations of an applicant under 18 also require the legal representative's consent.</li>
+    <li>After registration, the email address must be confirmed, and every new account is approved by a University administrator. The platform cannot be used before approval.</li>
+    <li>You must keep your password secret and are responsible for actions performed with your account. If you notice unauthorised access, inform the University immediately and change your password.</li>
+    <li>One person may use one account; accounts are not transferable.</li>
+  </ol>
+
+  <h2 id="en-4">4. Obligations of applicants</h2>
+  <ol class="pts">
+    <li>Applicants may provide only true, accurate and complete data and may upload only original, authentic documents (or true copies). Changes in data must be reported without delay.</li>
+    <li>In the case of false or misleading data or a forged document, the University may reject the application, revoke a decision already made and, where required by law, notify the authorities.</li>
+    <li>The rules, deadlines and fees of the admission procedure are set by the page of the degree or programme and the applicable University regulations. An (conditional) acceptance letter is valid once the University has sent it on the platform.</li>
+    <li>Applicants may provide data of a third person (e.g. a referee or an emergency contact) only after informing that person.</li>
+  </ol>
+
+  <h2 id="en-5">5. University staff and teachers</h2>
+  <p>Staff and teachers may access the platform only to the extent their duties require and must keep personal data confidential in accordance with the University's data protection and IT policies. <mark>[to be completed: reference to internal policies]</mark></p>
+
+  <h2 id="en-6">6. Prohibited conduct</h2>
+  <ul>
+    <li>signing in or applying in another person's name or with another person's account;</li>
+    <li>circumventing the platform's security or access controls, or attempting unauthorised access to other users' data;</li>
+    <li>uploading malicious code or unlawful or offensive content;</li>
+    <li>overloading the platform or querying it in an automated, bulk manner;</li>
+    <li>attempting to break the anonymity of course evaluations.</li>
+  </ul>
+  <p>In such cases, the University may suspend or close the account and take the necessary legal steps.</p>
+
+  <h2 id="en-7">7. Intellectual property</h2>
+  <p>The platform's software, design and the content published by the University are the intellectual property of the University or its licensors. You keep your rights in the content you upload; the University uses it only for admissions and student administration, for the purposes set out in the <a href="privacy.html">Privacy Notice</a>.</p>
+
+  <h2 id="en-8">8. Availability and liability</h2>
+  <ol class="pts">
+    <li>The University strives to keep the platform available, but the service may be temporarily interrupted by maintenance, faults or outages of external providers. In matters with deadlines (e.g. application deadlines), the International Office handles unavailability fairly.</li>
+    <li>The University is not liable for damage resulting from untrue data provided by users, careless handling of passwords or faults of the user's device. The University's liability is limited to the extent permitted by law; liability for breaches caused intentionally or by gross negligence, or damaging life, physical integrity or health, cannot be limited (Section 6:152 of the Civil Code).</li>
+  </ol>
+
+  <h2 id="en-9">9. Fees</h2>
+  <p>Using the platform is free of charge. Application fees, tuition and dormitory fees are set out on the page of the degree or programme, in the acceptance letter or in a separate contract.</p>
+
+  <h2 id="en-10">10. Data protection</h2>
+  <p>Processing of personal data is governed by the <a href="privacy.html">Privacy Notice</a>. Optional consents (e.g. newsletter, WhatsApp) are independent of accepting these terms and can be changed at any time under <i>My profile → Privacy and consents</i>.</p>
+
+  <h2 id="en-11">11. Closing the account</h2>
+  <p>You can ask for your account to be closed at any time at <mark>[email to be completed]</mark>. After closure, the University processes personal data for the retention periods set out in the Privacy Notice (e.g. statutory retention, pending procedures). The University may close the account if the user seriously breaches these terms.</p>
+
+  <h2 id="en-12">12. Complaints, governing law, disputes</h2>
+  <p>You can submit complaints to <mark>[email to be completed]</mark>; the University responds on the merits within 30 days. These terms are governed by Hungarian law. The parties settle disputes primarily through negotiation; failing that, the Hungarian court with jurisdiction and competence proceeds. Users who are consumers are also protected by consumer protection laws.</p>
+
+  <section class="partner" id="en-partner">
+    <h2>13. Partner Agency Terms</h2>
+    <p>This chapter applies, in addition to the terms above, to partner agencies registering in the "Agent" role and their staff. Any conflicting provision of a separate partnership agreement with the University prevails. <mark>[to be completed: reference to the partnership agreement template]</mark></p>
+    <ol class="pts">
+      <li><b>Approval.</b> The University approves self-registered agency accounts and agency data; until approval, the agency cannot see or represent applicants.</li>
+      <li><b>Authorisation and information.</b> The agency may submit and handle an applicant's data on the platform only if the applicant has authorised it and has been informed in advance that their data will be passed to the University, with reference to the <a href="privacy.html">Privacy Notice</a>. The agency must prove the authorisation at the University's request.</li>
+      <li><b>Role.</b> The agency acts as an independent controller for its own activities; it can access applicant data only for the applicants it represents and only as far as recruitment and application require.</li>
+      <li><b>Security and confidentiality.</b> The agency does not share its platform access, binds its staff to confidentiality, handles downloaded documents securely and deletes copies no longer needed. It notifies the University of any personal data breach without delay and within 24 hours at the latest. <mark>[deadline subject to legal review]</mark></li>
+      <li><b>True data.</b> The agency may not upload false or forged documents or make statements on the applicant's behalf that it knows to be untrue.</li>
+      <li><b>Commission.</b> The commission rate and settlement are set by the partnership agreement; commission data shown on the platform is for information only.</li>
+      <li><b>Termination.</b> The University may suspend agency access immediately in the event of a serious breach, abuse or withdrawal of approval. On termination, the agency deletes its copies of applicants' data, except where retention is required by law.</li>
+    </ol>
+  </section>
+</article>
+
+  <footer>
+    <a href="privacy.html">Adatkezelési tájékoztató · Privacy Notice</a>
+    <a href="index.html">UniPortal</a>
+  </footer>
+</div>
+<script>
+  (function () {
+    var btns = document.querySelectorAll('.lang button');
+    function set(l) {
+      document.querySelectorAll('[data-lang-block]').forEach(function (a) { a.hidden = a.getAttribute('data-lang-block') !== l; });
+      btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === l)); });
+      document.documentElement.lang = l;
+      document.title = l === 'en' ? 'Terms of Use — UniPortal' : 'Felhasználási feltételek — UniPortal';
+      try { localStorage.setItem('nje_lang', l); } catch (e) {}
+    }
+    var l = 'hu';
+    try { l = localStorage.getItem('nje_lang') || ((navigator.language || '').toLowerCase().indexOf('hu') === 0 ? 'hu' : 'en'); } catch (e) {}
+    set(l === 'en' ? 'en' : 'hu');
+    // A regisztráció a #partner horgonyra linkel; angol olvasónak az angol fejezet.
+    if (l === 'en' && location.hash === '#partner') { var t = document.getElementById('en-partner'); if (t) t.scrollIntoView(); }
+    btns.forEach(function (b) { b.addEventListener('click', function () { set(b.getAttribute('data-lang')); }); });
+  })();
+</script>
+</body>
+</html>

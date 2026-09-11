@@ -58,6 +58,9 @@ const FEATURE_FILES = [
   // Oktatoi nyilvantartas (54_teacher_registry.sql). A data-layer UTAN kell
   // allnia: onnan veszi a UModal/UField/UBadge/UEmpty atomokat.
   'features/teachers.jsx',
+  // Jogi dokumentumok, elfogadások, hozzájárulási napló (59_legal_consents.sql).
+  // A data-layer UTAN: onnan veszi a UBadge / U_btnPrimary / U_input atomokat.
+  'features/legal.jsx',
 ];
 
 // `motion` is only referenced by the shim at the top of app.jsx, which renders

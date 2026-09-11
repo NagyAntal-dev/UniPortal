@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<title>Adatkezelési tájékoztató — UniPortal</title>
+<!-- Szándékosan NINCS külső betűtípus, CDN vagy szkript: a tájékoztató megnyitása
+     sem adja ki a látogató IP-címét harmadik félnek. -->
+<style>
+  :root { --ink:#0f172a; --muted:#475569; --soft:#64748b; --line:#e2e8f0; --bg:#f8fafc; --card:#ffffff; --accent:#b85200; --mark:#fff4d6; --markInk:#7a4a00; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e2e8f0; --muted:#cbd5e1; --soft:#94a3b8; --line:#1e293b; --bg:#0b1220; --card:#0f172a; --accent:#ff9842; --mark:#3a2a08; --markInk:#ffd98a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; }
+  .brand { font-weight:900; letter-spacing:.02em; color:var(--accent); text-decoration:none; }
+  .brand span { color:var(--ink); font-size:12px; letter-spacing:.16em; margin-left:8px; }
+  .lang button { border:1px solid var(--line); background:var(--card); color:var(--ink); padding:6px 12px; border-radius:10px; font-weight:700; cursor:pointer; }
+  .lang button[aria-pressed="true"] { background:var(--ink); color:var(--bg); }
+  .draft { border:1px solid #f59e0b; background:var(--mark); color:var(--markInk); border-radius:14px; padding:12px 16px; font-size:14px; margin: 12px 0 24px; }
+  h1 { font-size: clamp(28px, 4vw, 38px); line-height:1.15; margin: 8px 0 6px; text-wrap: balance; }
+  .meta { color:var(--soft); font-size:14px; }
+  nav.toc { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 20px; margin: 24px 0 32px; }
+  nav.toc ol { margin:0; padding-left: 20px; columns: 2; column-gap: 32px; font-size:14px; }
+  @media (max-width: 640px) { nav.toc ol { columns: 1; } }
+  nav.toc a { color:var(--ink); }
+  h2 { font-size: 21px; margin: 40px 0 10px; scroll-margin-top: 16px; text-wrap: balance; }
+  h3 { font-size: 16px; margin: 22px 0 6px; }
+  p, li { color: var(--muted); }
+  a { color: var(--accent); }
+  mark { background: var(--mark); color: var(--markInk); padding: 0 4px; border-radius: 4px; }
+  .tbl { overflow-x:auto; border:1px solid var(--line); border-radius:14px; background:var(--card); margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 720px; }
+  th, td { text-align:left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); background: var(--bg); }
+  tr:last-child td { border-bottom: 0; }
+  code { font-size: 13px; background: var(--bg); border:1px solid var(--line); padding: 0 5px; border-radius: 6px; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 20px; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--soft); display:flex; flex-wrap:wrap; gap: 14px; }
+  [hidden] { display:none !important; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">NJE<span>UNIPORTAL</span></a>
+    <div class="lang" role="group" aria-label="Nyelv / Language">
+      <button type="button" data-lang="hu" aria-pressed="true">Magyar</button>
+      <button type="button" data-lang="en" aria-pressed="false">English</button>
+    </div>
+  </header>
+
+<!-- ======================= MAGYAR ======================= -->
+<article lang="hu" data-lang-block="hu">
+  <h1>Adatkezelési tájékoztató</h1>
+  <p class="meta">UniPortal felvételi és hallgatói platform · Verzió: <b>2026-09-11</b> · Hatályos: 2026. szeptember 11-től</p>
+  <div class="draft"><b>TERVEZET — jogi felülvizsgálat alatt.</b> A kiemelt <mark>[kitöltendő]</mark> részeket az egyetem adatvédelmi tisztviselője tölti ki és hagyja jóvá. A dokumentum magyar változata az irányadó.</div>
+
+  <nav class="toc" aria-label="Tartalom"><ol>
+    <li><a href="#adatkezelo">Az adatkezelő</a></li>
+    <li><a href="#hataly">A tájékoztató hatálya</a></li>
+    <li><a href="#erintettek">Kiknek az adatait kezeljük</a></li>
+    <li><a href="#celok">Célok, jogalapok, megőrzés</a></li>
+    <li><a href="#kulonleges">Különleges adatok és azonosítók</a></li>
+    <li><a href="#automatizalt">Automatizált feldolgozás</a></li>
+    <li><a href="#cimzettek">Címzettek és adatfeldolgozók</a></li>
+    <li><a href="#harmadik">Továbbítás harmadik országba</a></li>
+    <li><a href="#bongeszo">Böngészőben tárolt adatok</a></li>
+    <li><a href="#kiskoru">Kiskorúak</a></li>
+    <li><a href="#hozzajarulas">Hozzájárulások</a></li>
+    <li><a href="#naplo">Az elfogadások naplózása</a></li>
+    <li><a href="#echo">Kurzusértékelés (ECHO)</a></li>
+    <li><a href="#biztonsag">Adatbiztonság</a></li>
+    <li><a href="#jogok">Az Ön jogai</a></li>
+    <li><a href="#jogorvoslat">Jogorvoslat</a></li>
+    <li><a href="#modositas">A tájékoztató módosítása</a></li>
+  </ol></nav>
+
+  <h2 id="adatkezelo">1. Az adatkezelő</h2>
+  <div class="box">
+    <p><b>Neumann János Egyetem</b> (a továbbiakban: Egyetem)<br>
+    Székhely: 6000 Kecskemét, Izsáki út 10. <mark>[ellenőrizendő]</mark><br>
+    Honlap: <a href="https://www.nje.hu" rel="noopener">www.nje.hu</a><br>
+    Adatvédelmi tisztviselő: <mark>[kitöltendő: név, e-mail-cím, telefonszám]</mark><br>
+    A platformmal kapcsolatos megkeresések: <mark>[kitöltendő: pl. Nemzetközi Iroda e-mail-címe]</mark></p>
+  </div>
+  <p>A tájékoztató az Európai Parlament és a Tanács (EU) 2016/679 rendelete (GDPR), az információs önrendelkezési jogról és az információszabadságról szóló 2011. évi CXII. törvény (Infotv.) és a nemzeti felsőoktatásról szóló 2011. évi CCIV. törvény (Nftv.) alapján készült.</p>
+
+  <h2 id="hataly">2. A tájékoztató hatálya</h2>
+  <p>A tájékoztató a UniPortal platformra vonatkozik: a nyilvános nyitóoldalra, a bejelentkezés utáni alkalmazásra, a jelszó-visszaállító oldalra, valamint a platformon keresztül végzett felvételi, kommunikációs, kurzusértékelési, kollégiumi és partnerügynökségi folyamatokra. Az Egyetem egyéb adatkezeléseire (pl. Neptun-tanulmányi rendszer, munkaügy) az Egyetem saját tájékoztatói vonatkoznak.</p>
+
+  <h2 id="erintettek">3. Kiknek az adatait kezeljük</h2>
+  <ul>
+    <li><b>Jelentkezők és hallgatók</b> — a regisztrációtól a felvételen át a hallgatói jogviszonyig.</li>
+    <li><b>Partnerügynökségek munkatársai</b> és az általuk képviselt jelentkezők.</li>
+    <li><b>Az Egyetem munkatársai</b> (ügyintézők, interjúztatók, rendszergazdák) és <b>oktatói</b> (kurzus-hozzárendelés, kurzusértékelés).</li>
+    <li><b>Harmadik személyek</b>, akiket valaki más ad meg: ajánlólevél írói, kollégiumi vészhelyzeti kapcsolattartók, lakótárs-preferenciák. Őket az Egyetem a GDPR 14. cikke szerint e tájékoztatóval és szükség esetén külön értesíti.</li>
+    <li><b>Kollégiumi lakók</b> és a kollégiumi bérbeadó képviselői.</li>
+    <li><b>WhatsAppon kapcsolatba lépők</b> (csak hozzájárulás alapján).</li>
+    <li><b>A honlap látogatói</b> (technikai adatok, lásd 7. és 9. pont).</li>
+  </ul>
+
+  <h2 id="celok">4. Az adatkezelés céljai, jogalapjai és időtartama</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Cél</th><th>Kezelt adatok</th><th>Jogalap</th><th>Megőrzés</th></tr></thead>
+    <tbody>
+      <tr><td>Felhasználói fiók, bejelentkezés, jóváhagyás</td><td>név, e-mail-cím, jelszó (titkosítva, a Supabase Auth kezeli), szerepkör, profilkép, jóváhagyási állapot</td><td>GDPR 6. cikk (1) b) — a Felhasználási feltételek szerinti szolgáltatás; munkatársaknál 6. cikk (1) e)</td><td>a fiók megszűnéséig, utána <mark>[kitöltendő]</mark></td></tr>
+      <tr><td>Felvételi eljárás (jelentkezés, dokumentumok, ellenőrzés, interjú, szintfelmérő, felvételi levél)</td><td>személyes és elérhetőségi adatok, állampolgárság, születési dátum, nem, útlevél adatai és másolata, iskolai bizonyítványok, nyelvvizsga, motivációs levél, önéletrajz, portfólió, kutatási terv, ajánlólevél, szintfelmérő eredménye, interjúidőpont, felvételi döntés és levél</td><td>GDPR 6. cikk (1) e) és c) — az Nftv. szerinti felvételi feladat; önköltséges képzésnél 6. cikk (1) b) — szerződéskötést megelőző lépések</td><td><mark>[kitöltendő — az Nftv. 3. melléklete és az egyetemi iratkezelési szabályzat szerint]</mark></td></tr>
+      <tr><td>Dokumentumok hitelességének és a többszörös jelentkezésnek az ellenőrzése</td><td>feltöltött dokumentumok, útlevélszám, név, e-mail-cím (egyezéskeresés)</td><td>GDPR 6. cikk (1) e) és f) — a visszaélések megelőzése</td><td>a felvételi eljárás adataival együtt</td></tr>
+      <tr><td>Kapcsolattartás a platformon (üzenetek, értesítések, e-mailek)</td><td>név, e-mail-cím, üzenetek tartalma, csatolmány-hivatkozások</td><td>GDPR 6. cikk (1) e) és b)</td><td>az eljárás lezárásáig, utána <mark>[kitöltendő]</mark></td></tr>
+      <tr id="whatsapp-sor"><td>Kapcsolattartás WhatsAppon</td><td>telefonszám, WhatsApp-profilnév, üzenetek</td><td>GDPR 6. cikk (1) a) — hozzájárulás</td><td>a hozzájárulás visszavonásáig, legfeljebb <mark>[kitöltendő]</mark></td></tr>
+      <tr><td>Tájékoztatás képzésekről, eseményekről (hírlevél)</td><td>név, e-mail-cím</td><td>GDPR 6. cikk (1) a) — hozzájárulás; a gazdasági reklámtevékenységről szóló 2008. évi XLVIII. törvény (Grt.) 6. §</td><td>a hozzájárulás visszavonásáig</td></tr>
+      <tr><td>Díjak, befizetések, számlák</td><td>név, díjtétel, összeg, fizetési mód, befizetési igazolás</td><td>GDPR 6. cikk (1) b) és c) — a számvitelről szóló 2000. évi C. törvény</td><td>a számviteli bizonylatokat 8 évig (Számv. tv. 169. §)</td></tr>
+      <tr><td>Partnerügynökségek regisztrációja, együttműködés, jutalékelszámolás</td><td>az ügynökség és kapcsolattartója adatai, dokumentumok (szerződés, meghatalmazás), a képviselt jelentkezők neve, programja, tandíja</td><td>GDPR 6. cikk (1) b) és c)</td><td>a szerződés megszűnése után <mark>[kitöltendő]</mark>; számviteli adatok 8 évig</td></tr>
+      <tr><td>Kurzusértékelés (ECHO)</td><td>részvételi adat (kitöltötte-e), célkitűzések; a válaszok a beküldés után névtelenek (lásd 13. pont)</td><td>GDPR 6. cikk (1) e) és c) — az oktatói munka hallgatói véleményezése az Nftv. és az egyetemi szabályzat alapján <mark>[jogszabályhely ellenőrizendő]</mark></td><td>részvételi adat a kampány lezárásáig, utána <mark>[kitöltendő]</mark></td></tr>
+      <tr><td>Oktatói nyilvántartás és eredmények</td><td>név, beosztás, e-mail-cím, szervezeti egység, kurzus-hozzárendelés, összesített (k-anonim) értékelési eredmények, oktatói észrevétel</td><td>GDPR 6. cikk (1) e) és b) — munkaviszony</td><td><mark>[kitöltendő]</mark></td></tr>
+      <tr><td>Kollégiumi elhelyezés, szerződés, beköltözés, karbantartás</td><td>személyazonosító adatok, okmány típusa és száma, születési hely és idő, állampolgárság, nem, vészhelyzeti kapcsolattartó, lakótárs-preferencia, pontszám, kaució és díjak, visszautalási számla, hibabejelentések, átadás-átvételi fényképek</td><td>GDPR 6. cikk (1) b) és c); vészhelyzeti kapcsolattartó: 6. cikk (1) f); egészségügyi és akadálymentességi igény: 9. cikk (2) a) — kifejezett hozzájárulás</td><td>a szerződés megszűnése után <mark>[kitöltendő]</mark>; számviteli adatok 8 évig</td></tr>
+      <tr><td>Informatikai biztonság, hozzáférés-naplózás</td><td>ki, mikor, milyen műveletet végzett (felhasználói azonosító, e-mail-cím)</td><td>GDPR 6. cikk (1) f) és 32. cikk</td><td><mark>[kitöltendő]</mark></td></tr>
+      <tr><td>Az elfogadások és hozzájárulások igazolása</td><td>lásd <a href="#naplo">12. pont</a></td><td>GDPR 6. cikk (1) c) — 7. cikk (1); 6. cikk (1) f) — jogi igények</td><td>az adatkezelés megszűnése után 5 évig (Ptk. 6:22. §)</td></tr>
+      <tr><td>A honlap kiszolgálása</td><td>IP-cím, böngésző típusa, időpont (a tárhely- és tartalomszolgáltatóknál)</td><td>GDPR 6. cikk (1) f)</td><td>a szolgáltatók saját szabályai szerint (lásd 7. pont)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Ha a GDPR 6. cikk (1) f) pontja (jogos érdek) a jogalap, az érdekmérlegelési tesztet az Egyetem kérésre rendelkezésre bocsátja. <mark>[kitöltendő: érdekmérlegelési tesztek elkészítése]</mark></p>
+
+  <h2 id="kulonleges">5. Különleges adatok és személyazonosító okmányok</h2>
+  <p><b>Útlevél és okmányszám.</b> A felvételhez és a tartózkodási engedélyhez szükséges igazolásokhoz az Egyetem kezeli az útlevél adatait és másolatát. A másolatot zárt tárhelyen, csak időkorlátos (1 órás) hivatkozással nyitjuk meg.</p>
+  <p><b>Egészségügyi adat.</b> Egészségügyi adatot csak ott kérünk, ahol a képzés vagy a kollégiumi elhelyezés kifejezetten megköveteli (pl. alkalmassági igazolás, akadálymentes szoba). Kérjük, ne töltsön fel olyan egészségügyi dokumentumot, amelyet a rendszer nem kér. <mark>[jogi felülvizsgálat: az alkalmassági igazolás jogalapja képzésenként]</mark></p>
+  <p><b>Szabad szöveg.</b> Motivációs levélben, üzenetben vagy kurzusértékelésben kérjük, ne adjon meg vallási, egészségügyi vagy más különleges adatot. A kurzusértékelés szabad szöveges válaszait közzététel előtt moderáljuk.</p>
+
+  <h2 id="automatizalt">6. Automatizált feldolgozás és profilalkotás</h2>
+  <ul>
+    <li>A felvételről, a kollégiumi elhelyezésről és bármely más, joghatással járó ügyről <b>kizárólag automatizált döntés nem születik</b> (GDPR 22. cikk). A döntést minden esetben az Egyetem munkatársa hozza.</li>
+    <li>A matematika-szintfelmérőt a rendszer automatikusan pontozza. Sikertelen kitöltés esetén új feladatsor kérhető, és az eredmény felülvizsgálatát a Nemzetközi Irodától kérheti.</li>
+    <li>A kollégiumi jelentkezések rangsorolása pontozási szabály szerint történik. A kiosztást munkatárs hagyja jóvá, és Ön a pontszám felülvizsgálatát kérheti.</li>
+    <li>A dokumentumok mellett megjelenő automatikus jelzések (pl. formátum- és méretellenőrzés) csak tájékoztató jellegűek.</li>
+    <li><b>Külső mesterséges intelligencia szolgáltatás a platformon jelenleg nem kap személyes adatot.</b> Ha ilyen funkciót bekapcsolunk, előtte ezt a tájékoztatót frissítjük, és szükség esetén a hozzájárulását kérjük.</li>
+  </ul>
+
+  <h2 id="cimzettek">7. Címzettek és adatfeldolgozók</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Címzett</th><th>Szerep, feladat</th><th>Érintett adatok</th><th>Hely</th></tr></thead>
+    <tbody>
+      <tr><td>Supabase Inc.</td><td>adatfeldolgozó — adatbázis, bejelentkezés, fájltárolás, rendszer-e-mailek (regisztráció megerősítése, jelszó-visszaállítás)</td><td>a platform összes adata</td><td>EU (Írország, eu-west-1); amerikai anyavállalat</td></tr>
+      <tr><td>GitHub Inc. (GitHub Pages)</td><td>adatfeldolgozó — a honlap statikus fájljainak kiszolgálása</td><td>IP-cím, böngészőadatok</td><td>USA</td></tr>
+      <tr><td>Tartalomszolgáltató hálózatok: Google Fonts (Google LLC), cdn.tailwindcss.com, cdn.jsdelivr.net, unpkg.com, esm.sh; képek: images.unsplash.com</td><td>programkönyvtárak, betűtípusok, illusztrációk kiszolgálása</td><td>IP-cím, böngészőadatok</td><td>USA / globális</td></tr>
+      <tr><td>Meta Platforms Ireland Ltd. (WhatsApp Business)</td><td>adatfeldolgozó — csak ha a WhatsAppos kapcsolattartáshoz hozzájárult</td><td>telefonszám, profilnév, üzenetek</td><td>EU / USA</td></tr>
+      <tr><td>E-mail-küldő szolgáltató <mark>[kitöltendő, pl. Resend, ha bevezetésre kerül]</mark></td><td>adatfeldolgozó — értesítő e-mailek kézbesítése</td><td>név, e-mail-cím, értesítés tartalma</td><td><mark>[kitöltendő]</mark></td></tr>
+      <tr><td>Partnerügynökségek</td><td>önálló adatkezelők — csak az általuk képviselt jelentkezők adatait látják</td><td>a képviselt jelentkező adatai és eljárásának állapota</td><td>változó</td></tr>
+      <tr><td>Hatóságok (pl. idegenrendészeti hatóság, Oktatási Hivatal)</td><td>jogszabályban előírt adatszolgáltatás</td><td>a jogszabályban meghatározott adatok</td><td>Magyarország</td></tr>
+    </tbody>
+  </table></div>
+  <p>Az adatfeldolgozókkal az Egyetem a GDPR 28. cikke szerinti szerződést köt. <mark>[kitöltendő: a szerződések megléte és dátuma szolgáltatónként]</mark></p>
+
+  <h2 id="harmadik">8. Adattovábbítás harmadik országba</h2>
+  <p>Az adatbázis és a feltöltött dokumentumok az Európai Unióban (Írország) vannak. Egyes szolgáltatók (GitHub, Google, Supabase anyavállalata, a tartalomszolgáltató hálózatok, WhatsApp esetén a Meta) az Egyesült Államokban is kezelhetnek adatot. Ilyenkor a továbbítás az EU–USA adatvédelmi keretrendszer (Data Privacy Framework) szerinti megfelelőségi határozaton vagy az Európai Bizottság általános szerződési feltételein (GDPR 45–46. cikk) alapul. <mark>[kitöltendő: szolgáltatónként a tényleges garancia]</mark></p>
+
+  <h2 id="bongeszo">9. Böngészőben tárolt adatok (sütik és helyi tároló)</h2>
+  <p>A platform <b>nem használ sütit</b> (cookie), és nem használ analitikai vagy reklámkövető eszközt. A böngésző helyi tárolójában (localStorage, sessionStorage) csak a szolgáltatás működéséhez szükséges adatokat tároljuk — ezekhez az elektronikus hírközlésről szóló 2003. évi C. törvény 155. § (4) bekezdése alapján nem kell hozzájárulás.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Tétel</th><th>Mire való</th></tr></thead>
+    <tbody>
+      <tr><td><code>sb-…-auth-token</code></td><td>a bejelentkezett munkamenet (kijelentkezéskor törlődik)</td></tr>
+      <tr><td><code>nje_lang</code>, <code>nje_sidebar</code></td><td>nyelv és oldalsáv-beállítás</td></tr>
+      <tr><td><code>nje_processes_…</code>, <code>nje_messages_…</code>, <code>nje_account_…</code>, <code>uni_…</code></td><td>a felvételi folyamat, az üzenetek és a profil gyorsítótára (offline és gyors betöltés)</td></tr>
+      <tr><td><code>uni_chat_…</code></td><td>az AI-asszisztens beszélgetésének utolsó üzenetei</td></tr>
+      <tr><td><code>echo_valaszaim</code>, <code>echo_megnyitando</code></td><td>a kurzusértékelésre adott saját válaszainak helyi másolata (csak az Ön böngészőjében), illetve a megnyitandó kurzus</td></tr>
+      <tr><td><code>uniportal_compiled_…</code></td><td>programkód-gyorsítótár, személyes adatot nem tartalmaz</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Közös vagy nyilvános számítógépen</b> használat után jelentkezzen ki, és törölje a böngésző adatait, mert a gyorsítótár személyes adatot tartalmazhat. <mark>[fejlesztési javaslat: kijelentkezéskor a gyorsítótár automatikus törlése]</mark></p>
+
+  <h2 id="kiskoru">10. Kiskorúak</h2>
+  <p>A regisztrációhoz a felhasználónak nyilatkoznia kell, hogy elmúlt 16 éves. 16 év alatti személy a hozzájáruláson alapuló adatkezeléshez (pl. hírlevél) csak törvényes képviselője hozzájárulásával csatlakozhat (GDPR 8. cikk, Infotv. 6. § (3)). 18 év alatti jelentkező szerződéses jognyilatkozatához (pl. tandíjszerződés) a törvényes képviselő hozzájárulása is szükséges.</p>
+
+  <h2 id="hozzajarulas">11. Hozzájárulások</h2>
+  <h3 id="marketing">Hírlevél és képzési ajánlatok</h3>
+  <p>Ha hozzájárul, az Egyetem e-mailben tájékoztatja képzéseiről és eseményeiről. A hozzájárulás önkéntes; megtagadása vagy visszavonása semmilyen hátránnyal nem jár, és nem befolyásolja a felvételi eljárást.</p>
+  <h3 id="whatsapp">Kapcsolattartás WhatsAppon</h3>
+  <p>Ha hozzájárul, a Nemzetközi Iroda WhatsAppon is megkeresheti (a Meta Platforms szolgáltatásán keresztül). Hozzájárulás nélkül a kapcsolattartás a platformon és e-mailben történik.</p>
+  <p><b>Visszavonás:</b> bármikor, egy kattintással a <i>Profilom → Adatvédelem és hozzájárulások</i> részben, vagy az adatvédelmi tisztviselőnek írt üzenettel. A visszavonás nem érinti a visszavonás előtti adatkezelés jogszerűségét (GDPR 7. cikk (3)).</p>
+
+  <h2 id="naplo">12. Az elfogadások és hozzájárulások naplózása</h2>
+  <p>A GDPR 7. cikk (1) bekezdése szerint az Egyetemnek igazolnia kell a hozzájárulást, a Ptk. 6:78. §-a szerint pedig a feltételek elfogadását. Ezért naplózzuk: <b>ki</b> (felhasználói azonosító és e-mail-cím), <b>melyik dokumentum melyik verzióját</b> fogadta el, illetve melyik hozzájárulást <b>adta meg vagy vonta vissza</b>, <b>hol</b> (regisztráció, belépés, profil), <b>mikor</b>, valamint a böngésző azonosítóját (legfeljebb 300 karakter). IP-címet nem naplózunk. A naplót nem lehet módosítani vagy törölni; a saját bejegyzéseit Ön a profiljában látja, a teljes naplót csak a rendszergazdák. Megőrzés: az adatkezelés megszűnése után 5 évig.</p>
+
+  <h2 id="echo">13. Kurzusértékelés (ECHO)</h2>
+  <p>A kurzusértékelő kérdőívre adott válaszokat úgy tároljuk, hogy azok ne legyenek Önhöz köthetők: a válasz mellé nem kerül felhasználói azonosító, pontos időpont, IP-cím vagy böngészőadat; a beküldés külön, munkamenet nélküli kapcsolaton történik, a válaszok sorrendjét a rendszer összekeveri, és kis létszámú csoportok eredménye nem jelenik meg (k-anonimitás). Azt viszont nyilvántartjuk, hogy Ön kitöltötte-e a kérdőívet (részvétel), hogy ne kérjük újra. A saját válaszainak másolata csak az Ön böngészőjében marad.</p>
+
+  <h2 id="biztonsag">14. Adatbiztonság</h2>
+  <ul>
+    <li>Titkosított (HTTPS) kapcsolat; az adatbázis és a fájlok az EU-ban.</li>
+    <li>Sorszintű hozzáférés-szabályozás: mindenki csak a szerepköréhez szükséges adatot látja (a jelentkező a sajátját, az ügynökség a képviselt jelentkezőkét).</li>
+    <li>Zárt dokumentumtárhely, időkorlátos (1 órás) megnyitási hivatkozásokkal; érzékeny műveletek naplózása.</li>
+    <li>Adatvédelmi incidens esetén az Egyetem a GDPR 33–34. cikke szerint jár el.</li>
+  </ul>
+
+  <h2 id="jogok">15. Az Ön jogai</h2>
+  <ul>
+    <li><b>Hozzáférés</b> (15. cikk) — tájékoztatást és másolatot kérhet a kezelt adatairól.</li>
+    <li><b>Helyesbítés</b> (16. cikk) — pontatlan adatai javítását kérheti; alapadatait a Profilom oldalon maga is módosíthatja.</li>
+    <li><b>Törlés</b> (17. cikk) — kérheti adatai törlését, kivéve, ha jogszabály megőrzésüket írja elő.</li>
+    <li><b>Korlátozás</b> (18. cikk), <b>adathordozhatóság</b> (20. cikk), <b>tiltakozás</b> (21. cikk) — a jogos érdeken és közérdekű feladaton alapuló adatkezelés ellen.</li>
+    <li><b>Hozzájárulás visszavonása</b> (7. cikk (3)) — bármikor, a 11. pont szerint.</li>
+  </ul>
+  <p>Kérelmét az adatvédelmi tisztviselőnek küldheti: <mark>[kitöltendő e-mail-cím]</mark>. Az Egyetem a kérelemre legfeljebb egy hónapon belül válaszol (GDPR 12. cikk (3)); a határidő indokolt esetben további két hónappal meghosszabbítható. A kérelmező személyazonosságát az Egyetem ellenőrizheti.</p>
+
+  <h2 id="jogorvoslat">16. Jogorvoslat</h2>
+  <p>Panaszával a Nemzeti Adatvédelmi és Információszabadság Hatósághoz (NAIH) fordulhat: 1055 Budapest, Falk Miksa utca 9–11.; postacím: 1363 Budapest, Pf. 9.; <a href="https://www.naih.hu" rel="noopener">www.naih.hu</a>; ugyfelszolgalat@naih.hu. Jogai megsértése esetén bírósághoz is fordulhat; a pert — választása szerint — lakóhelye vagy tartózkodási helye szerinti törvényszék előtt is megindíthatja (Infotv. 23. §).</p>
+
+  <h2 id="modositas">17. A tájékoztató módosítása</h2>
+  <p>A tájékoztató minden változata verziószámot (dátumot) kap. Lényeges változás esetén a platform a következő bejelentkezéskor megjeleníti az új változatot, és az elfogadást naplózza.</p>
+</article>
+
+<!-- ======================= ENGLISH ======================= -->
+<article lang="en" data-lang-block="en" hidden>
+  <h1>Privacy Notice</h1>
+  <p class="meta">UniPortal admissions and student platform · Version: <b>2026-09-11</b> · Effective from 11 September 2026</p>
+  <div class="draft"><b>DRAFT — under legal review.</b> The highlighted <mark>[to be completed]</mark> parts are completed and approved by the university's Data Protection Officer. The Hungarian version prevails.</div>
+
+  <nav class="toc" aria-label="Contents"><ol>
+    <li><a href="#en-controller">The controller</a></li>
+    <li><a href="#en-scope">Scope</a></li>
+    <li><a href="#en-subjects">Whose data we process</a></li>
+    <li><a href="#en-purposes">Purposes, legal bases, retention</a></li>
+    <li><a href="#en-special">Special data and ID documents</a></li>
+    <li><a href="#en-automated">Automated processing</a></li>
+    <li><a href="#en-recipients">Recipients and processors</a></li>
+    <li><a href="#en-transfers">Transfers outside the EU</a></li>
+    <li><a href="#en-storage">Data stored in your browser</a></li>
+    <li><a href="#en-minors">Minors</a></li>
+    <li><a href="#en-consents">Consents</a></li>
+    <li><a href="#en-log">Logging of acceptances</a></li>
+    <li><a href="#en-echo">Course evaluation (ECHO)</a></li>
+    <li><a href="#en-security">Security</a></li>
+    <li><a href="#en-rights">Your rights</a></li>
+    <li><a href="#en-remedies">Remedies</a></li>
+    <li><a href="#en-changes">Changes to this notice</a></li>
+  </ol></nav>
+
+  <h2 id="en-controller">1. The controller</h2>
+  <div class="box">
+    <p><b>John von Neumann University</b> (Neumann János Egyetem, "the University")<br>
+    Registered office: Izsáki út 10., 6000 Kecskemét, Hungary <mark>[to be verified]</mark><br>
+    Website: <a href="https://www.nje.hu" rel="noopener">www.nje.hu</a><br>
+    Data Protection Officer: <mark>[to be completed: name, email, phone]</mark><br>
+    Platform enquiries: <mark>[to be completed: e.g. International Office email]</mark></p>
+  </div>
+  <p>This notice is based on Regulation (EU) 2016/679 (GDPR), Hungarian Act CXII of 2011 on informational self-determination and freedom of information (Infotv.) and Act CCIV of 2011 on national higher education (Nftv.).</p>
+
+  <h2 id="en-scope">2. Scope</h2>
+  <p>This notice covers the UniPortal platform: the public home page, the application after sign-in, the password reset page, and the admissions, communication, course evaluation, dormitory and partner agency processes carried out through the platform. Other processing by the University (e.g. the Neptun student records system, HR) is covered by the University's own notices.</p>
+
+  <h2 id="en-subjects">3. Whose data we process</h2>
+  <ul>
+    <li><b>Applicants and students</b> — from registration through admission to student status.</li>
+    <li><b>Staff of partner agencies</b> and the applicants they represent.</li>
+    <li><b>University staff</b> (officers, interviewers, administrators) and <b>teachers</b> (course assignment, course evaluation).</li>
+    <li><b>Third parties</b> whose data someone else provides: referees, dormitory emergency contacts, roommate preferences. The University informs them under Article 14 GDPR through this notice and, where necessary, separately.</li>
+    <li><b>Dormitory residents</b> and representatives of the dormitory landlord.</li>
+    <li><b>People who contact us via WhatsApp</b> (only with consent).</li>
+    <li><b>Website visitors</b> (technical data, see sections 7 and 9).</li>
+  </ul>
+
+  <h2 id="en-purposes">4. Purposes, legal bases and retention</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Purpose</th><th>Data</th><th>Legal basis</th><th>Retention</th></tr></thead>
+    <tbody>
+      <tr><td>User account, sign-in, approval</td><td>name, email, password (hashed, handled by Supabase Auth), role, profile picture, approval status</td><td>Art. 6(1)(b) GDPR — the service under the Terms of Use; for staff Art. 6(1)(e)</td><td>until the account is closed, then <mark>[to be completed]</mark></td></tr>
+      <tr><td>Admission procedure (application, documents, verification, interview, placement test, acceptance letter)</td><td>personal and contact details, citizenship, date of birth, gender, passport data and copy, school certificates, language certificate, motivation letter, CV, portfolio, research plan, recommendation letter, test result, interview slot, admission decision and letter</td><td>Art. 6(1)(e) and (c) — admissions tasks under the Nftv.; for self-funded programmes Art. 6(1)(b) — steps prior to a contract</td><td><mark>[to be completed — under Annex 3 of the Nftv. and the University's records management rules]</mark></td></tr>
+      <tr><td>Checking document authenticity and duplicate applications</td><td>uploaded documents, passport number, name, email (matching)</td><td>Art. 6(1)(e) and (f) — preventing fraud</td><td>together with the admission data</td></tr>
+      <tr><td>Communication on the platform (messages, notifications, emails)</td><td>name, email, message content, attachment references</td><td>Art. 6(1)(e) and (b)</td><td>until the procedure closes, then <mark>[to be completed]</mark></td></tr>
+      <tr><td>Contact via WhatsApp</td><td>phone number, WhatsApp profile name, messages</td><td>Art. 6(1)(a) — consent</td><td>until consent is withdrawn, at most <mark>[to be completed]</mark></td></tr>
+      <tr><td>Information on programmes and events (newsletter)</td><td>name, email</td><td>Art. 6(1)(a) — consent; Section 6 of Hungarian Act XLVIII of 2008 on commercial advertising</td><td>until consent is withdrawn</td></tr>
+      <tr><td>Fees, payments, invoices</td><td>name, fee item, amount, payment method, proof of payment</td><td>Art. 6(1)(b) and (c) — Hungarian Accounting Act (Act C of 2000)</td><td>accounting records for 8 years (Section 169 of the Accounting Act)</td></tr>
+      <tr><td>Partner agency registration, cooperation, commission</td><td>agency and contact person data, documents (contract, power of attorney), names, programmes and tuition of represented applicants</td><td>Art. 6(1)(b) and (c)</td><td>after the contract ends <mark>[to be completed]</mark>; accounting data 8 years</td></tr>
+      <tr><td>Course evaluation (ECHO)</td><td>participation (whether you completed it), goals; answers are anonymous after submission (see section 13)</td><td>Art. 6(1)(e) and (c) — student evaluation of teaching under the Nftv. and University rules <mark>[legal reference to be verified]</mark></td><td>participation data until the campaign closes, then <mark>[to be completed]</mark></td></tr>
+      <tr><td>Teacher registry and results</td><td>name, title, email, unit, course assignments, aggregated (k-anonymous) results, teacher's comments</td><td>Art. 6(1)(e) and (b) — employment</td><td><mark>[to be completed]</mark></td></tr>
+      <tr><td>Dormitory allocation, contract, move-in, maintenance</td><td>identification data, ID document type and number, place and date of birth, citizenship, gender, emergency contact, roommate preference, score, deposit and fees, refund account, maintenance reports, handover photos</td><td>Art. 6(1)(b) and (c); emergency contact: Art. 6(1)(f); health and accessibility needs: Art. 9(2)(a) — explicit consent</td><td>after the contract ends <mark>[to be completed]</mark>; accounting data 8 years</td></tr>
+      <tr><td>IT security, access logging</td><td>who did what and when (user ID, email)</td><td>Art. 6(1)(f) and Art. 32</td><td><mark>[to be completed]</mark></td></tr>
+      <tr><td>Proof of acceptances and consents</td><td>see <a href="#en-log">section 12</a></td><td>Art. 6(1)(c) — Art. 7(1); Art. 6(1)(f) — legal claims</td><td>5 years after processing ends (Hungarian Civil Code, Section 6:22)</td></tr>
+      <tr><td>Serving the website</td><td>IP address, browser type, time (at hosting and content delivery providers)</td><td>Art. 6(1)(f)</td><td>under the providers' own rules (see section 7)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Where legitimate interest (Art. 6(1)(f)) is the legal basis, the balancing test is available on request. <mark>[to be completed: balancing tests]</mark></p>
+
+  <h2 id="en-special">5. Special categories of data and ID documents</h2>
+  <p><b>Passport and document numbers.</b> For admission and for the certificates needed for a residence permit, the University processes passport data and a copy of the passport. The copy is kept in closed storage and opened only through time-limited (1-hour) links.</p>
+  <p><b>Health data.</b> We ask for health data only where a programme or dormitory placement explicitly requires it (e.g. a fitness certificate, an accessible room). Please do not upload health documents the system does not ask for. <mark>[legal review: legal basis of fitness certificates per programme]</mark></p>
+  <p><b>Free text.</b> Please do not include religious, health or other special data in motivation letters, messages or course evaluations. Free-text course evaluation answers are moderated before publication.</p>
+
+  <h2 id="en-automated">6. Automated processing and profiling</h2>
+  <ul>
+    <li><b>No decision is based solely on automated processing</b> (Art. 22 GDPR) for admission, dormitory allocation or anything else with legal effect. A University staff member always makes the decision.</li>
+    <li>The mathematics placement test is scored automatically. You can request a new set of tasks if you do not pass, and you can ask the International Office to review your result.</li>
+    <li>Dormitory applications are ranked using a scoring rule. A staff member approves the allocation, and you can request a review of your score.</li>
+    <li>Automatic indicators shown next to documents (e.g. format and size checks) are for information only.</li>
+    <li><b>No external artificial intelligence service currently receives personal data from the platform.</b> If we switch on such a feature, we will update this notice first and, where required, ask for your consent.</li>
+  </ul>
+
+  <h2 id="en-recipients">7. Recipients and processors</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Recipient</th><th>Role</th><th>Data</th><th>Location</th></tr></thead>
+    <tbody>
+      <tr><td>Supabase Inc.</td><td>processor — database, sign-in, file storage, system emails (sign-up confirmation, password reset)</td><td>all platform data</td><td>EU (Ireland, eu-west-1); US parent company</td></tr>
+      <tr><td>GitHub Inc. (GitHub Pages)</td><td>processor — serving the website's static files</td><td>IP address, browser data</td><td>USA</td></tr>
+      <tr><td>Content delivery networks: Google Fonts (Google LLC), cdn.tailwindcss.com, cdn.jsdelivr.net, unpkg.com, esm.sh; images: images.unsplash.com</td><td>serving libraries, fonts and illustrations</td><td>IP address, browser data</td><td>USA / global</td></tr>
+      <tr><td>Meta Platforms Ireland Ltd. (WhatsApp Business)</td><td>processor — only if you consented to contact via WhatsApp</td><td>phone number, profile name, messages</td><td>EU / USA</td></tr>
+      <tr><td>Email delivery provider <mark>[to be completed, e.g. Resend if introduced]</mark></td><td>processor — delivering notification emails</td><td>name, email, notification content</td><td><mark>[to be completed]</mark></td></tr>
+      <tr><td>Partner agencies</td><td>independent controllers — they only see the applicants they represent</td><td>data and status of represented applicants</td><td>varies</td></tr>
+      <tr><td>Authorities (e.g. immigration authority, Educational Authority)</td><td>data provision required by law</td><td>data defined by law</td><td>Hungary</td></tr>
+    </tbody>
+  </table></div>
+  <p>The University concludes contracts with its processors under Article 28 GDPR. <mark>[to be completed: contract status and date per provider]</mark></p>
+
+  <h2 id="en-transfers">8. Transfers outside the EU</h2>
+  <p>The database and uploaded documents are stored in the European Union (Ireland). Some providers (GitHub, Google, Supabase's parent company, the content delivery networks and, for WhatsApp, Meta) may also process data in the United States. Such transfers rely on the EU–US Data Privacy Framework adequacy decision or the European Commission's standard contractual clauses (Articles 45–46 GDPR). <mark>[to be completed: actual safeguard per provider]</mark></p>
+
+  <h2 id="en-storage">9. Data stored in your browser (cookies and local storage)</h2>
+  <p>The platform <b>does not use cookies</b> and uses no analytics or advertising trackers. The browser's local storage (localStorage, sessionStorage) holds only what the service needs to work — which, under Section 155(4) of Hungarian Act C of 2003 on electronic communications, requires no consent.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Item</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>sb-…-auth-token</code></td><td>your signed-in session (removed when you sign out)</td></tr>
+      <tr><td><code>nje_lang</code>, <code>nje_sidebar</code></td><td>language and sidebar preference</td></tr>
+      <tr><td><code>nje_processes_…</code>, <code>nje_messages_…</code>, <code>nje_account_…</code>, <code>uni_…</code></td><td>cache of the admission process, messages and profile (offline use and fast loading)</td></tr>
+      <tr><td><code>uni_chat_…</code></td><td>the latest messages of the AI assistant conversation</td></tr>
+      <tr><td><code>echo_valaszaim</code>, <code>echo_megnyitando</code></td><td>a local copy of your own course evaluation answers (only in your browser) and the course to open</td></tr>
+      <tr><td><code>uniportal_compiled_…</code></td><td>program code cache, no personal data</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>On a shared or public computer</b>, sign out after use and clear the browser data, because the cache may contain personal data. <mark>[development recommendation: clear the cache automatically on sign-out]</mark></p>
+
+  <h2 id="en-minors">10. Minors</h2>
+  <p>To register, users must confirm that they are at least 16 years old. A person under 16 may give consent-based permissions (e.g. newsletter) only with the consent of their legal representative (Art. 8 GDPR, Section 6(3) Infotv.). Contractual declarations of an applicant under 18 (e.g. a tuition contract) also require the legal representative's consent.</p>
+
+  <h2 id="en-consents">11. Consents</h2>
+  <h3 id="en-marketing">Newsletter and programme offers</h3>
+  <p>If you consent, the University emails you about its programmes and events. Consent is voluntary; refusing or withdrawing it has no negative consequence and does not affect the admission procedure.</p>
+  <h3 id="en-whatsapp">Contact via WhatsApp</h3>
+  <p>If you consent, the International Office may also contact you via WhatsApp (a Meta Platforms service). Without consent, contact happens on the platform and by email.</p>
+  <p><b>Withdrawal:</b> at any time, with one click under <i>My profile → Privacy and consents</i>, or by writing to the Data Protection Officer. Withdrawal does not affect the lawfulness of processing before it (Art. 7(3) GDPR).</p>
+
+  <h2 id="en-log">12. Logging of acceptances and consents</h2>
+  <p>Under Article 7(1) GDPR the University must be able to prove consent, and under Section 6:78 of the Hungarian Civil Code the acceptance of terms. We therefore log <b>who</b> (user ID and email) accepted <b>which version of which document</b>, or <b>gave or withdrew</b> which consent, <b>where</b> (registration, sign-in, profile), <b>when</b>, and the browser identifier (at most 300 characters). We do not log IP addresses. The log cannot be modified or deleted; you can see your own entries in your profile, and only administrators see the full log. Retention: 5 years after processing ends.</p>
+
+  <h2 id="en-echo">13. Course evaluation (ECHO)</h2>
+  <p>Course evaluation answers are stored so that they cannot be linked to you: no user ID, exact time, IP address or browser data is stored with an answer; submission uses a separate connection without a session; the order of answers is shuffled; and results of small groups are not shown (k-anonymity). We do record whether you completed the questionnaire (participation) so that we do not ask again. The copy of your own answers stays only in your browser.</p>
+
+  <h2 id="en-security">14. Security</h2>
+  <ul>
+    <li>Encrypted (HTTPS) connections; database and files in the EU.</li>
+    <li>Row-level access control: everyone sees only the data their role needs (applicants their own, agencies those of the applicants they represent).</li>
+    <li>Closed document storage with time-limited (1-hour) links; logging of sensitive operations.</li>
+    <li>In case of a personal data breach, the University acts under Articles 33–34 GDPR.</li>
+  </ul>
+
+  <h2 id="en-rights">15. Your rights</h2>
+  <ul>
+    <li><b>Access</b> (Art. 15) — information about and a copy of your data.</li>
+    <li><b>Rectification</b> (Art. 16) — correction of inaccurate data; you can edit your basic data yourself on your profile page.</li>
+    <li><b>Erasure</b> (Art. 17) — unless the law requires us to keep the data.</li>
+    <li><b>Restriction</b> (Art. 18), <b>data portability</b> (Art. 20), <b>objection</b> (Art. 21) — against processing based on legitimate interest or public task.</li>
+    <li><b>Withdrawal of consent</b> (Art. 7(3)) — at any time, see section 11.</li>
+  </ul>
+  <p>Send your request to the Data Protection Officer: <mark>[email to be completed]</mark>. The University responds within one month (Art. 12(3) GDPR), which may be extended by two further months where justified. The University may verify the requester's identity.</p>
+
+  <h2 id="en-remedies">16. Remedies</h2>
+  <p>You can lodge a complaint with the Hungarian National Authority for Data Protection and Freedom of Information (NAIH): Falk Miksa utca 9–11., 1055 Budapest; postal address: 1363 Budapest, Pf. 9.; <a href="https://www.naih.hu" rel="noopener">www.naih.hu</a>; ugyfelszolgalat@naih.hu. You may also go to court; at your choice, proceedings may be brought before the regional court of your place of residence or stay (Section 23 Infotv.). You may also complain to the supervisory authority of your EU residence.</p>
+
+  <h2 id="en-changes">17. Changes to this notice</h2>
+  <p>Every version of this notice has a version number (date). After a material change, the platform shows the new version at your next sign-in and logs your acceptance.</p>
+</article>
+
+  <footer>
+    <a href="terms.html" data-href-hu="terms.html">Felhasználási feltételek · Terms of Use</a>
+    <a href="index.html">UniPortal</a>
+  </footer>
+</div>
+<script>
+  // Nyelv: az alkalmazás beállítása, különben a böngészőé. Az „en-” horgonyok az angol részre mutatnak.
+  (function () {
+    var btns = document.querySelectorAll('.lang button');
+    function set(l) {
+      document.querySelectorAll('[data-lang-block]').forEach(function (a) { a.hidden = a.getAttribute('data-lang-block') !== l; });
+      btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === l)); });
+      document.documentElement.lang = l;
+      document.title = l === 'en' ? 'Privacy Notice — UniPortal' : 'Adatkezelési tájékoztató — UniPortal';
+      try { localStorage.setItem('nje_lang', l); } catch (e) {}
+    }
+    var l = 'hu';
+    try { l = localStorage.getItem('nje_lang') || ((navigator.language || '').toLowerCase().indexOf('hu') === 0 ? 'hu' : 'en'); } catch (e) {}
+    // Egy magyar horgonyra (#jogok, #marketing…) érkező angol olvasónak az angol megfelelő.
+    var map = { adatkezelo:'en-controller', jogok:'en-rights', kiskoru:'en-minors', marketing:'en-marketing', whatsapp:'en-whatsapp', naplo:'en-log', hozzajarulas:'en-consents', bongeszo:'en-storage' };
+    set(l === 'en' ? 'en' : 'hu');
+    var h = location.hash.replace('#', '');
+    if (l === 'en' && map[h]) { var t = document.getElementById(map[h]); if (t) t.scrollIntoView(); }
+    btns.forEach(function (b) { b.addEventListener('click', function () { set(b.getAttribute('data-lang')); }); });
+  })();
+</script>
+</body>
+</html>

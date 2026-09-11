@@ -72,6 +72,8 @@ const AppView = {
   DORM_OPS: 'dorm_ops',
   DORM_MAINTENANCE: 'dorm_maintenance',
   DORM_STUDENT: 'dorm_student',
+  // Jogi: hozzájárulási napló (59_legal_consents.sql) — csak SUPERADMIN/ADMIN.
+  CONSENTS: 'consents',
 };
 
 const MENU_ITEMS = [
@@ -104,6 +106,7 @@ const MENU_ITEMS = [
   { id: AppView.DORM_OPS, label: 'Kollégium', icon: <Lucide.Building2 size={20} /> },
   { id: AppView.DORM_MAINTENANCE, label: 'Karbantartás', icon: <Lucide.Wrench size={20} /> },
   { id: AppView.DORM_STUDENT, label: 'Szállásom', icon: <Lucide.BedDouble size={20} /> },
+  { id: AppView.CONSENTS, label: 'Hozzájárulási napló', icon: <Lucide.ShieldCheck size={20} /> },
 ];
 
 /* Az oldalsáv TÉMAKÖREI. Csak a sok menüpontot látó (ügyintézői) nézetben
@@ -119,7 +122,7 @@ const MENU_GROUPS = [
   { key: 'penzugy',   label: 'Pénzügy és elemzés',        ids: [AppView.FINANCE, AppView.REPORTS, AppView.INTELLIGENCE] },
   { key: 'echo',      label: 'Minőségbiztosítás (ECHO)',  ids: [AppView.ECHO_STUDENT, AppView.ECHO_ADMIN, AppView.ECHO_TEACHER] },
   { key: 'kollegium', label: 'Kollégium és szállás',      ids: [AppView.DORM_OPS, AppView.DORM_MAINTENANCE, AppView.DORM_STUDENT] },
-  { key: 'rendszer',  label: 'Rendszer',                  ids: [AppView.SYSTEM_ADMIN, AppView.REGISTRATIONS] },
+  { key: 'rendszer',  label: 'Rendszer',                  ids: [AppView.SYSTEM_ADMIN, AppView.REGISTRATIONS, AppView.CONSENTS] },
 ];
 
 
@@ -2767,7 +2770,8 @@ const AdmissionsCore = ({ user }) => {
         setAiReport(r => (r && r.d && r.d.id === d.id) ? { ...r, loading: false, error: 'Az AI elemzés nem sikerült. ' + ((e && e.message) || '') } : r);
       }
     };
-    const avatarUrl = (pp) => { const ex = pp.data && pp.data.extracted; return ex ? ('https://i.pravatar.cc/96?u=' + encodeURIComponent((pp.data.account && pp.data.account.email) || pp.id || pp._owner || 'x')) : null; };
+    // Nincs külső avatar-szolgáltató: az a jelentkező e-mail-címét vitte volna ki (GDPR). A Face monogramot mutat.
+    const avatarUrl = (pp) => null;
     const Face = ({ p, size = 44 }) => {
       const url = avatarUrl(p); const nm = pName(p);
       return (<div className="relative rounded-xl overflow-hidden bg-primary/10 text-primary flex items-center justify-center font-black flex-none" style={{ width: size, height: size }}><span>{(nm[0] || '?').toUpperCase()}</span>{url && <img src={url} alt="" className="absolute inset-0 w-full h-full object-cover" onError={e => { e.target.style.display = 'none'; }} />}</div>);
@@ -11008,7 +11012,7 @@ const AccountPage = ({ user, onUpdate, onClose }) => {
     reader.onload = () => { const url = reader.result; setAvatar(url); persist({ avatar: url }); onUpdate({ avatar: url }); setUploading(false); };
     reader.readAsDataURL(f);
   };
-  const removeAvatar = async () => { const fallback = 'https://i.pravatar.cc/150?u=' + encodeURIComponent(user.email || 'u'); setAvatar(fallback); persist({ avatar: '' }); onUpdate({ avatar: fallback }); try { if (window.sb && user.id) await sb.from('profiles').update({ avatar_url: null }).eq('id', user.id); } catch (e) {} };
+  const removeAvatar = async () => { const fallback = initialsAvatar(user.name || user.email); setAvatar(fallback); persist({ avatar: '' }); onUpdate({ avatar: fallback }); try { if (window.sb && user.id) await sb.from('profiles').update({ avatar_url: null }).eq('id', user.id); } catch (e) {} };
 
   const saveInfo = async () => {
     persist({ name, phone, country, birthDate });
@@ -11135,6 +11139,7 @@ const AccountPage = ({ user, onUpdate, onClose }) => {
           )}
         </div>
       </div>
+      <LEG_ProfileSection user={user} />
     </div>
   );
 };
@@ -11142,6 +11147,16 @@ return AccountPage;
 })();
 
 /*__FEATURES__*/
+
+/* Helyben generált, monogramos profilkép (SVG data URI). Korábban az
+   alapértelmezett kép az i.pravatar.cc-ről jött, a címben a felhasználó
+   E-MAIL-CÍMÉVEL — így minden oldalbetöltés továbbította a címet egy harmadik
+   félnek (GDPR 5. cikk (1) c), 44. cikk). Ez semmilyen külső kérést nem indít. */
+const initialsAvatar = (nev) => {
+  const betuk = String(nev || '?').replace(/@.*$/, '').trim().split(/[\s._-]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('') || '?';
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'><rect width='150' height='150' fill='#ffefdb'/><text x='75' y='80' font-family='Inter,Arial,sans-serif' font-size='58' font-weight='800' fill='#b85200' text-anchor='middle' dominant-baseline='middle'>" + betuk + "</text></svg>";
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+};
 
 /* ===== App ===== */
 const App = (() => {
@@ -11286,7 +11301,8 @@ const App: React.FC = () => {
       // adat, ilyenkor a kódba égetett lista dönt.
       rolePerms,
       dormResident,
-      avatar: (profile && profile.avatar_url) || ov.avatar || 'https://i.pravatar.cc/150?u=' + encodeURIComponent(authUser.email),
+      // A korábban elmentett pravatar-címet sem használjuk: az is az e-mail-címet vitte ki.
+      avatar: (() => { const av = (profile && profile.avatar_url) || ov.avatar || ''; return (av && !/pravatar\.cc/i.test(av)) ? av : initialsAvatar((profile && profile.name) || (authUser.user_metadata && authUser.user_metadata.name) || authUser.email); })(),
     });
     // HOVA LANDOLJON — és mikor NE mozduljon el.
     //
@@ -11458,6 +11474,11 @@ const App: React.FC = () => {
               ki volt írva, tehát bárki bejuthatott velük. A tesztfiókok adatai
               a tesztelési kézikönyvben vannak, azokat kézzel kell begépelni. */}
           <a href="index.html" className="block text-center mt-8 text-xs font-bold text-slate-400 hover:text-primary transition-colors">← Vissza a főoldalra</a>
+          <div className="mt-4 flex items-center justify-center gap-3 text-[11px] font-semibold text-slate-400">
+            <a href="privacy.html" target="_blank" rel="noopener" className="hover:text-primary">Adatkezelési tájékoztató</a>
+            <span aria-hidden="true">·</span>
+            <a href="terms.html" target="_blank" rel="noopener" className="hover:text-primary">Felhasználási feltételek</a>
+          </div>
         </div>
       </div>
     );
@@ -11467,13 +11488,15 @@ const App: React.FC = () => {
   // The RLS policies from migration 07 enforce the same thing server-side —
   // this screen only explains it.
   if (currentUser.status !== 'approved') {
-    return <PendingApprovalScreen user={currentUser} onLogout={handleLogout} />;
+    return <><PendingApprovalScreen user={currentUser} onLogout={handleLogout} /><LEG_Gate user={currentUser} onLogout={handleLogout} /></>;
   }
 
   // Filter menu items based on user role
   const filteredMenuItems = MENU_ITEMS.filter(item => {
     // Approving registrations is the superadmin's alone — not even ADMIN.
     if (item.id === AppView.REGISTRATIONS) return currentUser.role === 'SUPERADMIN';
+    // A hozzájárulási napló személyes adatot tartalmaz: csak rendszergazda (az RLS is így szűr).
+    if (item.id === AppView.CONSENTS) return currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN';
     // Az ECHO kampánykezelés a REGISTRATIONS mintájára a fail-open ág ELŐTT dönt,
     // különben a lenti 'SUPERADMIN || ADMIN → true' után minden ügyintéző látná.
     if (item.id === AppView.ECHO_ADMIN) return currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN';
@@ -11604,6 +11627,10 @@ const App: React.FC = () => {
           ? <RegistrationsView user={currentUser} />
           : <FeedView user={currentUser} onNavigate={setActiveView} />;
       case AppView.ECHO_STUDENT: return <ECHO_StudentView user={currentUser} />;
+      case AppView.CONSENTS:
+        return ['SUPERADMIN', 'ADMIN'].includes(currentUser.role)
+          ? <LEG_AdminLog user={currentUser} />
+          : <FeedView user={currentUser} onNavigate={setActiveView} />;
       case AppView.TEACHERS:
         // Ugyanaz a feltetel, mint a menuszuresben — kulonben a menupont
         // latszana, de a Hirfolyam jonne fel helyette.
@@ -11729,6 +11756,8 @@ const App: React.FC = () => {
           Lásd app.html: body:has(.fixed.bottom-0.left-72) .nje-assistant-slot. */}
       <div className="nje-assistant-slot contents">
         {['STUDENT', 'AGENT'].includes(currentUser.role) && activeView !== AppView.ASSISTANT && !showAccount && <AssistantWidget user={currentUser} />}
+        {/* Jogi kapu: ha egy kötelező dokumentum jelenlegi verziója nincs elfogadva, blokkoló ablak kéri. */}
+        <LEG_Gate user={currentUser} onLogout={handleLogout} />
       </div>
     </div>
   );
@@ -11896,6 +11925,7 @@ Object.assign(HU_EN, {
   'Elfelejtettem a jelszavam':'Forgot your password?','Elfelejtett jelszó':'Forgot password','Add meg az e-mail-címet, amellyel belépsz. Küldünk egy linket, amellyel új jelszót állíthatsz be.':'Enter the email address you sign in with. We will send you a link to set a new password.','Link küldése':'Send link','Küldés…':'Sending…','← Vissza a bejelentkezéshez':'← Back to sign in','Túl sok kérés. Kérjük, várj egy percet, mielőtt újabb linket kérsz.':'Too many requests. Please wait a minute before requesting another link.','A kérés nem sikerült. Kérjük, próbáld újra.':'The request failed. Please try again.',
   'Egy korábbi lépést nézel':'You are viewing an earlier step','Itt megnézheted, mit adtál meg. A haladásod nem változik, és ebben a nézetben nem módosíthatsz.':'Here you can review what you submitted. Your progress does not change, and nothing can be edited in this view.','Vissza az aktuális lépéshez':'Back to the current step','Kiküldésre vár':'Awaiting sending','A felvételi leveled előkészítés alatt':'Your acceptance letter is being prepared','Minden lépést teljesítettél. A Nemzetközi Iroda most ellenőrzi és véglegesíti a feltételes felvételi leveledet, majd kiküldi. Amint megérkezett, itt látod és ki is nyomtathatod — erről üzenetet is kapsz.':'You have completed every step. The International Office is now reviewing and finalising your conditional acceptance letter and will then send it. Once it arrives you will see it here and can print it — you will also get a message about it.','Kiküldve':'Sent','Tervezet — kiküldésre vár':'Draft — awaiting sending','Kiküldés a hallgatónak':'Send to the applicant','Kiküldés visszavonása':'Revoke sending','Levéltervezet létrehozása':'Create letter draft','A jelentkező a Felvételi levél lépésnél tart, de a levéltervezet még nem készült el.':'The applicant is at the acceptance letter step, but the draft has not been created yet.','A levél akkor készül el, amikor a jelentkező eléri a Felvételi levél lépést. Ezután itt nézheted át, szerkesztheted és küldheted ki.':'The letter is created when the applicant reaches the acceptance letter step. You can then review, edit and send it here.','Tandíj / félév (EUR)':'Tuition / semester (EUR)','Jelentkezési díj (EUR)':'Application fee (EUR)','Kollégiumi díj / félév (EUR)':'Dormitory fee / semester (EUR)','Kollégiumi kaució (EUR)':'Dormitory deposit (EUR)','Kiegészítő bekezdés (nem kötelező)':'Additional paragraph (optional)','Aláíró neve':'Signatory name','Aláíró beosztása':'Signatory title','Kelt':'Date of issue','A módosítások mentve. A levél még nem ment ki.':'Changes saved. The letter has not been sent yet.','A levéltervezet elkészült — nézd át, és küldd ki.':'The letter draft is ready — review it and send it.','A levelet kiküldtük. A hallgató a Felvételi folyamatban látja, és üzenetet is kapott róla.':'The letter has been sent. The applicant sees it in the admission process and has received a message about it.','A kiküldést visszavontuk — a levél újra tervezet, szerkeszthető.':'Sending revoked — the letter is a draft again and can be edited.','Levél kiküldésre vár':'Letter awaiting sending','Levél kiküldve':'Letter sent','Nincs kiválasztott szak — a levél nem állítható össze.':'No programme selected — the letter cannot be assembled.',
   'Általános':'General','Képzés és oktatás':'Programmes & teaching','Felvételi':'Admissions','Partnerek és kommunikáció':'Partners & communication','Pénzügy és elemzés':'Finance & analytics','Minőségbiztosítás (ECHO)':'Quality assurance (ECHO)','Kollégium és szállás':'Dormitory & housing','Rendszer':'System',
+  'Frissültek a feltételek':'The terms have been updated','Feltételek és adatkezelés':'Terms and data processing','A legutóbbi elfogadásod óta új verzió jelent meg. A folytatáshoz nézd át és fogadd el.':'A new version has been published since you last accepted. Please review and accept it to continue.','A platform használatához el kell fogadnod az alábbiakat.':'To use the platform, you need to accept the following.','Választható hozzájárulások':'Optional consents','Nem kötelezők; a Profilom oldalon bármikor megadhatod vagy visszavonhatod őket.':'These are optional; you can give or withdraw them at any time on your profile page.','Nem fogadom el — kijelentkezés':'I do not accept — sign out','Elfogadom és folytatom':'Accept and continue','Elolvasom':'Read','A csillaggal jelölt pontok a használat feltételei. Az elfogadást a rendszer időbélyeggel és verzióval naplózza.':'Items marked with an asterisk are required. Your acceptance is logged with a timestamp and the document version.','Még nincs elfogadva':'Not accepted yet','Hozzájárulok':'I agree','Adatvédelem és hozzájárulások':'Privacy and consents','Itt látod, mit fogadtál el, és itt adhatod meg vagy vonhatod vissza a választható hozzájárulásokat. A visszavonás nem érinti a korábbi, jogszerű adatkezelést.':'Here you can see what you have accepted, and give or withdraw optional consents. Withdrawal does not affect the lawfulness of processing before it.','A hozzájárulás-kezelés az 59-es adatbázis-migráció lefuttatása után érhető el.':'Consent management becomes available once database migration 59 has been run.','Elfogadott dokumentumok':'Accepted documents','Megadva':'Given','Visszavonva':'Withdrawn','Belépés':'Sign-in','Profil':'Profile','Regisztráció':'Registration','Jogaid:':'Your rights:','hozzáférés, helyesbítés, törlés, az adatkezelés korlátozása, adathordozhatóság és tiltakozás.':'access, rectification, erasure, restriction of processing, data portability and objection.','Részletek és elérhetőségek:':'Details and contacts:','Adatkezelési tájékoztató':'Privacy Notice','Felhasználási feltételek':'Terms of Use','Hozzájárulási napló':'Consent log','Ki, mikor, melyik dokumentum melyik verzióját fogadta el, illetve melyik hozzájárulást adta meg vagy vonta vissza. A napló nem módosítható és nem törölhető.':'Who accepted which version of which document and when, and who gave or withdrew which consent. The log cannot be modified or deleted.','A hozzájárulási napló az 59-es adatbázis-migráció lefuttatása után érhető el.':'The consent log becomes available once database migration 59 has been run.','Kötelező':'Required','Választható':'Optional','Keresés e-mail-címre…':'Search by email…','Minden dokumentum':'All documents','Minden művelet':'All actions','Dokumentum':'Document','Hol':'Where','Nincs a szűrésnek megfelelő bejegyzés.':'No entries match the filters.','Közben a dokumentum új verziója jelent meg. Frissítsd az oldalt, és nézd át újra.':'A new version of the document was published in the meantime. Refresh the page and review it again.','A munkameneted lejárt. Jelentkezz be újra.':'Your session has expired. Please sign in again.','A hozzájárulást visszavontad.':'You have withdrawn your consent.','A hozzájárulást megadtad.':'You have given your consent.',
   'Személyes adatok':'Personal details','Angol nyelvtudás':'English proficiency','Online interjú':'Online interview','Beadás és ellenőrzés':'Submit & review','Útlevél (adatoldal)':'Passport (data page)','Érettségi bizonyítvány + leckekönyv':'Secondary-school certificate + transcript','Alapdiploma + leckekönyv':'Bachelor degree + transcript','Mesterdiploma + leckekönyv':'Master degree + transcript','Önéletrajz (CV)':'Curriculum vitae (CV)','Portfólió / munkaminták':'Portfolio / work samples','Kutatási terv':'Research proposal','Ajánlólevél':'Recommendation letter','Előkészítő':'Preparatory','Rövid kurzus':'Short course','Tanulmányi kirándulás':'Educational excursion','Mesterképzés (MA · MBA)':'Master (MA · MBA)','Doktori (PhD)':'Doctoral (PhD)','Piszkozat':'Draft','Bírálat alatt':'In review','Elfogadva':'Accepted','Várólistán':'Waitlisted',
   'A képzés felvételi lépései':'Admission steps for this programme','Szükséges dokumentumok':'Required documents','A jelentkezés lezárult':'Applications closed','Jelentkezés folytatása':'Continue application','Jelentkezem':'Apply now','Vissza a képzésekhez':'Back to programmes','Mentés és kilépés':'Save & exit later','Erősítsd meg a kapcsolattartási adataidat ehhez a jelentkezéshez.':'Confirm your contact information for this application.','Telefon':'Phone','Állampolgárság szerinti ország':'Country of citizenship','pl. Nigéria':'e.g. Nigeria','Ezek a fájlok kötelezőek ehhez a képzéshez.':'These files are required for this programme.','Add meg az angol nyelvvizsgád adatait (B2 vagy magasabb ajánlott).':'Tell us about your English certificate (B2 or higher recommended).','Bizonyítvány':'Certificate','Válassz…':'Select…','Oktatás nyelve':'Medium of instruction','Egyéb':'Other','Pontszám / szint':'Score / level','Miért ezt a képzést választod? Legalább ~40 karakter (egy rövid bekezdés ideális).':'Why this programme? Minimum ~40 characters (a short paragraph is ideal).','Tisztelt Felvételi Bizottság! …':'Dear Admissions Committee, …','Online interjú foglalása':'Book an online interview','Regisztrációs díj':'Registration fee','Foglald le a helyed — ez a díj erősíti meg a regisztrációdat.':'Secure your place — this fee confirms your registration.','A jelentkezés feldolgozásához egyszeri, vissza nem térítendő jelentkezési díj szükséges.':'A one-time, non-refundable application fee is required to process your application.','Nincs fizetendő díj — minden rendben.':"No fee required — you're all set.",'Kártya':'Card','Banki átutalás':'Bank transfer','Fizetés kártyával':'Pay by card','Banki átutalás rögzítése':'Mark bank transfer','Teszt üzemmód — valódi terhelés nem történik.':'Test mode — no real charge is made.','Jelentkezés beadva':'Application submitted','Ellenőrzés és beadás':'Review & submit','A jelentkezésed a felvételi csoportnál van.':'Your application is with the admissions team.','Ellenőrizd, hogy minden kész, majd add be bírálatra.':'Check everything is complete, then submit for review.','Kész':'Complete','Hiányos':'Incomplete','Jelentkezés beadása':'Submit application','A beadáshoz minden lépést teljesíts':'Complete all steps to submit','Ismeretlen lépés.':'Unknown step.','Három rövid feladat. A megfeleléshez legalább 2 helyes válasz kell.':'Three short tasks. You need at least 2 correct to pass.','Válaszok beadása':'Submit answers','Minden szint':'All levels','Keresés a képzések között…':'Search programmes…','Nincs találat':'No results','Próbálj másik szintet vagy keresőkifejezést.':'Try a different level or search term.','Az adatok és a képzés felvételi folyamatának beállítása':"Configure details and this programme's admission flow",'Képzés neve':'Programme name','Kar':'Faculty','Fokozat megnevezése':'Degree label','Tandíj / szemeszter (EUR)':'Tuition / semester (EUR)','Időtartam (szemeszter)':'Duration (semesters)','Létszámkeret':'Capacity','Jelentkezési határidő':'Application deadline','Címkék (vesszővel elválasztva)':'Tags (comma-separated)','Összefoglaló':'Summary','Képzés borítóképe':'Programme image','Feltöltött kép ✓':'Uploaded image ✓','Kép URL (https://…)':'Image URL (https://…)','Felvételi folyamat — lépések':'Admission flow — steps','Sorrend':'Order','Jelentkezés nyitva':'Applications open','Képzés mentése':'Save programme','Időtartam':'Duration','Nyelv':'Language',
   // Hírfolyam (features/feed.jsx)
@@ -12450,6 +12480,13 @@ Object.assign(HU_EN, {
 });
 HU_EN_PHRASES.push(
   [/· elkezdte /g, '· started '],
+  [/^Frissült: (.+) → (.+)$/g, 'Updated: $1 → $2'],
+  [/^Elfogadva: (.+) · (.+)$/g, 'Accepted: $1 · $2'],
+  [/^Korábbi verzió elfogadva \((.+)\) — a jelenlegi: (.+)$/g, 'An earlier version was accepted ($1) — current: $2'],
+  [/^Megadva: (.+)$/g, 'Given: $1'],
+  [/^Visszavonva: (.+)$/g, 'Withdrawn: $1'],
+  [/^Előzmények \((\d+)\)$/g, 'History ($1)'],
+  [/^(\d+) bejegyzés · (\d+) felhasználó$/g, '$1 entries · $2 users'],
   [/^Kiküldve · (.+)$/g, 'Sent · $1'],
   [/A mentés nem sikerült: /g, 'Saving failed: '],
   [/^Ha létezik fiók ezzel a címmel \((.+)\), elküldtük rá a linket\. Nézd meg a beérkező leveleidet \(és a spam mappát is\)\. A link egyszer használható, és egy idő után lejár\.$/g, 'If an account exists for this address ($1), we have sent it a link. Check your inbox (and the spam folder). The link works once and expires after a while.'],
