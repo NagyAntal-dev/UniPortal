@@ -1,0 +1,69 @@
+# ============================================================================
+# UniPortal — a teljes rendszer: felület + önálló (self-hosted) Supabase.
+#
+#   Első alkalommal (egyszer):   ./init-env.sh https://uniportal.pelda.hu
+#   Indítás és frissítés:        docker compose up -d --build
+#
+# Szolgáltatások:
+#   web      a UniPortal felülete (nginx, :8080) — ugyanazon a címen továbbítja
+#            a Supabase API-t is (auth, rest, realtime, storage, functions)
+#   migrate  egyszer fut indításkor: felviszi a supabase/NN_*.sql migrációkat
+#            (deploy/migrate/manifest.txt), a már lefutottakat kihagyja, és
+#            lezárja a nyilvános jelszavú demó fiókokat
+#   + a hivatalos Supabase stack (deploy/supabase, rögzített verzió):
+#     db, auth, rest, realtime, storage, imgproxy, meta, functions, api-gw,
+#     studio, supavisor
+#
+# A .env COMPOSE_FILE sora ehhez a fájlhoz hozzáveszi a deploy/compose.uniportal.yml
+# réteget is (a belső portok csak a szerverről érhetők el; levélsablon).
+# Részletek: DEPLOY.md
+# ============================================================================
+name: uniportal
+
+include:
+  - path: deploy/supabase/docker-compose.yml
+    env_file: .env
+
+services:
+  migrate:
+    image: postgres:17-alpine
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: ${POSTGRES_PORT:-5432}
+      PGUSER: ${UNIPORTAL_MIGRATE_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-postgres}
+      # A futtató ebből ellenőrzi, hogy a .env titkai ki vannak-e töltve.
+      UNIPORTAL_SECRET_CHECK: "${JWT_SECRET}|${ANON_KEY}|${POSTGRES_PASSWORD}"
+      UNIPORTAL_DEMO_ACCOUNTS: ${UNIPORTAL_DEMO_ACCOUNTS:-lock}
+    volumes:
+      - ./supabase:/uniportal/migrations:ro
+      - ./deploy/migrate:/uniportal/bin:ro
+    entrypoint: ["/bin/sh", "/uniportal/bin/run.sh"]
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web/Dockerfile
+    image: uniportal-web:latest
+    restart: unless-stopped
+    ports:
+      - "${UNIPORTAL_HTTP_PORT:-8080}:8080"
+    environment:
+      # Üresen: a böngésző a saját címén éri el az API-t (a web továbbítja).
+      UNIPORTAL_SUPABASE_URL: ${UNIPORTAL_SUPABASE_URL:-}
+      UNIPORTAL_SUPABASE_ANON_KEY: ${ANON_KEY}
+      API_GW_UPSTREAM: api-gw:8000
+    depends_on:
+      api-gw:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully

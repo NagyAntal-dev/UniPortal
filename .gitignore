@@ -14,3 +14,12 @@ node_modules/
 
 .DS_Store
 *.log
+
+# ---- Docker-telepítés (DEPLOY.md) ----
+# A titkokat tartalmazó .env SOHA nem kerülhet a tárolóba (nyilvános).
+.env
+.env.tmp*
+# Az önálló Supabase adatai és a mentések a szerveren maradnak.
+deploy/supabase/volumes/db/data/
+deploy/supabase/volumes/storage/
+backups/

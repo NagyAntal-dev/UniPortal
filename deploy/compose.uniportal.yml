@@ -1,0 +1,38 @@
+# ============================================================================
+# UniPortal-réteg a hivatalos Supabase-szolgáltatásokon. A .env COMPOSE_FILE
+# sora tölti be, így a deploy/supabase fájljaihoz nem kell nyúlni.
+#
+# 1) Biztonság: kifelé CSAK a web (UNIPORTAL_HTTP_PORT, alapból 8080) nyíljon.
+#    A hivatalos stack az API-átjárót (Studio + nyers API, :8000) és a
+#    Supavisor adatbázis-portjait (:5432, :6543) minden interfészen kinyitja;
+#    itt ezeket a szerver saját címére (127.0.0.1) korlátozzuk:
+#      • Studio távolról:    ssh -L 8000:127.0.0.1:8000 <szerver>  →  http://localhost:8000
+#      • adatbázis távolról: ssh -L 5432:127.0.0.1:5432 <szerver>
+#
+# 2) Jelszó-visszaállító levél: magyar/angol sablon, amelynek linkje a
+#    reset-password.html oldalra visz (token_hash). A levelezők biztonsági
+#    szűrői így nem tudják előre elhasználni az egyszer használható linket.
+#    A sablont a web szolgáltatja: deploy/web/email/recovery.html
+#
+# 3) WhatsApp: a whatsapp-send / whatsapp-webhook függvények titkai a .env-ből.
+# ============================================================================
+services:
+  api-gw:
+    ports: !override
+      - "127.0.0.1:${API_GW_HTTP_PORT:-8000}:8000/tcp"
+  supavisor:
+    ports: !override
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION:-6543}:6543"
+  auth:
+    environment:
+      GOTRUE_MAILER_TEMPLATES_RECOVERY: http://web:8080/email/recovery.html
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: "Új jelszó beállítása · Reset your password — UniPortal"
+  functions:
+    environment:
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      # Üres érték NEM jó (a függvény csak hiányzó változónál vált alapértékre).
+      WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v21.0}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}

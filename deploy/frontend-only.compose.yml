@@ -1,0 +1,26 @@
+# ============================================================================
+# CSAK a felület, a meglévő FELHŐS Supabase-szel (adatbázis, bejelentkezés és
+# fájlok a supabase.co-n maradnak). Ha a teljes rendszert telepíted, erre nincs
+# szükség — azt a gyökér docker-compose.yml írja le.
+#
+#   docker compose -f deploy/frontend-only.compose.yml up -d --build
+#
+# A Supabase Dashboardon (Authentication → URL Configuration) vedd fel az új
+# címet a Redirect URLs közé, különben a jelszó-visszaállító link nem ide jön.
+# ============================================================================
+name: uniportal-web
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web/Dockerfile
+    image: uniportal-web:latest
+    restart: unless-stopped
+    ports:
+      - "${UNIPORTAL_HTTP_PORT:-8080}:8080"
+    environment:
+      # A publikálható (böngészős) kulcs — nyilvános, a GitHub Pages oldal is ezt használja.
+      UNIPORTAL_SUPABASE_URL: https://mdccyastwhzwtyukxlpk.supabase.co
+      UNIPORTAL_SUPABASE_ANON_KEY: sb_publishable_S6syNS_lBfb93fT54WaLJg_aYNDqv9M
+      # Nincs helyi API; a böngésző közvetlenül a felhőt éri el.
+      API_GW_UPSTREAM: 127.0.0.1:9

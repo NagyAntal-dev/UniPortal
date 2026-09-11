@@ -1,0 +1,3 @@
+Forrás: https://github.com/supabase/supabase/tree/8c7a4d9dbbaf8b552893822e89d7bf06f33f9220/docker
+Beemelve: 2026-09-11T11:45:17Z
+A tests/ és dev/ könyvtár szándékosan kimaradt. Licenc: Apache-2.0.

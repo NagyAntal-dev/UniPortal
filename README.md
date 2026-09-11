@@ -5,6 +5,8 @@ Statikus oldal (GitHub Pages) + **Supabase** (PostgreSQL, Auth, Storage, Realtim
 
 **Élő demó:** https://kecskemetadatkozpont.github.io/UniPortal/
 
+**Saját szerverre, Dockerrel:** lásd [DEPLOY.md](DEPLOY.md) — `./init-env.sh <cím>`, majd `docker compose up -d --build`.
+
 > ⚠️ **Ez egy demó, nem éles rendszer.** Az adatbázisban kizárólag mintaadat van,
 > a jelszavak nyilvánosak, és a hozzáférési szabályok szándékosan megengedőek.
 > Valós személyes adatot ne vigyél fel.

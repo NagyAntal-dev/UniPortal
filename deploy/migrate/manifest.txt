@@ -1,0 +1,72 @@
+# ============================================================================
+# A friss telepítésben lefutó migrációk, SORRENDBEN (deploy/migrate/run.sh).
+# Új migráció: vedd fel a lista végére. Egy már lefutott fájlt a futtató nem
+# futtat újra (a uniportal_meta.migrations táblában tartja nyilván).
+#
+# SZÁNDÉKOSAN KIMARAD:
+#   00_setup_all.sql        — a 01–05 összefűzött másolata (duplikátum)
+#   13_rbac_rollback.sql    — vészvisszaállítás a 12 után, csak kézzel, ha kell
+#   RUN_ALL_*.sql           — a SQL Editorhoz összefűzött duplikátumok
+#   DIAG_rpc.sql, diagnostics/ — diagnosztika
+#   TESZT_valaszok.sql      — tesztadat
+# ============================================================================
+01_schema_and_seed.sql
+02_auth_profiles.sql
+03_avatars_storage.sql
+04_admission_processes.sql
+05_features.sql
+06_harden_rls.sql
+07_registration_approval.sql
+08_documents_storage.sql
+09_process_list_view.sql
+10_whatsapp.sql
+11_rbac_additive.sql
+12_rbac_flip.sql
+14_hallgatoi_kotes.sql
+15_echo_core.sql
+16_echo_reports.sql
+17_echo_template_rename.sql
+18a_echo_campaign.sql
+18b_echo_form_seed.sql
+18c_echo_form_activate.sql
+19_echo_roles.sql
+20_echo_report_fix.sql
+21_echo_harden_submit.sql
+22_echo_draft.sql
+23_echo_form_rules.sql
+24_echo_form_v3.sql
+25_status_model.sql
+26_dorm.sql
+27_interview_gate.sql
+28_interview_availability.sql
+29_agency.sql
+30_interview_gate_hardening.sql
+31_interview_integrity.sql
+32_multi_program.sql
+33_program_catalogue_backfill.sql
+34_echo_export.sql
+35_echo_comment.sql
+36_echo_question_bank.sql
+37_merge_application_flows.sql
+38_student_groups.sql
+39_role_admin.sql
+40_attributes_edit.sql
+41_campaign_term_free.sql
+42_campaign_editor.sql
+43_course_registry.sql
+44_course_history.sql
+45_audience_preview.sql
+46_readonly_rpc_fix.sql
+47_audience_list.sql
+48_campaign_form.sql
+49_student_courses.sql
+50_my_enrollments.sql
+51_dorm_photos.sql
+52_dorm_inventory.sql
+53_dorm_status.sql
+54_teacher_registry.sql
+55_attendance_band_fix.sql
+56_admin_results_control.sql
+57_raw_attendance.sql
+58_program_doc_types.sql
+59_legal_consents.sql

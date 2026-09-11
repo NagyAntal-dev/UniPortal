@@ -160,9 +160,11 @@
        demand there (see boot() below) so a built deploy never pays for it. -->
   <!-- Supabase client (Step 4: live backend) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Futásidejű beállítás (Dockerben a .env-ből; GitHub Pages-en üres). -->
+  <script src="config.js"></script>
   <script>
-    window.SUPABASE_URL = 'https://mdccyastwhzwtyukxlpk.supabase.co';
-    window.SUPABASE_ANON_KEY = 'sb_publishable_S6syNS_lBfb93fT54WaLJg_aYNDqv9M';
+    window.SUPABASE_URL = window.SUPABASE_URL || 'https://mdccyastwhzwtyukxlpk.supabase.co';
+    window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_S6syNS_lBfb93fT54WaLJg_aYNDqv9M';
     /* Ha a jelszó-visszaállító link ide érkezett (pl. mert a Supabase az
        alapcímre küldte), a kliens itt új jelszó NÉLKÜL léptetné be a
        felhasználót. Ehelyett továbbadjuk a reset-password.html-nek, a címsor

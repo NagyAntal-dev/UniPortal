@@ -1,0 +1,16 @@
+# A web-kép csak a felülethez szükséges fájlokat kapja meg.
+.git
+.env
+.env.*
+!.env.example
+node_modules
+backups
+deploy/supabase
+supabase
+tools
+proto
+ci
+*.md
+*.docx
+*.pdf
+.DS_Store
