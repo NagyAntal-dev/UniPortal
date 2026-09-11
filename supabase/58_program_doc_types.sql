@@ -88,18 +88,23 @@ create policy program_doc_type_update on public.program_doc_type
   for update to authenticated using (public.is_admin()) with check (public.is_admin());
 -- Szándékosan NINCS delete policy: elrejtés van, törlés nincs.
 
-revoke all on public.program_doc_type from anon;
-revoke all on public.program_doc_type from public;
+-- A Supabase alapértelmezett jogai (ALTER DEFAULT PRIVILEGES ... GRANT ALL ON
+-- TABLES TO anon, authenticated) az új táblára MINDENT megadnak — a törlést és
+-- a TRUNCATE-et is, amire az RLS nem vonatkozik. Ezért előbb mindent
+-- visszavonunk mindenkitől, és csak a szükségeset adjuk vissza.
+-- (Az első változat csak az anontól vont vissza, ezért állt meg az ellenőrzés.)
+revoke all on public.program_doc_type from anon, authenticated, public;
 grant select, insert, update on public.program_doc_type to authenticated;
 
--- Ellenőrzés: az anon ne lássa, és törölni senki ne tudjon policy nélkül.
+-- Ellenőrzés: az anon ne lássa, és törölni/üríteni senki ne tudjon.
 do $blk$
 begin
   if has_table_privilege('anon', 'public.program_doc_type', 'select') then
     raise exception 'BIZTONSAGI HIBA: az anon olvashatja a program_doc_type tablat.';
   end if;
-  if has_table_privilege('authenticated', 'public.program_doc_type', 'delete') then
-    raise exception 'BIZTONSAGI HIBA: az authenticated torolhet a program_doc_type tablabol.';
+  if has_table_privilege('authenticated', 'public.program_doc_type', 'delete')
+     or has_table_privilege('authenticated', 'public.program_doc_type', 'truncate') then
+    raise exception 'BIZTONSAGI HIBA: az authenticated torolhet vagy uritheti a program_doc_type tablat.';
   end if;
   raise notice 'Rendben: a program_doc_type tabla kesz, az egyedi dokumentumtipusok felvehetok.';
 end $blk$;
