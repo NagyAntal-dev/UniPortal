@@ -59,6 +59,55 @@ const PROG_DOC_DEFS = {
   research:       'Kutatási terv',
   recommendation: 'Ajánlólevél',
 };
+
+/* EGYEDI DOKUMENTUMTÍPUSOK — 58_program_doc_types.sql
+   ------------------------------------------------------------------
+   A fenti beépített lista mellé az admin a szerkesztőből vehet fel újat; az
+   onnantól minden program és képzés szerkesztésekor választható. A tábla csak
+   az egyedieket tartja ('c_' előtagú kulccsal). A KULCS NEM VÁLTOZIK — rá
+   hivatkozik a required_docs, a jelentkezés data.docs-a és a fájl útvonala —,
+   csak a megnevezés. Törlés nincs, csak elrejtés: a már használt típus neve így
+   sosem vész el.
+   A név feloldása MINDENHOL a PROG_docLabel()-en megy át, hogy a hallgató, az
+   admin és a szerkesztő ugyanazt a nevet lássa. Az angol nevet a HU_EN
+   szótárba jegyezzük be, így a nyelvváltó a megszokott úton fordítja. */
+const PROG_DOC_TABLE = 'program_doc_type';
+let PROG_EGYEDI_DOK = {};   // kulcs -> { key, label_hu, label_en, active }
+const PROG_docLabel = (id) => PROG_DOC_DEFS[id] || (PROG_EGYEDI_DOK[id] && PROG_EGYEDI_DOK[id].label_hu) || id;
+
+function PROG_docTypeHiba(e) {
+  const kod = (e && e.code) || '';
+  const msg = String((e && e.message) || e || '');
+  if (kod === 'PGRST205' || kod === '42P01' || (/program_doc_type/.test(msg) && /does not exist|schema cache/i.test(msg)))
+    return 'Az 58_program_doc_types.sql migráció még nem futott le — egyedi dokumentumtípus addig nem vehető fel.';
+  if (kod === '42501' || /row-level security|permission denied/i.test(msg)) return 'Új dokumentumtípust csak rendszergazda vehet fel.';
+  // Az RLS a tiltott UPDATE-et nem hibaként, hanem 0 érintett sorként adja vissza.
+  if (kod === 'PGRST116') return 'A módosítás nem ment át — dokumentumtípust csak rendszergazda módosíthat.';
+  if (kod === '23505') return 'Ilyen nevű dokumentumtípus már van.';
+  if (kod === '23514') return 'A megnevezés 2–120 karakter legyen.';
+  return 'A mentés nem sikerült: ' + msg;
+}
+
+// Ékezet nélküli, tárolási útvonalba is biztonságos kulcs: c_<név>_<4 jel>.
+const PROG_docKey = (nev) => 'c_' + ((String(nev).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)) || 'dok') + '_' + Math.random().toString(36).slice(2, 6).padEnd(4, '0');
+
+/* NEM a dlSelect-en át: az a hiányzó táblát csendben localStorage-ra cseréli,
+   és akkor az egyedi típus csak az adott böngészőben létezne. */
+async function PROG_loadDocTypes() {
+  if (!window.sb) return { rows: [], hiba: 'Nincs kapcsolat az adatbázissal.' };
+  try {
+    const { data, error } = await window.sb.from(PROG_DOC_TABLE).select('key,label_hu,label_en,active').order('created_at', { ascending: true });
+    if (error) return { rows: [], hiba: PROG_docTypeHiba(error) };
+    const m = {};
+    (data || []).forEach(r => {
+      m[r.key] = r;
+      if (r.label_en && typeof HU_EN !== 'undefined') HU_EN[r.label_hu] = r.label_en;
+    });
+    PROG_EGYEDI_DOK = m;
+    return { rows: data || [], hiba: null };
+  } catch (e) { return { rows: [], hiba: PROG_docTypeHiba(e) }; }
+}
 const PROG_LEVELS = { preparatory: 'Előkészítő', course: 'Eseti / rövid kurzus', training: 'Továbbképzés', company_visit: 'Céglátogatás', excursion: 'Tanulmányi kirándulás', bachelor: 'Alapképzés (BSc)', master: 'Mesterképzés (MA · MBA)', doctoral: 'Doktori (PhD)' };
 const PROG_LEVEL_TONE = { preparatory: 'amber', course: 'green', training: 'violet', company_visit: 'slate', excursion: 'blue', bachelor: 'blue', master: 'violet', doctoral: 'primary' };
 /* KÉT KÜLÖN KÍNÁLAT, EGY TÁBLÁBAN. A `level` dönti el, hová tartozik egy sor:
@@ -261,7 +310,7 @@ function PROG_Detail({ program, myApp, onClose, onApply }) {
         <div>
           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Szükséges dokumentumok</div>
           <div className="grid sm:grid-cols-2 gap-2">
-            {(program.required_docs || []).map(d => <div key={d} className="flex items-center gap-2 text-sm text-slate-600"><Lucide.FileCheck size={15} className="text-emerald-500 flex-none" /> {PROG_DOC_DEFS[d] || d}</div>)}
+            {(program.required_docs || []).map(d => <div key={d} className="flex items-center gap-2 text-sm text-slate-600"><Lucide.FileCheck size={15} className="text-emerald-500 flex-none" /> {PROG_docLabel(d)}</div>)}
           </div>
         </div>
         <div className="flex items-center justify-between gap-4 pt-2 border-t border-slate-100">
@@ -435,7 +484,7 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
             <div key={id} className={'flex items-center justify-between gap-4 p-4 rounded-2xl border ' + (got ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-100')}>
               <div className="flex items-center gap-3 min-w-0">
                 <div className={'w-9 h-9 rounded-xl flex items-center justify-center flex-none ' + (got ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400')}>{got ? <Lucide.Check size={17} /> : <Lucide.FileText size={17} />}</div>
-                <div className="min-w-0"><div className="text-sm font-bold text-slate-700 truncate">{PROG_DOC_DEFS[id] || id}</div>{got && <div className="text-[11px] text-emerald-600 font-semibold truncate">{got.fileName}</div>}</div>
+                <div className="min-w-0"><div className="text-sm font-bold text-slate-700 truncate">{PROG_docLabel(id)}</div>{got && <div className="text-[11px] text-emerald-600 font-semibold truncate">{got.fileName}</div>}</div>
               </div>
               <label className={U_btnGhost + ' flex-none cursor-pointer text-[13px] py-2 px-4 ' + (docBusy === id ? 'opacity-50 pointer-events-none' : '')}>
                 {docBusy === id ? 'Feltöltés…' : got ? 'Csere' : 'Feltöltés'}
@@ -722,6 +771,36 @@ function PROG_Editor({ open, program, onClose, onSaved, scope }) {
   const blank = { id: '', code: '', name: '', level: isDeg ? 'bachelor' : 'course', faculty: '', degree: isDeg ? 'BSc' : 'Short course', duration_semesters: isDeg ? 7 : 2, ects: isDeg ? 210 : 30, tuition: isDeg ? 2500 : 400, currency: 'EUR', language: 'English', deadline: '2026-06-30', capacity: 30, seats_taken: 0, is_open: true, summary: '', image_url: '', required_docs: isDeg ? ['passport', 'hs_diploma', 'english'] : ['passport'], steps: isDeg ? ['personal', 'documents', 'interview', 'fee', 'review'] : ['personal', 'fee', 'review'], tags: [] };
   const [f, setF] = useState(blank);
   const [busy, setBusy] = useState(false);
+  // Egyedi dokumentumtípusok: minden megnyitáskor frissen, hogy a más admin
+  // által közben felvett típus is látsszon.
+  const DOK_URES = { open: false, hu: '', en: '', active: true, szerk: null, busy: false, hiba: '' };
+  const [egyedi, setEgyedi] = useState([]);
+  const [dokHiba, setDokHiba] = useState(null);
+  const [dok, setDok] = useState(DOK_URES);
+  useEffect(() => {
+    if (!open) return;
+    setDok(DOK_URES);
+    let el = false;
+    PROG_loadDocTypes().then(r => { if (!el) { setEgyedi(r.rows); setDokHiba(r.hiba); } });
+    return () => { el = true; };
+  }, [open]);
+  const mentDok = async () => {
+    const hu = dok.hu.trim(), en = dok.en.trim();
+    if (hu.length < 2) { setDok(d => ({ ...d, hiba: 'A magyar megnevezés legalább 2 karakter.' })); return; }
+    const foglalt = [...Object.values(PROG_DOC_DEFS), ...egyedi.filter(r => r.key !== dok.szerk).map(r => r.label_hu)]
+      .some(l => String(l).trim().toLowerCase() === hu.toLowerCase());
+    if (foglalt) { setDok(d => ({ ...d, hiba: 'Ilyen nevű dokumentumtípus már van.' })); return; }
+    if (!window.sb) { setDok(d => ({ ...d, hiba: 'Nincs kapcsolat az adatbázissal.' })); return; }
+    setDok(d => ({ ...d, busy: true, hiba: '' }));
+    const res = dok.szerk
+      ? await window.sb.from(PROG_DOC_TABLE).update({ label_hu: hu, label_en: en || null, active: dok.active }).eq('key', dok.szerk).select().single()
+      : await window.sb.from(PROG_DOC_TABLE).insert({ key: PROG_docKey(hu), label_hu: hu, label_en: en || null }).select().single();
+    if (res.error) { setDok(d => ({ ...d, busy: false, hiba: PROG_docTypeHiba(res.error) })); return; }
+    const r = await PROG_loadDocTypes(); setEgyedi(r.rows); setDokHiba(r.hiba);
+    // Az újonnan felvett típust rögtön be is jelöljük ennél a programnál — ezért hozta létre.
+    if (!dok.szerk && res.data) setF(p => ({ ...p, required_docs: p.required_docs.includes(res.data.key) ? p.required_docs : [...p.required_docs, res.data.key] }));
+    setDok(DOK_URES);
+  };
   useEffect(() => { if (open) setF(program ? { ...blank, ...program, required_docs: program.required_docs || [], steps: program.steps || [], tags: program.tags || [] } : blank); }, [open, program, scope]);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   // Típusváltáskor a kártyacímke is követi — de csak amíg az admin nem írt be sajátot.
@@ -795,10 +874,46 @@ function PROG_Editor({ open, program, onClose, onSaved, scope }) {
         <div className="rounded-2xl border border-slate-100 p-4">
           <div className="flex items-center gap-2 mb-3"><Lucide.FileCheck size={16} className="text-primary" /><span className="text-sm font-black text-slate-700">Szükséges dokumentumok</span></div>
           <div className="grid sm:grid-cols-2 gap-2">
-            {Object.entries(PROG_DOC_DEFS).map(([k, label]) => { const on = f.required_docs.includes(k); return (
-              <button key={k} onClick={() => toggleArr('required_docs', k)} className={'flex items-center gap-2 px-3 py-2 rounded-xl border text-[12px] font-bold text-left transition-all ' + (on ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 hover:border-slate-200')}><span className={'w-4 h-4 rounded flex-none flex items-center justify-center ' + (on ? 'bg-emerald-500 text-white' : 'bg-slate-200')}>{on && <Lucide.Check size={11} />}</span> {label}</button>
+            {[
+              ...Object.entries(PROG_DOC_DEFS).map(([k, label]) => ({ k, label, egyedi: null })),
+              // Az elrejtett egyedi típus csak ott látszik, ahol már be van jelölve.
+              ...egyedi.filter(t => t.active || f.required_docs.includes(t.key)).map(t => ({ k: t.key, label: t.label_hu, egyedi: t })),
+              // Egy kulcs, amelyet sem a beépített lista, sem a tábla nem ismer (pl. a migráció
+              // előtt vagy egy másik rendszerből jött): ne tűnjön el szó nélkül a kijelölésből.
+              ...f.required_docs.filter(k => !PROG_DOC_DEFS[k] && !egyedi.some(t => t.key === k)).map(k => ({ k, label: PROG_docLabel(k), egyedi: null })),
+            ].map(({ k, label, egyedi: t }) => { const on = f.required_docs.includes(k); return (
+              <div key={k} className="flex items-stretch gap-1">
+                <button onClick={() => toggleArr('required_docs', k)} className={'flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-xl border text-[12px] font-bold text-left transition-all ' + (on ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 hover:border-slate-200')}>
+                  <span className={'w-4 h-4 rounded flex-none flex items-center justify-center ' + (on ? 'bg-emerald-500 text-white' : 'bg-slate-200')}>{on && <Lucide.Check size={11} />}</span>
+                  <span className="min-w-0 break-words">{label}</span>
+                  {t && <span className={'ml-auto flex-none px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ' + (t.active ? 'bg-sky-50 text-sky-600' : 'bg-slate-100 text-slate-400')}>{t.active ? 'egyedi' : 'rejtett'}</span>}
+                </button>
+                {t && <button type="button" title="Dokumentumtípus szerkesztése" onClick={() => setDok({ ...DOK_URES, open: true, szerk: t.key, hu: t.label_hu, en: t.label_en || '', active: t.active })} className="w-8 flex-none rounded-xl border border-slate-100 text-slate-400 hover:text-primary hover:border-slate-200 flex items-center justify-center"><Lucide.Pencil size={13} /></button>}
+              </div>
             ); })}
           </div>
+          {dokHiba ? (
+            <p className="mt-3 text-[12px] font-semibold text-amber-700">{dokHiba}</p>
+          ) : dok.open ? (
+            <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2">
+              <div className="text-[12px] font-black text-slate-700">{dok.szerk ? 'Dokumentumtípus szerkesztése' : 'Új dokumentumtípus'}</div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                <input className={U_input} autoFocus maxLength={120} placeholder="Megnevezés magyarul (kötelező)" value={dok.hu} onChange={e => setDok(d => ({ ...d, hu: e.target.value, hiba: '' }))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); mentDok(); } }} />
+                <input className={U_input} maxLength={120} placeholder="Megnevezés angolul (nem kötelező)" value={dok.en} onChange={e => setDok(d => ({ ...d, en: e.target.value, hiba: '' }))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); mentDok(); } }} />
+              </div>
+              {dok.szerk && <label className="flex items-center gap-2 text-[12px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-primary" checked={!dok.active} onChange={e => setDok(d => ({ ...d, active: !e.target.checked }))} /> Elrejtés az új választások elől</label>}
+              {dok.hiba && <p className="text-[12px] font-semibold text-red-600">{dok.hiba}</p>}
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-slate-500">{dok.szerk ? 'A név minden programnál és jelentkezésnél megváltozik.' : 'Az új típus minden program és képzés szerkesztésekor választható lesz.'}</p>
+                <div className="flex gap-2 flex-none">
+                  <button type="button" className={U_btnGhost + ' py-2 px-4 text-[13px]'} onClick={() => setDok(DOK_URES)}>Mégse</button>
+                  <button type="button" className={U_btnPrimary + ' py-2 px-4 text-[13px]'} disabled={dok.busy || dok.hu.trim().length < 2} onClick={mentDok}>{dok.busy ? 'Mentés…' : dok.szerk ? 'Módosítás mentése' : 'Típus létrehozása'}</button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setDok({ ...DOK_URES, open: true })} className="mt-3 text-[13px] font-bold text-primary hover:underline flex items-center gap-1"><Lucide.Plus size={15} /> Új dokumentumtípus</button>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-3 pt-2">
@@ -879,7 +994,9 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
   const kezelo = !!user && (isAdmin(user) || user.role === 'SUPERADMIN');
   const [tab, setTab] = useState(kezelo && !embedded ? 'manage' : 'explore');
 
-  const refetch = async () => { const [p, a] = await Promise.all([PROG_loadPrograms(), PROG_loadApps()]); setPrograms(p); setApps(a); };
+  // A dokumentumtípusok is itt töltődnek, hogy a hallgató feltöltési lépése és a
+  // részletező ablak az egyedi típusok NEVÉT mutassa, ne a kulcsát.
+  const refetch = async () => { const [p, a] = await Promise.all([PROG_loadPrograms(), PROG_loadApps(), PROG_loadDocTypes()]); setPrograms(p); setApps(a); };
   useEffect(() => { refetch(); }, []);
 
   /* Kis-nagybetű független egyezés: a beszúrás kisbetűsít (owner_email), itt
