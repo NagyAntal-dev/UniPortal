@@ -7727,7 +7727,7 @@ interface StudentPortalProps {
 }
 
 const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'application' | 'documents' | 'finance' | 'interviews' | 'messages' | 'profile' | 'recommendations' | 'visa' | 'journey'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'degrees' | 'dashboard' | 'application' | 'documents' | 'finance' | 'interviews' | 'messages' | 'profile' | 'recommendations' | 'visa' | 'journey'>('degrees');
   const [showJourney, setShowJourney] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -7915,10 +7915,25 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
     );
   }
 
+  /* Hallgatói nyilvántartási sor nélkül eddig CSAK a felvételi folyamat
+     látszott. Most elöl a képzési kínálat (az admin „Képzések” menüpontjában
+     felvett féléves képzések), mellette a felvételi folyamat. */
   if (!student) {
+    const fulGomb = (id, cimke) => (
+      <button onClick={() => setActiveTab(id)}
+        className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === id ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>{cimke}</button>
+    );
     return (
-      <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1720px] mx-auto p-4 sm:p-6 lg:p-8">
-        <AdmissionsHub user={user} />
+      <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1720px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        <div>
+          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{user.role === 'STUDENT' ? 'Képzések' : 'Hallgatói Portál'}</h2>
+          <p className="text-slate-500 mt-1 max-w-[75ch]">Böngészd az NJE angol nyelvű képzéseit és jelentkezz online.</p>
+        </div>
+        <div className="flex items-center gap-1 p-1 bg-white border border-slate-100 rounded-2xl w-fit shadow-sm overflow-x-auto max-w-full">
+          {fulGomb('degrees', 'Képzési kínálat')}
+          {fulGomb('journey', 'Felvételi folyamat')}
+        </div>
+        {activeTab === 'journey' ? <AdmissionsHub user={user} /> : <ProgramsView user={user} scope="degrees" embedded />}
       </div>
     );
   }
@@ -8747,7 +8762,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-8">
         <div>
-          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Hallgatói Portál</h2>
+          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{user.role === 'STUDENT' ? 'Képzések' : 'Hallgatói Portál'}</h2>
           <p className="text-slate-500 mt-1 max-w-[75ch]">Üdvözlünk, {user.name}! Kövesd nyomon a jelentkezésed folyamatát.</p>
         </div>
         <div className="flex items-center gap-3">
@@ -8759,6 +8774,12 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 p-1 bg-white border border-slate-100 rounded-2xl w-fit shadow-sm overflow-x-auto max-w-full">
+        <button
+          onClick={() => setActiveTab('degrees')}
+          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'degrees' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+        >
+          Képzési kínálat
+        </button>
         <button 
           onClick={() => setActiveTab('dashboard')}
           className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
@@ -8824,6 +8845,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
 
       {/* Content */}
       <div className="mt-8">
+        {activeTab === 'degrees' && <ProgramsView user={user} scope="degrees" embedded />}
         {activeTab === 'dashboard' && renderDashboard()}
         {activeTab === 'journey' && <AdmissionsHub user={user} />}
         {activeTab === 'application' && renderApplication()}
@@ -11117,6 +11139,15 @@ const App: React.FC = () => {
     if ((currentUser.groupPerms || []).includes(item.id)) return true;
     return false;
   });
+  /* A hallgatónak a Student Portal a KÉPZÉSEK menüpontja: itt látja a féléves
+     képzéseket, amelyekre jelentkezhet (a kisebb programok a Programok alatt).
+     Az azonosító marad student_portal, így a szerepkör-jogosultságokon
+     (39_role_admin.sql) nem kell változtatni. Akinek az admin „Képzések”
+     menüpontja is látszik, annál marad a régi név — két azonos felirat ne legyen. */
+  if (!filteredMenuItems.some(i => i.id === AppView.TRAININGS)) {
+    const k = filteredMenuItems.findIndex(i => i.id === AppView.STUDENT_PORTAL);
+    if (k >= 0) filteredMenuItems[k] = { ...filteredMenuItems[k], label: 'Képzések', icon: <Lucide.GraduationCap size={20} /> };
+  }
 
   const renderContent = () => {
     switch (activeView) {
@@ -11427,6 +11458,7 @@ Object.assign(HU_EN, {
   // ============================================================
   // Képzések (features/programs.jsx)
   'Kurzusok':'Courses','Kurzusnyilvántartás':'Course Registry','Képzések kezelése':'Degree Management','Programok kezelése':'Program Management','Képzési kínálat':'Study Programmes','Képzések':'Degrees','Programok':'Programs','Képzések (BSc, MSc, MA, MBA, PhD), a felvételi folyamataik és a jelentkezők kezelése.':'Manage degree programmes (BSc, MSc, MA, MBA, PhD), their admission flows and applicants.','Előkészítő programok, rövid kurzusok és tanulmányi kirándulások kezelése.':'Manage preparatory programmes, short courses and educational excursions.','Böngészd az NJE angol nyelvű képzéseit és jelentkezz online.':'Explore English-taught programmes at NJE and apply online.','Jelentkezők':'Applicants','Új képzés':'New degree','Új program':'New programme','Még nincs képzés':'No degrees yet','Még nincs program':'No programmes yet','Vedd fel az első képzést (BSc, MSc, MA, MBA vagy PhD).':'Add your first degree programme (BSc, MSc, MA, MBA or PhD).','Vegyél fel egy előkészítő programot, rövid kurzust vagy tanulmányi kirándulást.':'Add a preparatory programme, short course or educational excursion.','Jelentkezéseim':'My applications','Minden képzés':'All programmes','Még nincs jelentkezés':'No applications yet','A hallgatói jelentkezések itt fognak megjelenni.':'Applications from students will appear here.','Előrehaladás':'Progress','Beadva':'Submitted','Szint':'Level','Tandíj':'Tuition','Határidő':'Deadline','Nyitva':'Open','Lezárva':'Closed','Jelentkezés lezárása':'Close applications','Jelentkezés megnyitása':'Open applications','Program':'Program',
+  'Eseti / rövid kurzus':'Ad-hoc / short course','Továbbképzés':'Further training','Céglátogatás':'Company visit','Minden típus':'All types','Keresés a programok között…':'Search programmes…','Program neve':'Programme name','Program mentése':'Save programme','Program borítóképe':'Programme image','Címke a kártyán':'Card label','Az adatok és a program jelentkezési folyamatának beállítása':"Configure details and this programme's application flow",'Programkínálat':'Programmes','Kisebb programok — céglátogatások, továbbképzések, eseti kurzusok, előkészítők és tanulmányi kirándulások — kezelése.':'Manage smaller programmes — company visits, further training, ad-hoc courses, preparatory programmes and study excursions.','Céglátogatások, továbbképzések, eseti kurzusok és más rövid programok — jelentkezz online.':'Company visits, further training, ad-hoc courses and other short programmes — apply online.','Vegyél fel egy céglátogatást, továbbképzést, eseti kurzust vagy tanulmányi kirándulást.':'Add a company visit, further training, ad-hoc course or study excursion.',
   'Személyes adatok':'Personal details','Angol nyelvtudás':'English proficiency','Online interjú':'Online interview','Beadás és ellenőrzés':'Submit & review','Útlevél (adatoldal)':'Passport (data page)','Érettségi bizonyítvány + leckekönyv':'Secondary-school certificate + transcript','Alapdiploma + leckekönyv':'Bachelor degree + transcript','Mesterdiploma + leckekönyv':'Master degree + transcript','Önéletrajz (CV)':'Curriculum vitae (CV)','Portfólió / munkaminták':'Portfolio / work samples','Kutatási terv':'Research proposal','Ajánlólevél':'Recommendation letter','Előkészítő':'Preparatory','Rövid kurzus':'Short course','Tanulmányi kirándulás':'Educational excursion','Mesterképzés (MA · MBA)':'Master (MA · MBA)','Doktori (PhD)':'Doctoral (PhD)','Piszkozat':'Draft','Bírálat alatt':'In review','Elfogadva':'Accepted','Várólistán':'Waitlisted',
   'A képzés felvételi lépései':'Admission steps for this programme','Szükséges dokumentumok':'Required documents','A jelentkezés lezárult':'Applications closed','Jelentkezés folytatása':'Continue application','Jelentkezem':'Apply now','Vissza a képzésekhez':'Back to programmes','Mentés és kilépés':'Save & exit later','Erősítsd meg a kapcsolattartási adataidat ehhez a jelentkezéshez.':'Confirm your contact information for this application.','Telefon':'Phone','Állampolgárság szerinti ország':'Country of citizenship','pl. Nigéria':'e.g. Nigeria','Ezek a fájlok kötelezőek ehhez a képzéshez.':'These files are required for this programme.','Add meg az angol nyelvvizsgád adatait (B2 vagy magasabb ajánlott).':'Tell us about your English certificate (B2 or higher recommended).','Bizonyítvány':'Certificate','Válassz…':'Select…','Oktatás nyelve':'Medium of instruction','Egyéb':'Other','Pontszám / szint':'Score / level','Miért ezt a képzést választod? Legalább ~40 karakter (egy rövid bekezdés ideális).':'Why this programme? Minimum ~40 characters (a short paragraph is ideal).','Tisztelt Felvételi Bizottság! …':'Dear Admissions Committee, …','Online interjú foglalása':'Book an online interview','Regisztrációs díj':'Registration fee','Foglald le a helyed — ez a díj erősíti meg a regisztrációdat.':'Secure your place — this fee confirms your registration.','A jelentkezés feldolgozásához egyszeri, vissza nem térítendő jelentkezési díj szükséges.':'A one-time, non-refundable application fee is required to process your application.','Nincs fizetendő díj — minden rendben.':"No fee required — you're all set.",'Kártya':'Card','Banki átutalás':'Bank transfer','Fizetés kártyával':'Pay by card','Banki átutalás rögzítése':'Mark bank transfer','Teszt üzemmód — valódi terhelés nem történik.':'Test mode — no real charge is made.','Jelentkezés beadva':'Application submitted','Ellenőrzés és beadás':'Review & submit','A jelentkezésed a felvételi csoportnál van.':'Your application is with the admissions team.','Ellenőrizd, hogy minden kész, majd add be bírálatra.':'Check everything is complete, then submit for review.','Kész':'Complete','Hiányos':'Incomplete','Jelentkezés beadása':'Submit application','A beadáshoz minden lépést teljesíts':'Complete all steps to submit','Ismeretlen lépés.':'Unknown step.','Három rövid feladat. A megfeleléshez legalább 2 helyes válasz kell.':'Three short tasks. You need at least 2 correct to pass.','Válaszok beadása':'Submit answers','Minden szint':'All levels','Keresés a képzések között…':'Search programmes…','Nincs találat':'No results','Próbálj másik szintet vagy keresőkifejezést.':'Try a different level or search term.','Az adatok és a képzés felvételi folyamatának beállítása':"Configure details and this programme's admission flow",'Képzés neve':'Programme name','Kar':'Faculty','Fokozat megnevezése':'Degree label','Tandíj / szemeszter (EUR)':'Tuition / semester (EUR)','Időtartam (szemeszter)':'Duration (semesters)','Létszámkeret':'Capacity','Jelentkezési határidő':'Application deadline','Címkék (vesszővel elválasztva)':'Tags (comma-separated)','Összefoglaló':'Summary','Képzés borítóképe':'Programme image','Feltöltött kép ✓':'Uploaded image ✓','Kép URL (https://…)':'Image URL (https://…)','Felvételi folyamat — lépések':'Admission flow — steps','Sorrend':'Order','Jelentkezés nyitva':'Applications open','Képzés mentése':'Save programme','Időtartam':'Duration','Nyelv':'Language',
   // Hírfolyam (features/feed.jsx)
