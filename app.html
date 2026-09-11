@@ -163,8 +163,15 @@
   <script>
     window.SUPABASE_URL = 'https://mdccyastwhzwtyukxlpk.supabase.co';
     window.SUPABASE_ANON_KEY = 'sb_publishable_S6syNS_lBfb93fT54WaLJg_aYNDqv9M';
+    /* Ha a jelszó-visszaállító link ide érkezett (pl. mert a Supabase az
+       alapcímre küldte), a kliens itt új jelszó NÉLKÜL léptetné be a
+       felhasználót. Ehelyett továbbadjuk a reset-password.html-nek, a címsor
+       tartalmával együtt — és itt nem is dolgozzuk fel a linket. */
+    window.__RECOVERY_REDIRECT = /(^|[#&])type=recovery(&|$)/.test(location.hash);
+    if (window.__RECOVERY_REDIRECT) location.replace('reset-password.html' + location.hash);
     try {
-      window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+      window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY,
+        window.__RECOVERY_REDIRECT ? { auth: { detectSessionInUrl: false } } : undefined);
     } catch (e) { console.error('Failed to init Supabase client', e); }
   </script>
 </head>
@@ -184,7 +191,7 @@
     // modul-gyorsitotarabol pedig tovabb — a REGI kodot futtatta, es a
     // felhasznalo joggal hitte, hogy a javitas nem keszult el. Mert(ve): az elo
     // csomagban mar benne volt a javitas, a bongeszo megis a regit mutatta.
-    const BUNDLE_V = '6076af746e2c';
+    const BUNDLE_V = '480af761a464';
     const BUNDLE_URL = './app.bundle.js?v=' + BUNDLE_V;
 
     async function hasPrebuilt() {

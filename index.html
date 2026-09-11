@@ -30,7 +30,14 @@
   <script>
     window.SUPABASE_URL = 'https://mdccyastwhzwtyukxlpk.supabase.co';
     window.SUPABASE_ANON_KEY = 'sb_publishable_S6syNS_lBfb93fT54WaLJg_aYNDqv9M';
-    try { window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY); }
+    /* Ha a jelszó-visszaállító link ide érkezett (pl. mert a Supabase az
+       alapcímre küldte), a kliens itt új jelszó NÉLKÜL léptetné be a
+       felhasználót. Ehelyett továbbadjuk az erre szolgáló oldalnak, a címsor
+       tartalmával együtt — és itt nem is dolgozzuk fel a linket. */
+    window.__RECOVERY_REDIRECT = /(^|[#&])type=recovery(&|$)/.test(location.hash);
+    if (window.__RECOVERY_REDIRECT) location.replace('reset-password.html' + location.hash);
+    try { window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY,
+            window.__RECOVERY_REDIRECT ? { auth: { detectSessionInUrl: false } } : undefined); }
     catch (e) { console.error('Failed to init Supabase client', e); }
   </script>
   <style>
@@ -468,8 +475,30 @@
             <input id="loginPassword" type="password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-11 pr-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
           </div>
         </div>
+        <div class="flex justify-end -mt-1">
+          <button type="button" id="forgotLink" onclick="showForgot()" class="text-[12px] font-bold text-primary-600 hover:text-primary-700 focus:outline-none focus-visible:underline">Forgot password?</button>
+        </div>
         <div id="loginError" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
         <button id="loginBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Sign in</button>
+      </form>
+
+      <!-- FORGOT PASSWORD — a Supabase egyszer használható linket küld, ami a reset-password.html-re visz -->
+      <form id="formForgot" class="px-7 py-7 space-y-4 hidden" onsubmit="return doForgot(event)">
+        <div>
+          <h3 class="text-lg font-black text-ink">Reset your password</h3>
+          <p class="mt-1 text-sm text-slate-500 leading-relaxed">Enter the email address you sign in with. We'll send you a link to set a new password.</p>
+        </div>
+        <div>
+          <label for="forgotEmail" class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Email address</label>
+          <div class="relative">
+            <i data-lucide="mail" class="w-4 h-4 text-slate-300 absolute left-4 top-1/2 -translate-y-1/2"></i>
+            <input id="forgotEmail" type="email" required autocomplete="email" placeholder="e.g. anna@example.com" class="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-11 pr-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
+          </div>
+        </div>
+        <div id="forgotError" role="alert" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
+        <div id="forgotOk" aria-live="polite" class="hidden text-[12px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5"></div>
+        <button id="forgotBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95 disabled:opacity-60">Send reset link</button>
+        <button type="button" onclick="switchTab('login')" class="w-full text-center text-[12px] font-bold text-slate-400 hover:text-primary-600">← Back to sign in</button>
       </form>
 
       <!-- REGISTER -->
@@ -631,6 +660,7 @@
       document.getElementById('formLogin').classList.toggle('hidden', !login);
       document.getElementById('formRegister').classList.toggle('hidden', login);
       document.getElementById('regSuccess').classList.add('hidden');
+      document.getElementById('formForgot').classList.add('hidden');
       const active = 'bg-white text-ink shadow-sm';
       document.getElementById('tabLogin').className = 'flex-1 py-2.5 rounded-xl transition-all ' + (login ? active : 'text-slate-400');
       document.getElementById('tabRegister').className = 'flex-1 py-2.5 rounded-xl transition-all ' + (!login ? active : 'text-slate-400');
@@ -661,6 +691,55 @@
         enterApp();
       } catch (err) {
         showErr('loginError', 'Connection error. Please try again.'); btn.disabled = false; btn.textContent = label;
+      }
+      return false;
+    }
+    /* ---- Elfelejtett jelszó ----
+       A válasz szándékosan ugyanaz, akár létezik a fiók, akár nem: a felületről
+       így nem deríthető ki, ki van regisztrálva (a Supabase is így válaszol). */
+    const FORGOT_LABEL = 'Send reset link';
+    function showForgot(){
+      document.getElementById('formLogin').classList.add('hidden');
+      document.getElementById('formRegister').classList.add('hidden');
+      document.getElementById('regSuccess').classList.add('hidden');
+      document.getElementById('formForgot').classList.remove('hidden');
+      const fe = document.getElementById('forgotEmail');
+      const le = document.getElementById('loginEmail').value.trim();
+      if (le && !fe.value) fe.value = le;
+      hideErr('forgotError'); document.getElementById('forgotOk').classList.add('hidden');
+      setTimeout(() => { lucide.createIcons(); fe.focus(); }, 0);
+    }
+    function forgotCooldown(btn){
+      let s = 60;
+      btn.disabled = true; btn.textContent = FORGOT_LABEL + ' (' + s + ')';
+      const iv = setInterval(() => {
+        s -= 1;
+        if (s <= 0) { clearInterval(iv); btn.disabled = false; btn.textContent = FORGOT_LABEL; }
+        else btn.textContent = FORGOT_LABEL + ' (' + s + ')';
+      }, 1000);
+    }
+    async function doForgot(e){
+      e.preventDefault();
+      hideErr('forgotError');
+      const ok = document.getElementById('forgotOk'); ok.classList.add('hidden');
+      const email = document.getElementById('forgotEmail').value.trim();
+      const btn = document.getElementById('forgotBtn');
+      if (!email) return false;
+      btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        const { error } = await window.sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('reset-password.html', window.location.href).href });
+        if (error) {
+          const rate = error.status === 429 || /rate limit|only request this after/i.test(error.message || '');
+          showErr('forgotError', rate ? 'Too many requests. Please wait a minute before requesting another link.' : (error.message || 'The request failed. Please try again.'));
+          btn.disabled = false; btn.textContent = FORGOT_LABEL;
+          return false;
+        }
+        ok.textContent = 'If an account exists for ' + email + ', we have sent it a link to set a new password. Check your inbox (and the spam folder). The link works once and expires after a while.';
+        ok.classList.remove('hidden');
+        forgotCooldown(btn);
+      } catch (err) {
+        showErr('forgotError', 'Connection error. Please try again.');
+        btn.disabled = false; btn.textContent = FORGOT_LABEL;
       }
       return false;
     }
@@ -720,6 +799,8 @@
     showDemo('review', false);
     startDemoCycle();
     lucide.createIcons();
+    // A visszaállító oldal „Új link kérése” gombja ide mutat: index.html#forgot
+    if (location.hash === '#forgot') { openAuth('login'); showForgot(); }
   </script>
 </body>
 </html>

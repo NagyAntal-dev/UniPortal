@@ -3252,9 +3252,6 @@ const AdmissionsCore = ({ user }) => {
                           <ICONS.FileCheck size={14} /> Conditional
                         </button>
                       )}
-                      <button onClick={() => setActiveSubView('review')} className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-slate-800 inline-flex items-center gap-1.5">
-                        <ICONS.Eye size={13} /> Részletek
-                      </button>
                     </div>
                   </td>
                 </tr>
@@ -3552,12 +3549,6 @@ const AdmissionsCore = ({ user }) => {
           Jelentkezések
         </button>
         <button 
-          onClick={() => setActiveSubView('review')}
-          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeSubView === 'review' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
-        >
-          Dokumentum Bírálat
-        </button>
-        <button 
           onClick={() => setActiveSubView('offers')}
           className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeSubView === 'offers' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
         >
@@ -3569,7 +3560,6 @@ const AdmissionsCore = ({ user }) => {
       <div className="mt-8">
         {activeSubView === 'applications' && renderApplications()}
         {activeSubView === 'form_builder' && renderFormBuilder()}
-        {activeSubView === 'review' && renderReview()}
         {activeSubView === 'offers' && renderOffers()}
       </div>
 
@@ -10951,6 +10941,16 @@ const App: React.FC = () => {
   // esetet a "ugyanaz a fiók frissült" esettől, hogy a nézet ne ugorjon vissza.
   const landedForRef = useRef(null);
   const [loginEmail, setLoginEmail] = useState('');
+  /* Elfelejtett jelszó: a Supabase egyszer használható linket küld, ami a
+     reset-password.html-re visz. A válasz szándékosan ugyanaz, akár létezik a
+     fiók, akár nem — így a felületről nem deríthető ki, ki van regisztrálva. */
+  const [elfelejtett, setElfelejtett] = useState(null);   // null | { email, busy, ok, hiba }
+  const [visszaSzamlalo, setVisszaSzamlalo] = useState(0);
+  useEffect(() => {
+    if (visszaSzamlalo <= 0) return;
+    const t = setTimeout(() => setVisszaSzamlalo(v => v - 1), 1000);
+    return () => clearTimeout(t);
+  }, [visszaSzamlalo]);
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
@@ -11135,6 +11135,25 @@ const App: React.FC = () => {
     }
   };
 
+  const kuldResetLink = async (e) => {
+    e.preventDefault();
+    const email = String((elfelejtett && elfelejtett.email) || '').trim();
+    if (!email) return;
+    setElfelejtett(f => ({ ...f, busy: true, hiba: '', ok: '' }));
+    try {
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('reset-password.html', window.location.href).href });
+      if (error) {
+        const tulSok = error.status === 429 || /rate limit|only request this after/i.test(error.message || '');
+        setElfelejtett(f => ({ ...f, busy: false, hiba: tulSok ? 'Túl sok kérés. Kérjük, várj egy percet, mielőtt újabb linket kérsz.' : (error.message || 'A kérés nem sikerült. Kérjük, próbáld újra.') }));
+        return;
+      }
+      setElfelejtett(f => ({ ...f, busy: false, ok: email }));
+      setVisszaSzamlalo(60);
+    } catch (err) {
+      setElfelejtett(f => ({ ...f, busy: false, hiba: 'Kapcsolódási hiba. Kérjük, próbálja újra.' }));
+    }
+  };
+
   const handleLogout = async () => {
     try { await sb.auth.signOut(); } catch (e) { /* ignore */ }
     setCurrentUser(null);
@@ -11166,6 +11185,27 @@ const App: React.FC = () => {
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">UniPortal Pro</h1>
             <p className="text-slate-400 text-sm mt-2">Kérjük, jelentkezzen be a folytatáshoz</p>
           </div>
+          {elfelejtett ? (
+            <form onSubmit={kuldResetLink} className="space-y-5">
+              <div>
+                <h2 className="text-lg font-black text-slate-900">Elfelejtett jelszó</h2>
+                <p className="text-sm text-slate-500 mt-1 leading-relaxed">Add meg az e-mail-címet, amellyel belépsz. Küldünk egy linket, amellyel új jelszót állíthatsz be.</p>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">E-mail cím</label>
+                <input type="email" required autoFocus autoComplete="email" value={elfelejtett.email || ''}
+                  onChange={(e) => { const v = e.target.value; setElfelejtett(f => ({ ...f, email: v })); }}
+                  placeholder="pl. admin@uni.hu"
+                  className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+              </div>
+              {elfelejtett.hiba && <div role="alert" className="text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">{elfelejtett.hiba}</div>}
+              {elfelejtett.ok && <div aria-live="polite" className="text-[12px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">{`Ha létezik fiók ezzel a címmel (${elfelejtett.ok}), elküldtük rá a linket. Nézd meg a beérkező leveleidet (és a spam mappát is). A link egyszer használható, és egy idő után lejár.`}</div>}
+              <button disabled={elfelejtett.busy || visszaSzamlalo > 0} className="w-full bg-primary text-white py-4 rounded-2xl font-bold shadow-xl shadow-primary/10 hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-60">
+                {elfelejtett.busy ? 'Küldés…' : visszaSzamlalo > 0 ? `Link küldése (${visszaSzamlalo})` : 'Link küldése'}
+              </button>
+              <button type="button" onClick={() => setElfelejtett(null)} className="w-full text-center text-xs font-bold text-slate-400 hover:text-primary transition-colors">← Vissza a bejelentkezéshez</button>
+            </form>
+          ) : (
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">E-mail cím</label>
@@ -11189,6 +11229,10 @@ const App: React.FC = () => {
                 required
               />
             </div>
+            <div className="flex justify-end -mt-2">
+              <button type="button" onClick={() => setElfelejtett({ email: loginEmail, busy: false, ok: '', hiba: '' })}
+                className="text-xs font-bold text-primary hover:underline">Elfelejtettem a jelszavam</button>
+            </div>
             {loginError && (
               <div className="text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">{loginError}</div>
             )}
@@ -11196,6 +11240,7 @@ const App: React.FC = () => {
               {authBusy ? 'Bejelentkezés…' : 'Belépés a rendszerbe'}
             </button>
           </form>
+          )}
           {/* A teszt-fiókok gyorsgombjai innen KIKERÜLTEK. Ez a képernyő
               nyilvánosan elérhető, és a gombok mellett a jelszó szövegesen is
               ki volt írva, tehát bárki bejuthatott velük. A tesztfiókok adatai
@@ -11631,6 +11676,7 @@ Object.assign(HU_EN, {
   'Eseti / rövid kurzus':'Ad-hoc / short course','Továbbképzés':'Further training','Céglátogatás':'Company visit','Minden típus':'All types','Keresés a programok között…':'Search programmes…','Program neve':'Programme name','Program mentése':'Save programme','Program borítóképe':'Programme image','Címke a kártyán':'Card label','Az adatok és a program jelentkezési folyamatának beállítása':"Configure details and this programme's application flow",'Programkínálat':'Programmes','Kisebb programok — céglátogatások, továbbképzések, eseti kurzusok, előkészítők és tanulmányi kirándulások — kezelése.':'Manage smaller programmes — company visits, further training, ad-hoc courses, preparatory programmes and study excursions.','Céglátogatások, továbbképzések, eseti kurzusok és más rövid programok — jelentkezz online.':'Company visits, further training, ad-hoc courses and other short programmes — apply online.','Vegyél fel egy céglátogatást, továbbképzést, eseti kurzust vagy tanulmányi kirándulást.':'Add a company visit, further training, ad-hoc course or study excursion.',
   'Új dokumentumtípus':'New document type','Dokumentumtípus szerkesztése':'Edit document type','Megnevezés magyarul (kötelező)':'Name in Hungarian (required)','Megnevezés angolul (nem kötelező)':'Name in English (optional)','Elrejtés az új választások elől':'Hide from new selections','Módosítás mentése':'Save changes','Típus létrehozása':'Create type','Az új típus minden program és képzés szerkesztésekor választható lesz.':'The new type becomes selectable when editing any programme or degree.','A név minden programnál és jelentkezésnél megváltozik.':'The name changes in every programme and application.','egyedi':'custom','rejtett':'hidden','Az 58_program_doc_types.sql migráció még nem futott le — egyedi dokumentumtípus addig nem vehető fel.':'Migration 58_program_doc_types.sql has not been run yet — custom document types cannot be added until then.','Új dokumentumtípust csak rendszergazda vehet fel.':'Only an administrator can add a document type.','A módosítás nem ment át — dokumentumtípust csak rendszergazda módosíthat.':'The change was not saved — only an administrator can edit a document type.','Ilyen nevű dokumentumtípus már van.':'A document type with this name already exists.','A megnevezés 2–120 karakter legyen.':'The name must be 2–120 characters.','A magyar megnevezés legalább 2 karakter.':'The Hungarian name must be at least 2 characters.','Nincs kapcsolat az adatbázissal.':'No connection to the database.',
   'Keresés: név, e-mail, azonosító, program…':'Search: name, email, ID, programme…','Név, e-mail, program…':'Name, email, programme…','Minden program':'All programmes','Minden folyamatállapot':'All process states','Hallgató tölti ki':'Applicant is filling in','Irodai lépés':'Office step','Dokumentumok: mind':'Documents: all','Hiányzik dokumentum':'Missing documents','Frissítve':'Updated','Nincs a szűrésnek megfelelő folyamat.':'No process matches the filters.','Folyamatállapot':'Process state',
+  'Elfelejtettem a jelszavam':'Forgot your password?','Elfelejtett jelszó':'Forgot password','Add meg az e-mail-címet, amellyel belépsz. Küldünk egy linket, amellyel új jelszót állíthatsz be.':'Enter the email address you sign in with. We will send you a link to set a new password.','Link küldése':'Send link','Küldés…':'Sending…','← Vissza a bejelentkezéshez':'← Back to sign in','Túl sok kérés. Kérjük, várj egy percet, mielőtt újabb linket kérsz.':'Too many requests. Please wait a minute before requesting another link.','A kérés nem sikerült. Kérjük, próbáld újra.':'The request failed. Please try again.',
   'Személyes adatok':'Personal details','Angol nyelvtudás':'English proficiency','Online interjú':'Online interview','Beadás és ellenőrzés':'Submit & review','Útlevél (adatoldal)':'Passport (data page)','Érettségi bizonyítvány + leckekönyv':'Secondary-school certificate + transcript','Alapdiploma + leckekönyv':'Bachelor degree + transcript','Mesterdiploma + leckekönyv':'Master degree + transcript','Önéletrajz (CV)':'Curriculum vitae (CV)','Portfólió / munkaminták':'Portfolio / work samples','Kutatási terv':'Research proposal','Ajánlólevél':'Recommendation letter','Előkészítő':'Preparatory','Rövid kurzus':'Short course','Tanulmányi kirándulás':'Educational excursion','Mesterképzés (MA · MBA)':'Master (MA · MBA)','Doktori (PhD)':'Doctoral (PhD)','Piszkozat':'Draft','Bírálat alatt':'In review','Elfogadva':'Accepted','Várólistán':'Waitlisted',
   'A képzés felvételi lépései':'Admission steps for this programme','Szükséges dokumentumok':'Required documents','A jelentkezés lezárult':'Applications closed','Jelentkezés folytatása':'Continue application','Jelentkezem':'Apply now','Vissza a képzésekhez':'Back to programmes','Mentés és kilépés':'Save & exit later','Erősítsd meg a kapcsolattartási adataidat ehhez a jelentkezéshez.':'Confirm your contact information for this application.','Telefon':'Phone','Állampolgárság szerinti ország':'Country of citizenship','pl. Nigéria':'e.g. Nigeria','Ezek a fájlok kötelezőek ehhez a képzéshez.':'These files are required for this programme.','Add meg az angol nyelvvizsgád adatait (B2 vagy magasabb ajánlott).':'Tell us about your English certificate (B2 or higher recommended).','Bizonyítvány':'Certificate','Válassz…':'Select…','Oktatás nyelve':'Medium of instruction','Egyéb':'Other','Pontszám / szint':'Score / level','Miért ezt a képzést választod? Legalább ~40 karakter (egy rövid bekezdés ideális).':'Why this programme? Minimum ~40 characters (a short paragraph is ideal).','Tisztelt Felvételi Bizottság! …':'Dear Admissions Committee, …','Online interjú foglalása':'Book an online interview','Regisztrációs díj':'Registration fee','Foglald le a helyed — ez a díj erősíti meg a regisztrációdat.':'Secure your place — this fee confirms your registration.','A jelentkezés feldolgozásához egyszeri, vissza nem térítendő jelentkezési díj szükséges.':'A one-time, non-refundable application fee is required to process your application.','Nincs fizetendő díj — minden rendben.':"No fee required — you're all set.",'Kártya':'Card','Banki átutalás':'Bank transfer','Fizetés kártyával':'Pay by card','Banki átutalás rögzítése':'Mark bank transfer','Teszt üzemmód — valódi terhelés nem történik.':'Test mode — no real charge is made.','Jelentkezés beadva':'Application submitted','Ellenőrzés és beadás':'Review & submit','A jelentkezésed a felvételi csoportnál van.':'Your application is with the admissions team.','Ellenőrizd, hogy minden kész, majd add be bírálatra.':'Check everything is complete, then submit for review.','Kész':'Complete','Hiányos':'Incomplete','Jelentkezés beadása':'Submit application','A beadáshoz minden lépést teljesíts':'Complete all steps to submit','Ismeretlen lépés.':'Unknown step.','Három rövid feladat. A megfeleléshez legalább 2 helyes válasz kell.':'Three short tasks. You need at least 2 correct to pass.','Válaszok beadása':'Submit answers','Minden szint':'All levels','Keresés a képzések között…':'Search programmes…','Nincs találat':'No results','Próbálj másik szintet vagy keresőkifejezést.':'Try a different level or search term.','Az adatok és a képzés felvételi folyamatának beállítása':"Configure details and this programme's admission flow",'Képzés neve':'Programme name','Kar':'Faculty','Fokozat megnevezése':'Degree label','Tandíj / szemeszter (EUR)':'Tuition / semester (EUR)','Időtartam (szemeszter)':'Duration (semesters)','Létszámkeret':'Capacity','Jelentkezési határidő':'Application deadline','Címkék (vesszővel elválasztva)':'Tags (comma-separated)','Összefoglaló':'Summary','Képzés borítóképe':'Programme image','Feltöltött kép ✓':'Uploaded image ✓','Kép URL (https://…)':'Image URL (https://…)','Felvételi folyamat — lépések':'Admission flow — steps','Sorrend':'Order','Jelentkezés nyitva':'Applications open','Képzés mentése':'Save programme','Időtartam':'Duration','Nyelv':'Language',
   // Hírfolyam (features/feed.jsx)
@@ -12185,6 +12231,8 @@ Object.assign(HU_EN, {
 });
 HU_EN_PHRASES.push(
   [/· elkezdte /g, '· started '],
+  [/^Ha létezik fiók ezzel a címmel \((.+)\), elküldtük rá a linket\. Nézd meg a beérkező leveleidet \(és a spam mappát is\)\. A link egyszer használható, és egy idő után lejár\.$/g, 'If an account exists for this address ($1), we have sent it a link. Check your inbox (and the spam folder). The link works once and expires after a while.'],
+  [/^Link küldése \((\d+)\)$/g, 'Send link ($1)'],
   // Egy korábbi általános szabály a „7 folyamat”-ot előbb „7 process(es)”-re fordítja,
   // ezért a már félig lefordított alakot is elfogadjuk.
   [/^Találat: (\d+)\/(\d+) (?:folyamat|process\(es\)) · (\d+)\/(\d+) (?:jelentkező|applicant\(s\))$/g, 'Results: $1/$2 processes · $3/$4 applicants'],
