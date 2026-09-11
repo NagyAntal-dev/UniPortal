@@ -384,14 +384,33 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
       if (!file) return;
       setDocBusy(id);
       try {
-        const path = await DOC_upload(file, (user && user.email) || 'guest', cur.id, id);
+        /* A TULAJDONOS A FELHASZNÁLÓ AZONOSÍTÓJA, NEM AZ E-MAIL-CÍME.
+           A 'documents' tároló írási szabálya (08_documents_storage.sql,
+           documents_insert_own) előírja, hogy az útvonal ELSŐ szegmense a
+           feltöltő auth.uid()-ja legyen. Korábban itt az e-mail-cím állt, ezért
+           MINDEN hallgatói feltöltést elutasított a szabály („new row violates
+           row-level security policy") — MÉRVE élesben: e-mail-lel elbukott,
+           UUID-val sikerült. Az irodai út (app.jsx) mindig is a user.id-t adta
+           át; a két út most ugyanazt a sémát követi. A 'guest' tartalék is
+           kikerült: munkamenet nélkül a DOC_upload 'storage-unavailable'-t dob,
+           és azt alább érthetően kiírjuk. */
+        const path = await DOC_upload(file, (user && user.id) || null, cur.id, id);
         setData({ docs: { ...docs, [id]: {
           fileName: file.name, path, size: file.size,
           type: file.type || '', at: todayStr(),
         } } });
       } catch (err) {
-        setDocErr(id + ': ' + (err && err.message === 'storage-unavailable'
-          ? 'Nincs kapcsolat a tárolóval — jelentkezz be újra.'
+        /* A valódi okot eddig lenyeltük, és mindenre „Próbáld újra"-t írtunk —
+           ezért nem derült ki, hogy a szabály utasítja el. Az ismert okokat
+           most néven nevezzük; ismeretlen hibánál marad az általános üzenet. */
+        const msg = String((err && (err.message || err.error)) || '');
+        setDocErr(id + ': ' + (
+          msg === 'storage-unavailable'
+            ? 'Nincs kapcsolat a tárolóval — jelentkezz be újra.'
+          : /row-level security|violates|unauthorized|403/i.test(msg)
+            ? 'Nincs jogosultságod ide feltölteni. Jelentkezz ki és be újra; ha így sem megy, szólj az ügyintézőnek.'
+          : /exceeded|too large|maximum allowed size|413/i.test(msg)
+            ? 'A fájl túl nagy — legfeljebb 20 MB lehet.'
           : 'A feltöltés nem sikerült. Próbáld újra.'));
       } finally {
         setDocBusy('');

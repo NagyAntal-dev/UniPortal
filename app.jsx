@@ -11699,6 +11699,11 @@ Object.assign(HU_EN, {
   'A megnevezés kötelező.':'The title is required.',
   'Válasszon fájlt.':'Choose a file.',
   'A feltöltés nem sikerült.':'The upload failed.',
+  'A feltöltés nem sikerült. Próbáld újra.':'The upload failed. Please try again.',
+  'Nincs kapcsolat a tárolóval — jelentkezz be újra.':'No connection to the storage — please sign in again.',
+  'Nincs jogosultságod ide feltölteni. Jelentkezz ki és be újra; ha így sem megy, szólj az ügyintézőnek.':
+    'You are not allowed to upload here. Sign out and back in; if it still fails, contact the admissions office.',
+  'A fájl túl nagy — legfeljebb 20 MB lehet.':'The file is too large — the limit is 20 MB.',
   'A törlés nem sikerült.':'The deletion failed.',
   'A dokumentumok betöltése nem sikerült.':'Loading the documents failed.',
   'A fájl nagyobb 20 MB-nál.':'The file is larger than 20 MB.',
