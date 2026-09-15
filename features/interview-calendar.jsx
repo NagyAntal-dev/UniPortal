@@ -856,3 +856,127 @@ function IV_ProcessInterview({ processId, readOnly, fallback, onState }) {
     </div>
   );
 }
+
+/* ============================================================
+   ÜGYINTÉZŐ — a felvételi eljárás interjúja a „Részletek” ablakban
+   ------------------------------------------------------------
+   Az admin a Részletek ablakban és a részletes nézetben is látja és
+   szerkesztheti az interjú időpontját: élő interjúnál interview_move (a
+   jelentkező üzenetet kap), interjú nélkül interview_assign. Ügyintézőként az
+   elérhetőségen és a szüneteken kívülre is tehető (61-es szabály), csak
+   ütközés nem lehet — hiba esetén a szerver mondatát mutatjuk.
+   ============================================================ */
+function IV_AdminProcessInterview({ processId, canEdit, fallback, onChanged }) {
+  const { ctx } = IV_useContext();
+  const [st, setSt] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+  const [missing, setMissing] = useState(false);
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+
+  const load = React.useCallback(async () => {
+    if (!processId) { setMissing(true); setLoaded(true); return; }
+    const { data, error } = await IV_rpc('interview_process_state', { p_process_id: processId });
+    setLoaded(true);
+    if (error) { if (IV_nincsFuggveny(error)) setMissing(true); else setErr(IV_msg(error)); return; }
+    setMissing(false); setSt(data || null);
+  }, [processId]);
+  useEffect(() => { setForm(null); setOk(''); setErr(''); load(); }, [load]);
+
+  if (missing) return fallback || null;
+  const cur = st && st.current;
+  const dec = st && st.declined;
+  const roster = ((ctx && ctx.interviewers) || []).filter(i => i && i.id && i.active !== false);
+  const perc = Number((st && st.slot_minutes) || (ctx && ctx.slot_minutes) || 15);
+  const meta = cur ? (IV_STATUS[cur.status] || { label: cur.status, badge: 'slate' }) : null;
+
+  const szerkeszt = () => {
+    let s;
+    if (cur) s = new Date(cur.start);
+    else {
+      s = new Date(); s.setDate(s.getDate() + 1);
+      while (s.getDay() === 0 || s.getDay() === 6) s.setDate(s.getDate() + 1);
+      s.setHours(10, 0, 0, 0);
+    }
+    const e = cur ? new Date(cur.end) : new Date(s.getTime() + perc * 60000);
+    setErr(''); setOk('');
+    setForm({ date: IV_ymd(s), start: IV_hm(s), end: IV_hm(e), interviewer: (cur && cur.interviewer) || (roster[0] && roster[0].id) || '', note: '' });
+  };
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const sIso = form ? IV_toIso(form.date, form.start) : null;
+  const eIso = form ? IV_toIso(form.date, form.end) : null;
+  const idoOk = !!(sIso && eIso && new Date(eIso) > new Date(sIso));
+  const ment = async () => {
+    if (!idoOk) { setErr('Adj meg érvényes napot, kezdést és befejezést.'); return; }
+    if (!cur && !form.interviewer) { setErr('Válaszd ki az interjúztatót.'); return; }
+    setBusy(true); setErr('');
+    const note = form.note.trim() || null;
+    const { error } = cur
+      ? await IV_rpc('interview_move', { p_slot: cur.id, p_start: sIso, p_end: eIso, p_interviewer: form.interviewer || null, p_note: note })
+      : await IV_rpc('interview_assign', { p_process_id: processId, p_interviewer: form.interviewer, p_start: sIso, p_end: eIso, p_note: note });
+    setBusy(false);
+    if (error) { setErr(IV_msg(error)); return; }
+    setForm(null);
+    setOk(cur ? 'Az interjú új időpontja elmentve — a jelentkező értesítést kapott.' : 'Az interjút rögzítettük — a jelentkező értesítést kapott.');
+    await load();
+    if (onChanged) onChanged();
+  };
+  const lbl = 'text-[10px] font-black text-slate-400 uppercase tracking-widest';
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white shadow-sm p-5 space-y-3" data-iv-admin={processId}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2"><Lucide.Video size={16} className="text-primary" /><span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Interjú</span></div>
+        {meta && <UBadge tone={meta.badge}>{meta.label}</UBadge>}
+      </div>
+      {!loaded ? <p className="text-sm text-slate-400">Betöltés...</p> : (
+        <>
+          {cur ? (
+            <div className="grid sm:grid-cols-2 gap-3 text-sm">
+              <div><div className={lbl}>Időpont</div><div className="font-bold text-slate-700" data-iv-admin-ido="1">{IV_fmtRange(cur.start, cur.end)}</div></div>
+              <div><div className={lbl}>Interjúztató</div><div className="font-bold text-slate-700">{cur.interviewer_name || '—'}</div></div>
+              {cur.status === 'Proposed' && <div className="sm:col-span-2 text-[12px] font-bold text-amber-700">Javasolt időpont — a jelentkező még nem fogadta el.</div>}
+              {cur.teams_url && <div className="sm:col-span-2"><a href={cur.teams_url} target="_blank" rel="noopener noreferrer" className="text-primary text-[12px] font-bold break-all hover:underline">{cur.teams_url}</a></div>}
+              {cur.note && <div className="sm:col-span-2 text-[12px] text-slate-500 whitespace-pre-line">{cur.note}</div>}
+            </div>
+          ) : <p className="text-sm text-slate-500">Még nincs interjú-időpont ehhez a jelentkezéshez.</p>}
+          {dec && <p className="text-[12px] text-slate-500"><span className="font-bold">Korábban elutasított foglalás:</span> <span>{IV_fmtRange(dec.start, dec.end)}</span>{dec.note ? <span>{' — ' + dec.note}</span> : null}</p>}
+        </>
+      )}
+      <IV_Err>{err}</IV_Err>
+      <IV_Ok>{ok}</IV_Ok>
+      {canEdit && loaded && !form && (
+        <div className="pt-1">
+          <button type="button" className={U_btnGhost + ' !py-2 text-sm'} onClick={szerkeszt} data-iv-admin-szerkeszt="1">
+            <Lucide.CalendarClock size={15} /> {cur ? 'Időpont módosítása' : 'Interjú-időpont megadása'}
+          </button>
+        </div>
+      )}
+      {form && (
+        <div className="space-y-3 pt-3 border-t border-slate-100" data-iv-admin-urlap="1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <UField label="Nap"><input type="date" className={U_input} value={form.date} onChange={e => set('date', e.target.value)} /></UField>
+            <UField label="Kezdés"><input type="time" step="300" className={U_input} value={form.start} onChange={e => set('start', e.target.value)} /></UField>
+            <UField label="Befejezés"><input type="time" step="300" className={U_input} value={form.end} onChange={e => set('end', e.target.value)} /></UField>
+          </div>
+          {roster.length > 0 && (
+            <UField label="Interjúztató">
+              <select className={U_input} value={form.interviewer} onChange={e => set('interviewer', e.target.value)}>
+                {!form.interviewer && <option value="">Válassz…</option>}
+                {roster.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            </UField>
+          )}
+          <UField label="Belső megjegyzés (nem kötelező)"><input className={U_input} value={form.note} onChange={e => set('note', e.target.value)} /></UField>
+          <p className="text-[12px] text-slate-400">Ha az időpont változik, a jelentkező üzenetet kap róla. Ügyintézőként munkaidőn kívülre is teheted, de más interjúval nem ütközhet.</p>
+          <div className="flex justify-end gap-2">
+            <button type="button" className={U_btnGhost} onClick={() => { setForm(null); setErr(''); }}>Mégse</button>
+            <button type="button" className={U_btnPrimary} disabled={busy || !idoOk} onClick={ment}>{busy ? 'Mentés…' : 'Mentés'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

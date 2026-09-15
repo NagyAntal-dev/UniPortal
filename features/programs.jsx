@@ -185,6 +185,147 @@ function PROG_mergeFlow(progs) {
   return { steps, required_docs: dok };
 }
 
+/* ============================================================
+   VALÓS FOLYAMATÁLLAPOT — egyetlen forrás
+   ------------------------------------------------------------
+   A hallgató lépéssávja, a „Felvételi folyamat” gyűjtőnézet, a katalógus
+   kártyái és az admin „Folyamat állapota” / „Feltöltött dokumentumok” része
+   ugyanebből számol. Egy lépés akkor KÉSZ, ha a mentett adat alapján
+   teljesült — nem attól, hogy a hallgató rákattintott vagy továbblépett.
+
+   Két alak:
+     • 'kepzes' — a Képzések kártyáiról indított jelentkezés (data.program_ids /
+                  program_id): a hallgatói lépések a megjelölt képzések uniója,
+                  utána az irodai szakasz (ellenőrzés, [interjú], döntés, levél).
+     • 'irodai' — a régi, a Felvételi folyamat felületen indított eljárás
+                  (data.programs): az irodai lánc lépései (JourneyShared).
+   A bemenet lehet a PROG_fromRow (status) és az spRow (stage) alakja is; a
+   katalógus tömb vagy azonosító → képzés térkép.
+   ============================================================ */
+const PROG_dokFeltoltve = (e) => !!(e && (e.path || e.fileName));
+
+function PROG_folyamVaz(program, valasztott) {
+  const isDeg = PROG_kind(program) === 'degree';
+  const folyam = isDeg
+    ? PROG_mergeFlow(valasztott && valasztott.length ? valasztott : [program])
+    : { steps: program.steps || ['personal', 'review'], required_docs: program.required_docs || [] };
+  return { isDeg, steps: isDeg ? ['choice', ...folyam.steps] : folyam.steps, required_docs: folyam.required_docs };
+}
+
+// Egy hallgatói lépés a MENTETT adat alapján teljesült-e (nem a megtekintés alapján).
+function PROG_lepesKesz(stepKey, program, data, beadva) {
+  if (stepKey === 'review') return !!beadva;
+  if (stepKey === 'language') { const l = data.language || {}; return !!(l.cert && l.level); }
+  if (stepKey === 'documents') return (program.required_docs || []).every(d => PROG_dokFeltoltve((data.docs || {})[d]));
+  return !!PROG_canAdvance(stepKey, program, data);
+}
+
+function PROG_dokOsszegzes(items, extra) {
+  const kotelezo = items.filter(x => !x.optional);
+  return {
+    items, extra,
+    osszes: kotelezo.length,
+    feltoltve: kotelezo.filter(x => x.feltoltve).length,
+    hitelesitve: kotelezo.filter(x => x.hitelesitve).length,
+    hianyzik: kotelezo.filter(x => !x.feltoltve),
+  };
+}
+
+/* A feltöltendő dokumentumok: a megjelölt képzések kötelező dokumentumainak
+   uniója (egy dokumentum egyszer). Ha csak az egyik képzés kéri, az is
+   benne van — a `kerik` mondja meg, melyik képzés kéri (több képzésnél). */
+function PROG_dokKovetelmeny(data, valasztott, required) {
+  const docs = (data && data.docs) || {};
+  const kell = required || [];
+  const tobb = (valasztott || []).length > 1;
+  const items = kell.map(id => {
+    const e = docs[id];
+    const kerik = tobb ? valasztott.filter(p => (p.required_docs || []).includes(id)).map(p => ({ id: p.id, code: p.code || p.degree || p.name, name: p.name })) : [];
+    return { id, label: PROG_docLabel(id), kerik, feltoltve: PROG_dokFeltoltve(e), hitelesitve: !!(e && PROG_dokFeltoltve(e) && e.verified), fajl: (e && e.fileName) || '' };
+  });
+  const extra = Object.keys(docs).filter(id => !kell.includes(id) && PROG_dokFeltoltve(docs[id]))
+    .map(id => ({ id, label: PROG_docLabel(id), kerik: [], extra: true, feltoltve: true, hitelesitve: !!docs[id].verified, fajl: docs[id].fileName || '' }));
+  return PROG_dokOsszegzes(items, extra);
+}
+
+const PROG_DONTES_CIMKE = { admitted: 'Felvéve', rejected: 'Elutasítva', withdrawn: 'Visszalépett' };
+const PROG_allapotTone = (fa) => !fa ? 'blue'
+  : (fa.kod === 'rejected' || fa.kod === 'cancelled') ? 'red'
+  : (fa.kod === 'accepted' || fa.kod === 'admitted') ? 'green'
+  : fa.kod === 'withdrawn' ? 'slate' : 'blue';
+
+function PROG_folyamatAllapot(proc, katalogus) {
+  const p = proc || {};
+  const data = p.data || {};
+  const keres = (id) => Array.isArray(katalogus) ? (katalogus.find(x => x && x.id === id) || null) : ((katalogus || {})[id] || null);
+  const ids = PROG_appIds({ data, program_id: p.program_id || p.programId || data.program_id });
+  const beadva = p.stage ? p.stage !== 'student' : (!!p.status && p.status !== 'draft');
+  const dontes = data.decision && PROG_DONTES_CIMKE[data.decision.outcome] ? data.decision : null;
+  const levelKiment = !!(typeof JourneyShared !== 'undefined' && JourneyShared.letterSent && JourneyShared.letterSent(p));
+  const lepesek = [];
+  let tipus, dok, valasztott = [];
+
+  if (ids.length) {
+    tipus = 'kepzes';
+    valasztott = ids.map(keres).filter(Boolean);
+    const alap = valasztott[0] || { id: ids[0], kind: Array.isArray(data.program_ids) ? 'degree' : 'program', steps: ['personal', 'documents', 'review'], required_docs: [] };
+    const vaz = PROG_folyamVaz(alap, valasztott);
+    const virt = { ...alap, steps: vaz.steps, required_docs: vaz.required_docs, _valasztott: valasztott, _katalogus: Array.isArray(katalogus) ? katalogus : Object.values(katalogus || {}) };
+    vaz.steps.forEach(key => lepesek.push({ key, fazis: 'hallgato', label: (PROG_STEP_DEFS[key] || {}).label || key, kesz: PROG_lepesKesz(key, virt, data, beadva) }));
+    dok = PROG_dokKovetelmeny(data, valasztott, vaz.required_docs);
+    lepesek.push({ key: 'check', fazis: 'iroda', label: 'Dokumentum-ellenőrzés', kesz: beadva && dok.hitelesitve === dok.osszes, megj: dok.osszes ? `${dok.hitelesitve}/${dok.osszes} dokumentum jóváhagyva` : '' });
+    const iv = data.interview || {};
+    if (!vaz.steps.includes('interview') && (iv.slotId || iv.start || iv.status)) {
+      lepesek.push({ key: 'interview', fazis: 'iroda', label: 'Interjú', kesz: !!(iv.booked || iv.status === 'Completed') });
+    }
+    lepesek.push({ key: 'decision', fazis: 'iroda', label: 'Felvételi döntés', kesz: !!dontes, elutasitva: !!dontes && dontes.outcome !== 'admitted', megj: dontes ? PROG_DONTES_CIMKE[dontes.outcome] : '' });
+    lepesek.push({ key: 'letter', fazis: 'iroda', label: 'Felvételi levél', kesz: levelKiment, kihagyva: !!dontes && dontes.outcome !== 'admitted' });
+  } else {
+    tipus = 'irodai';
+    const SD = (typeof JourneyShared !== 'undefined' && JourneyShared.STEP_DEFS) || [];
+    const DT = (typeof JourneyShared !== 'undefined' && JourneyShared.DOC_TYPES) || [];
+    const docs = data.docs || {};
+    const items = DT.map(d => { const e = docs[d.id]; return { id: d.id, label: d.label, Icon: d.Icon, optional: !!d.optional, kerik: [], feltoltve: PROG_dokFeltoltve(e), hitelesitve: !!(e && PROG_dokFeltoltve(e) && e.verified), fajl: (e && e.fileName) || '' }; });
+    const extra = Object.keys(docs).filter(id => !DT.some(d => d.id === id) && PROG_dokFeltoltve(docs[id]))
+      .map(id => ({ id, label: PROG_docLabel(id), kerik: [], extra: true, feltoltve: true, hitelesitve: !!docs[id].verified, fajl: docs[id].fileName || '' }));
+    dok = PROG_dokOsszegzes(items, extra);
+    const mt = data.math || {}, iv = data.interview || {}, acc = data.account || {};
+    const kesz = {
+      register: !!(acc.fullName && acc.email),
+      programs: (data.programs || []).length > 0,
+      documents: dok.feltoltve === dok.osszes,
+      check: dok.osszes > 0 && dok.hitelesitve === dok.osszes,
+      interview: !!(iv.booked || iv.status === 'Completed'),
+      math: !!mt.passed,
+      letter: levelKiment,
+    };
+    SD.forEach(s => {
+      if (s.id === 'letter' && dontes) lepesek.push({ key: 'decision', fazis: null, label: 'Felvételi döntés', kesz: true, elutasitva: dontes.outcome !== 'admitted', megj: PROG_DONTES_CIMKE[dontes.outcome] });
+      lepesek.push({ key: s.id, fazis: null, label: s.label, kesz: !!p.done || !!kesz[s.id], kihagyva: s.id === 'letter' && !!dontes && dontes.outcome !== 'admitted' });
+    });
+  }
+
+  const megszakitva = !!data._cancelled;
+  const szamolt = lepesek.filter(l => !l.kihagyva);
+  const aktualis = megszakitva ? null : (szamolt.find(l => !l.kesz) || null);
+  lepesek.forEach(l => { l.aktualis = l === aktualis; });
+  const kesz = szamolt.filter(l => l.kesz).length;
+  const osszes = Math.max(szamolt.length, 1);
+  let cimke, kod, rend;
+  if (megszakitva) { cimke = 'Megszakítva'; kod = 'cancelled'; rend = 99; }
+  else if (dontes && dontes.outcome === 'rejected') { cimke = 'Elutasítva'; kod = 'rejected'; rend = 95; }
+  else if (dontes && dontes.outcome === 'withdrawn') { cimke = 'Visszalépett'; kod = 'withdrawn'; rend = 96; }
+  else if (levelKiment || p.done) { cimke = 'Felvéve · levél kiállítva'; kod = 'accepted'; rend = 90; }
+  else if (dontes && dontes.outcome === 'admitted') {
+    const fp = valasztott.find(x => x.id === dontes.programId);
+    cimke = 'Felvéve: ' + (fp ? (fp.code || fp.name) : (dontes.programId || '')); kod = 'admitted'; rend = 85;
+  }
+  else if (tipus === 'kepzes' && !beadva) { cimke = 'Hallgató tölti ki'; kod = 'student'; rend = 0; }
+  else if (aktualis) { cimke = aktualis.key === 'decision' ? 'Döntésre vár' : aktualis.label; kod = 'step:' + aktualis.key; rend = 10 + lepesek.indexOf(aktualis); }
+  else { cimke = 'Minden lépés kész'; kod = 'accepted'; rend = 90; }
+  return { tipus, beadva, megszakitva, ids, valasztott, lepesek, aktualis, kesz, osszes, pct: Math.round((kesz / osszes) * 100), cimke, kod, rend, dok, dontes, levelKiment };
+}
+
 const PROG_IMGS = {
   'prep-engmath': 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=70',
   'bsc-cse': 'https://images.unsplash.com/photo-1517180102446-f3ece451e9d8?auto=format&fit=crop&w=800&q=70',
@@ -396,7 +537,7 @@ function PROG_Detail({ program, myApp, onClose, onApply }) {
    képzések lépéseinek és kötelező dokumentumainak uniója. Az interjú után a
    felvételi iroda dönt, melyik képzésre vesszük fel (admission_decide).
    Kisebb programnál minden a régi: egy program, a saját lépései. */
-function ProgramApply({ program, programs, app, user, onExit, onSaved, notice }) {
+function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, backLabel }) {
   const isDeg = PROG_kind(program) === 'degree';
   const regiPiszkozat = isDeg && !(app.data && Array.isArray(app.data.program_ids) && app.data.program_ids.length);
   const [cur, setCur] = useState(() => regiPiszkozat
@@ -406,19 +547,43 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice })
   const setData = (patch) => setCur(c => ({ ...c, data: { ...(c.data || {}), ...patch } }));
   const katalogus = programs && programs.length ? programs : [program];
   const valasztott = isDeg ? PROG_appIds({ data }).map(id => katalogus.find(x => x.id === id)).filter(Boolean) : [program];
-  const folyam = isDeg ? PROG_mergeFlow(valasztott.length ? valasztott : [program]) : { steps: program.steps || ['personal', 'review'], required_docs: program.required_docs || [] };
-  const steps = isDeg ? ['choice', ...folyam.steps] : folyam.steps;
+  const vaz = PROG_folyamVaz(program, valasztott);
+  const steps = vaz.steps;
   const nevek = valasztott.map(x => x.name);
-  const virt = { ...program, steps, required_docs: folyam.required_docs, name: nevek.length > 1 ? nevek.join(', ') : program.name, _valasztott: valasztott, _katalogus: katalogus };
-  // A régi piszkozatnál az új első lépés miatt eggyel odébb van a mentett lépés.
-  const [idx, setIdx] = useState(Math.min((app.step_index || 0) + (regiPiszkozat ? 1 : 0), steps.length - 1));
-  const lepes = Math.max(0, Math.min(idx, steps.length - 1));
+  const virt = { ...program, steps, required_docs: vaz.required_docs, name: nevek.length > 1 ? nevek.join(', ') : program.name, _valasztott: valasztott, _katalogus: katalogus };
+  const beadva = !!cur.status && cur.status !== 'draft';
+  /* VALÓS ÁLLAPOT A LÉPÉSSÁVON. A pipa korábban a megtekintett lépés indexéből
+     jött (i < lepes): aki az utolsó lépésre kattintott, annak minden korábbi
+     lépése „kész” lett, visszakattintva pedig eltűntek a pipák. Most minden
+     lépés a mentett adat alapján kész vagy nem (PROG_lepesKesz) — ugyanaz a
+     számítás, amit a gyűjtőnézet és az admin „Folyamat állapota” használ.
+     A hallgatói lépések után az irodai szakasz is látszik (ellenőrzés,
+     döntés, levél), hogy a beadás után is kiderüljön, hol tart az eljárás. */
+  const irodai = PROG_folyamatAllapot({ ...cur, data }, katalogus).lepesek.filter(l => l.fazis === 'iroda');
+  const rail = [
+    ...steps.map(key => ({ key, fazis: 'hallgato', label: (PROG_STEP_DEFS[key] || {}).label || key, icon: (PROG_STEP_DEFS[key] || {}).icon || Lucide.Circle, kesz: PROG_lepesKesz(key, virt, data, beadva) })),
+    ...irodai.map(l => ({ ...l, icon: PROG_IRODA_IKON[l.key] || Lucide.Circle })),
+  ];
+  const railKesz = rail.filter(l => l.kesz).length;
+  const railOsszes = rail.filter(l => !l.kihagyva).length;
+  /* Nyitó lépés: a legelső még nem teljesült. Beadás előtt legfeljebb a
+     legutóbb mentett lépésig (a régi piszkozatnál az új első lépés miatt
+     eggyel odébb), így a frissen indított jelentkezés a képzésválasztással
+     kezdődik. */
+  const [idx, setIdx] = useState(() => {
+    const elso = rail.findIndex(l => !l.kesz && !l.kihagyva);
+    const nyitott = elso < 0 ? rail.length - 1 : elso;
+    if (beadva) return nyitott;
+    return Math.min((app.step_index || 0) + (regiPiszkozat ? 1 : 0), nyitott, steps.length - 1);
+  });
+  const lepes = Math.max(0, Math.min(idx, rail.length - 1));
+  const hallgatoiNezet = lepes < steps.length;
   const [saving, setSaving] = useState(false);
 
   const persist = async (extra = {}) => {
     setSaving(true);
     const ids = PROG_appIds({ data: cur.data || {} });
-    const patch = { student_step: lepes, data: cur.data || {}, updated_at: new Date().toISOString(), ...(isDeg && ids.length ? { program_id: ids[0] } : {}), ...extra };
+    const patch = { student_step: Math.min(lepes, steps.length - 1), data: cur.data || {}, updated_at: new Date().toISOString(), ...(isDeg && ids.length ? { program_id: ids[0] } : {}), ...extra };
     const saved = await dlUpdate(APP_TABLE, cur.id, patch, APP_LS);
     setSaving(false);
     if (saved) { const m = PROG_fromRow(saved); setCur(m); onSaved && onSaved(m); }
@@ -426,12 +591,12 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice })
   };
   const goNext = async () => { const n = Math.min(lepes + 1, steps.length - 1); setIdx(n); await persist({ student_step: n }); };
   const goPrev = () => setIdx(Math.max(0, lepes - 1));
-  const stepKey = steps[lepes];
+  const stepKey = hallgatoiNezet ? steps[lepes] : null;
   const statusz = PROG_STATUS[cur.status] || null;
 
   return (
     <div className="max-w-5xl 2xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 animate-in fade-in duration-300">
-      <button onClick={onExit} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-primary mb-4 transition-colors"><Lucide.ArrowLeft size={16} /> Vissza a képzésekhez</button>
+      <button onClick={onExit} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-primary mb-4 transition-colors"><Lucide.ArrowLeft size={16} /> {backLabel || 'Vissza a képzésekhez'}</button>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div className="min-w-0">
           <p className="text-primary font-black text-xs uppercase tracking-widest mb-1">{isDeg && valasztott.length > 1 ? `Jelentkezés ${valasztott.length} képzésre` : <>{program.degree} jelentkezés</>}</p>
@@ -452,17 +617,22 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice })
       <div className="grid lg:grid-cols-[240px,1fr] gap-6">
         {/* step rail */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-3 h-fit">
-          {steps.map((s, i) => { const def = PROG_STEP_DEFS[s] || { label: s, icon: Lucide.Circle }; const I = def.icon; const done = i < lepes; const active = i === lepes; return (
-            <button key={s} onClick={() => setIdx(i)} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors ' + (active ? 'bg-primary/10 text-primary' : done ? 'text-emerald-600 hover:bg-slate-50' : 'text-slate-500 hover:bg-slate-50')}>
-              <span className={'w-7 h-7 rounded-lg flex items-center justify-center flex-none ' + (active ? 'bg-primary text-white' : done ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400')}>{done ? <Lucide.Check size={15} /> : <I size={15} />}</span>
-              <span className="text-[13px] font-bold">{def.label}</span>
-            </button>
+          <div className="px-3 pt-1 pb-2 text-[11px] font-bold text-slate-400" data-lepes-osszesito="1">{`${railKesz}/${railOsszes} lépés kész`}</div>
+          {rail.map((s, i) => { const I = s.icon; const active = i === lepes; const elsoIrodai = s.fazis === 'iroda' && (i === 0 || rail[i - 1].fazis !== 'iroda'); return (
+            <React.Fragment key={s.fazis + ':' + s.key}>
+              {elsoIrodai && <div className="px-3 pt-4 pb-1 mt-2 border-t border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">Felvételi iroda</div>}
+              <button onClick={() => setIdx(i)} data-lepes={s.key} data-kesz={s.kesz ? '1' : '0'} aria-current={active ? 'step' : undefined}
+                className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors ' + (active ? 'bg-primary/10 text-primary' : s.elutasitva ? 'text-red-600 hover:bg-slate-50' : s.kesz ? 'text-emerald-600 hover:bg-slate-50' : s.kihagyva ? 'text-slate-300 hover:bg-slate-50' : 'text-slate-500 hover:bg-slate-50')}>
+                <span className={'w-7 h-7 rounded-lg flex items-center justify-center flex-none ' + (s.elutasitva ? 'bg-red-500 text-white' : s.kesz ? 'bg-emerald-500 text-white' : active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400')}>{s.elutasitva ? <Lucide.X size={15} /> : s.kesz ? <Lucide.Check size={15} /> : <I size={15} />}</span>
+                <span className="text-[13px] font-bold">{s.label}</span>
+              </button>
+            </React.Fragment>
           ); })}
         </div>
 
         {/* step body */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 sm:p-8 min-h-[360px]">
-          <PROG_StepBody stepKey={stepKey} program={virt} data={data} setData={setData} user={user} cur={cur} setCur={setCur}
+          {hallgatoiNezet ? <PROG_StepBody stepKey={stepKey} program={virt} data={data} setData={setData} user={user} cur={cur} setCur={setCur}
             onSubmit={async () => {
               /* Előbb mentünk (hogy az utolsó lépés adatai is bent legyenek),
                  utána a szerver fordítja át a sort az irodai szakaszba. */
@@ -472,12 +642,12 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice })
               if (error) { alert(error.message || 'A beadás nem sikerült. Próbáld újra.'); return; }
               setCur(c => ({ ...c, status: 'submitted' }));
               onSaved && onSaved({ ...cur, status: 'submitted' });
-            }} />
+            }} /> : <PROG_IrodaiLepes lepes={rail[lepes]} cur={cur} data={data} program={virt} />}
           <div className="flex items-center justify-between gap-3 mt-8 pt-5 border-t border-slate-100">
             <button onClick={goPrev} disabled={lepes === 0} className={U_btnGhost + (lepes === 0 ? ' opacity-0 pointer-events-none' : '')}><Lucide.ArrowLeft size={15} /> Vissza</button>
             <div className="flex items-center gap-3">
               <button onClick={async () => { await persist(); onExit && onExit(); }} disabled={saving} className="text-sm font-bold text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50">{saving ? 'Mentés…' : 'Mentés és kilépés'}</button>
-              {lepes < steps.length - 1 && <button onClick={goNext} className={U_btnPrimary} disabled={!PROG_canAdvance(stepKey, virt, data)}>Folytatás <Lucide.ArrowRight size={15} /></button>}
+              {hallgatoiNezet && lepes < steps.length - 1 && <button onClick={goNext} className={U_btnPrimary} disabled={!PROG_canAdvance(stepKey, virt, data)}>Folytatás <Lucide.ArrowRight size={15} /></button>}
             </div>
           </div>
         </div>
@@ -595,6 +765,10 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
   }
   if (stepKey === 'documents') {
     const docs = data.docs || {};
+    // Több képzésnél a kötelező dokumentumok uniója; a sor mutatja, melyik képzés kéri.
+    const valasztottK = program._valasztott || [];
+    const tobbKepzes = valasztottK.length > 1;
+    const feltoltveN = (program.required_docs || []).filter(id => PROG_dokFeltoltve(docs[id])).length;
     /* VALÓDI FELTÖLTÉS — korábban csak a fájl NEVÉT jegyeztük fel, maga a
        fájl eldobódott. Ezért nem látott semmit az ügyintéző a dokumentum-
        ellenőrzésnél, és állt meg a folyamat.
@@ -643,13 +817,14 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
     };
     return (
       <div className="space-y-5">
-        <PROG_Head icon={Lucide.Upload} title="Dokumentumok feltöltése" sub="Ezek a fájlok kötelezőek ehhez a képzéshez." />
+        <PROG_Head icon={Lucide.Upload} title="Dokumentumok feltöltése" sub={tobbKepzes ? 'A megjelölt képzések által kért összes dokumentum. Ami több képzéshez is kell, azt elég egyszer feltölteni.' : 'Ezek a fájlok kötelezőek ehhez a képzéshez.'} />
+        <p className="text-[12px] font-bold text-slate-400" data-dok-osszesito="1">{`${feltoltveN}/${(program.required_docs || []).length} dokumentum feltöltve`}</p>
         <div className="space-y-3">
           {(program.required_docs || []).map(id => { const got = docs[id]; return (
             <div key={id} className={'flex items-center justify-between gap-4 p-4 rounded-2xl border ' + (got ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-100')}>
               <div className="flex items-center gap-3 min-w-0">
                 <div className={'w-9 h-9 rounded-xl flex items-center justify-center flex-none ' + (got ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400')}>{got ? <Lucide.Check size={17} /> : <Lucide.FileText size={17} />}</div>
-                <div className="min-w-0"><div className="text-sm font-bold text-slate-700 truncate">{PROG_docLabel(id)}</div>{got && <div className="text-[11px] text-emerald-600 font-semibold truncate">{got.fileName}</div>}</div>
+                <div className="min-w-0"><div className="text-sm font-bold text-slate-700 truncate">{PROG_docLabel(id)}</div>{got && <div className="text-[11px] text-emerald-600 font-semibold truncate">{got.fileName}</div>}{tobbKepzes && <div className="mt-1 flex flex-wrap items-center gap-1" data-keri={id}><span className="text-[10px] font-bold text-slate-400">Kéri:</span>{valasztottK.filter(x => (x.required_docs || []).includes(id)).map(x => <span key={x.id} title={x.name} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold">{x.code || x.name}</span>)}</div>}</div>
               </div>
               <label className={U_btnGhost + ' flex-none cursor-pointer text-[13px] py-2 px-4 ' + (docBusy === id ? 'opacity-50 pointer-events-none' : '')}>
                 {docBusy === id ? 'Feltöltés…' : got ? 'Csere' : 'Feltöltés'}
@@ -787,6 +962,104 @@ const PROG_Head = ({ icon, title, sub }) => { const I = icon; return (
   <div className="flex items-start gap-3"><div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-none"><I size={20} /></div><div><h3 className="text-lg font-black text-slate-900 tracking-tight">{title}</h3><p className="text-sm text-slate-400">{sub}</p></div></div>
 ); };
 
+/* ---------- a jelentkezés irodai szakasza, a hallgató szemszögéből ----------
+   A beadás után a kártyáról indított jelentkezés NEM egy másik felületen
+   folytatódik: ugyanitt látszik a dokumentum-ellenőrzés, a döntés és a
+   felvételi levél — ugyanaz az állapot, amit az ügyintéző lát. */
+const PROG_IRODA_IKON = { check: Lucide.ShieldCheck, interview: Lucide.Video, decision: Lucide.Gavel, letter: Lucide.FileCheck };
+function PROG_IrodaiLepes({ lepes, cur, data, program }) {
+  if (!lepes) return null;
+  const beadva = !!cur.status && cur.status !== 'draft';
+  const elotte = !beadva ? (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600 flex items-start gap-2" role="note">
+      <Lucide.Info size={16} className="flex-none mt-0.5" />
+      <span>Ez a lépés a jelentkezés beadása után következik, a felvételi iroda végzi.</span>
+    </div>
+  ) : null;
+  if (lepes.key === 'check') {
+    const dok = PROG_dokKovetelmeny(data, program._valasztott || [], program.required_docs || []);
+    return (
+      <div className="space-y-5" data-iroda-lepes="check">
+        <PROG_Head icon={Lucide.ShieldCheck} title="Dokumentum-ellenőrzés" sub="A felvételi iroda átnézi és jóváhagyja a feltöltött dokumentumokat." />
+        {elotte}
+        <p className="text-[12px] font-bold text-slate-400">{`${dok.hitelesitve}/${dok.osszes} dokumentum jóváhagyva`}</p>
+        <div className="space-y-2">
+          {dok.items.map(d => (
+            <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100">
+              <span className={'w-8 h-8 rounded-lg flex items-center justify-center flex-none ' + (d.hitelesitve ? 'bg-emerald-500 text-white' : d.feltoltve ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500')}>
+                {d.hitelesitve ? <Lucide.ShieldCheck size={16} /> : d.feltoltve ? <Lucide.Clock size={16} /> : <Lucide.AlertCircle size={16} />}
+              </span>
+              <span className="flex-1 min-w-0 text-sm font-bold text-slate-700 truncate">{d.label}</span>
+              <span className={'text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ' + (d.hitelesitve ? 'bg-emerald-50 text-emerald-700' : d.feltoltve ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600')}>{d.hitelesitve ? 'Jóváhagyva' : d.feltoltve ? 'Ellenőrzésre vár' : 'Hiányzik'}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (lepes.key === 'interview') {
+    return (
+      <div className="space-y-5" data-iroda-lepes="interview">
+        <PROG_Head icon={Lucide.Video} title="Interjú" sub="Az interjú időpontját a felvételi iroda jelölte ki." />
+        <IV_ProcessInterview processId={cur.id} />
+      </div>
+    );
+  }
+  if (lepes.key === 'decision') {
+    const d = data.decision && PROG_DONTES_CIMKE[data.decision.outcome] ? data.decision : null;
+    const fp = d && d.programId ? (program._valasztott || []).find(x => x.id === d.programId) : null;
+    return (
+      <div className="space-y-5" data-iroda-lepes="decision">
+        <PROG_Head icon={Lucide.Gavel} title="Felvételi döntés" sub="A döntést a felvételi iroda hozza meg a dokumentumok és az interjú alapján." />
+        {elotte}
+        {!d ? (beadva && <p className="text-sm text-slate-500">Még nem született döntés. Amint megszületik, itt látod.</p>)
+          : d.outcome === 'admitted' ? (
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+              <div className="font-black text-emerald-800 flex items-center gap-2"><Lucide.CheckCircle2 size={18} /> Felvettünk!</div>
+              {fp && <p className="text-sm text-emerald-800 mt-1"><span>Képzés:</span> <span className="font-bold">{fp.name}</span></p>}
+            </div>
+          ) : d.outcome === 'rejected' ? (
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-red-700 font-black flex items-center gap-2"><Lucide.XCircle size={18} /> A jelentkezésedet ezúttal nem tudtuk elfogadni.</div>
+          ) : (
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5 text-slate-600 font-bold">A jelentkezéstől visszaléptél.</div>
+          )}
+      </div>
+    );
+  }
+  if (lepes.key === 'letter') {
+    const proc = { ...cur, data };
+    const kiment = !!(JourneyShared.letterSent && JourneyShared.letterSent(proc));
+    const LetterDoc = JourneyShared.LetterDoc;
+    return (
+      <div className="space-y-5" data-iroda-lepes="letter">
+        <PROG_Head icon={Lucide.FileCheck} title="Felvételi levél" sub="A felvételi levelet a felvételi iroda állítja ki és küldi el." />
+        {elotte}
+        {lepes.kihagyva ? <p className="text-sm text-slate-500">A döntés alapján felvételi levél nem készül.</p>
+          : (kiment && LetterDoc) ? <LetterDoc proc={proc} />
+          : (beadva && <p className="text-sm text-slate-500">A levél a felvételi döntés után készül el. Amint kiküldtük, itt olvashatod.</p>)}
+      </div>
+    );
+  }
+  return null;
+}
+
+/* A „Felvételi folyamat” gyűjtőnézetből megnyitott, kártyáról indított
+   jelentkezés: ugyanaz a nézet (ProgramApply), mint a Képzési kínálatból. */
+function PROG_FolyamatMegnyitas({ processId, user, onExit }) {
+  const [allapot, setAllapot] = useState(null);
+  const betolt = async () => {
+    const [programs, apps] = await Promise.all([PROG_loadPrograms(), PROG_loadApps(), PROG_loadDocTypes()]);
+    setAllapot({ programs: programs || [], app: (apps || []).find(a => a.id === processId) || null });
+  };
+  useEffect(() => { betolt(); }, [processId]);
+  const vissza = <button className={U_btnGhost} onClick={onExit}><Lucide.ArrowLeft size={15} /> Vissza a felvételi folyamatokhoz</button>;
+  if (!allapot) return <div className="h-64 rounded-3xl bg-white border border-slate-100 animate-pulse" />;
+  if (!allapot.app) return <div className="bg-white rounded-3xl border border-slate-100 p-8 text-center space-y-4"><p className="text-slate-500 font-semibold">A jelentkezés nem található.</p>{vissza}</div>;
+  const program = allapot.programs.find(x => x.id === PROG_appIds(allapot.app)[0]);
+  if (!program) return <div className="bg-white rounded-3xl border border-slate-100 p-8 text-center space-y-4"><p className="text-slate-500 font-semibold">A jelentkezés képzése már nem szerepel a kínálatban.</p>{vissza}</div>;
+  return <ProgramApply key={allapot.app.id} program={program} programs={allapot.programs} app={allapot.app} user={user} onExit={onExit} onSaved={() => betolt()} backLabel="Vissza a felvételi folyamatokhoz" />;
+}
+
 function PROG_MathStep({ data, setData }) {
   const [tasks, setTasks] = useState(null);
   const [ans, setAns] = useState({});
@@ -829,14 +1102,13 @@ function PROG_MathStep({ data, setData }) {
    A feltöltött dokumentumot a TÁROLÓBELI ÚTVONAL (path) jelzi. A régi
    bejegyzések csak a fájl nevét őrizték, maga a fájl nem került fel — azokat
    nem számoljuk feltöltöttnek, mert az ügyintéző sem látja őket. */
-function PROG_myState(p, mine) {
+function PROG_myState(p, mine, katalogus) {
   if (!mine) return { tier: 3 };
-  const docs = (mine.data && mine.data.docs) || {};
-  const kell = p.required_docs || [];
-  const feltoltve = kell.filter(d => docs[d] && docs[d].path).length;
-  const lepesek = (p.steps || []).filter(s => s !== 'review');
-  const lepes = Math.min(Number(mine.step_index) || 0, lepesek.length);
-  const alap = { feltoltve, kell: kell.length, lepes, osszes: lepesek.length };
+  /* Ugyanaz a valós állapot, mint a lépéssávon és a „Felvételi folyamat”
+     gyűjtőnézetben: a kész lépés és a feltöltött dokumentum az adatból számol,
+     több képzésnél a megjelölt képzések uniójával. */
+  const fa = PROG_folyamatAllapot(mine, katalogus && katalogus.length ? katalogus : [p]);
+  const alap = { feltoltve: fa.dok.feltoltve, kell: fa.dok.osszes, lepes: fa.kesz, osszes: fa.osszes, fa };
   if (mine.status && mine.status !== 'draft') return { tier: 1, ...alap };
   if (!p.is_open) return { tier: 2, ...alap };
   return { tier: 0, ...alap };
@@ -869,7 +1141,7 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg, felev, setF
      sorrendben. A rendezés a SZŰRT listán fut, tehát a szint- és a keresőszűrő
      ugyanúgy működik, mint eddig. */
   const ordered = list
-    .map((p, i) => { const mine = myApps.find(a => PROG_appIds(a).includes(p.id)); return { p, i, mine, st: PROG_myState(p, mine) }; })
+    .map((p, i) => { const mine = myApps.find(a => PROG_appIds(a).includes(p.id)); return { p, i, mine, st: PROG_myState(p, mine, programs) }; })
     .sort((a, b) => {
       if (a.st.tier !== b.st.tier) return a.st.tier - b.st.tier;
       if (a.st.tier === 0) {
@@ -931,7 +1203,7 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg, felev, setF
               <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
                 <UBadge tone={PROG_LEVEL_TONE[p.level]} className="!bg-white/90 backdrop-blur">{p.degree}</UBadge>
                 {kiemelt ? <UBadge tone="amber" className="!bg-white/90 backdrop-blur">Folytatandó</UBadge>
-                  : st.tier === 1 ? <UBadge tone={stat.tone} className="!bg-white/90 backdrop-blur">{stat.label}</UBadge>
+                  : st.tier === 1 ? <UBadge tone={st.fa ? PROG_allapotTone(st.fa) : stat.tone} className="!bg-white/90 backdrop-blur">{st.fa ? st.fa.cimke : stat.label}</UBadge>
                   : !p.is_open ? <UBadge tone="red" className="!bg-white/90 backdrop-blur">Lezárva</UBadge> : null}
               </div>
             </div>
@@ -940,6 +1212,13 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg, felev, setF
                 <span>{`${st.lepes}/${st.osszes} lépés kész`}</span>
                 {st.kell > 0 && <span>{`${st.feltoltve}/${st.kell} dokumentum feltöltve`}</span>}
                 {hd && <span className={hd.surgos ? 'text-red-600' : ''}>{hd.szoveg}</span>}
+              </div>
+            )}
+            {st.tier === 1 && st.fa && (
+              <div className="px-5 py-2.5 bg-blue-50 border-b border-blue-100 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-blue-800" data-kartya-allapot="1">
+                <span>{`${st.lepes}/${st.osszes} lépés kész`}</span>
+                {st.kell > 0 && <span>{`${st.feltoltve}/${st.kell} dokumentum feltöltve`}</span>}
+                {st.fa.aktualis && !['rejected', 'withdrawn', 'cancelled', 'accepted'].includes(st.fa.kod) && <span><span>Következő:</span> <span>{st.fa.aktualis.label}</span></span>}
               </div>
             )}
             {st.tier === 2 && (
