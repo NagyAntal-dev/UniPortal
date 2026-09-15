@@ -27,6 +27,13 @@ const APP_TABLE = 'admission_processes', APP_LS = 'uni_applications';
 const PROG_fromRow = (r) => !r ? r : ({
   id:              r.id,
   program_id:      r.program_id || (r.data && r.data.program_id) || '',
+  /* Egy képzés-jelentkezés legfeljebb 3 képzésre szólhat (data.program_ids, a
+     sorrend a preferencia), egy félévre (data.term). A régi, egyképzéses sorban
+     csak a program_id van — abból lesz az egyelemű lista. */
+  program_ids:     (r.data && Array.isArray(r.data.program_ids) && r.data.program_ids.length) ? r.data.program_ids
+                   : ((r.program_id || (r.data && r.data.program_id)) ? [r.program_id || r.data.program_id] : []),
+  term:            (r.data && r.data.term) || '',
+  ref_no:          r.ref_no || null,
   applicant_email: r.owner_email || r.applicant_email || '',
   applicant_name:  r.applicant_name || '',
   // A felület 'draft' / 'submitted' párost vár; a tábla szakaszt tárol.
@@ -38,6 +45,8 @@ const PROG_fromRow = (r) => !r ? r : ({
 });
 
 const PROG_STEP_DEFS = {
+  // Csak a képzésre szóló jelentkezés első lépése — a szerkesztőben nem választható.
+  choice:     { label: 'Képzések és félév',   icon: Lucide.ListChecks },
   personal:   { label: 'Személyes adatok',    icon: Lucide.User },
   documents:  { label: 'Dokumentumok',           icon: Lucide.Upload },
   language:   { label: 'Angol nyelvtudás',  icon: Lucide.Languages },
@@ -122,6 +131,59 @@ const PROG_PROGRAM_LEVELS = ['course', 'training', 'company_visit', 'preparatory
    amíg az admin át nem írja a sajátjára. */
 const PROG_DEFAULT_DEGREE = { preparatory: 'Certificate', course: 'Short course', training: 'Training', company_visit: 'Company visit', excursion: 'Excursion', bachelor: 'BSc', master: 'MA', doctoral: 'PhD' };
 const PROG_kind = (p) => (p && p.kind) || (PROG_DEGREE_LEVELS.includes(p && p.level) ? 'degree' : 'program');
+
+/* FÉLÉVEK ÉS TÖBB KÉPZÉS — 60_admission_decision_terms.sql
+   ------------------------------------------------------------------
+   A képzés `intakes` mezője mondja meg, melyik félévben indul: autumn (őszi),
+   spring (tavaszi). A jelentkező egy konkrét félévre jelentkezik; a kód az ECHO
+   kurzusokéval azonos: 'ÉÉÉÉ/ÉÉ/F' (F: 1 = őszi, 2 = tavaszi), pl. '2027/28/1'.
+   A migráció előtt a programs táblának nincs intakes oszlopa: ilyenkor minden
+   képzés mindkét félévben indul, és a szerkesztő nem küldi a mezőt (különben a
+   PostgREST az egész mentést elutasítaná). */
+const PROG_INTAKES = { autumn: 'Őszi félév', spring: 'Tavaszi félév' };
+let PROG_INTAKE_COL = false;
+const PROG_intakesOf = (p) => {
+  const l = (p && Array.isArray(p.intakes)) ? p.intakes.filter(x => PROG_INTAKES[x]) : [];
+  return l.length ? l : ['autumn', 'spring'];
+};
+const PROG_termSeason = (code) => /\/1$/.test(String(code || '')) ? 'autumn' : (/\/2$/.test(String(code || '')) ? 'spring' : '');
+// A következő két induló félév, időrendben: tavaszi (február 1.) és őszi (szeptember 1.).
+function PROG_upcomingTerms(most) {
+  const d = most || new Date();
+  const y = d.getFullYear(), m = d.getMonth();
+  const tavasz = m >= 1 ? y + 1 : y;
+  const osz = m >= 8 ? y + 1 : y;
+  return [
+    { season: 'spring', code: (tavasz - 1) + '/' + String(tavasz % 100).padStart(2, '0') + '/2', start: new Date(tavasz, 1, 1) },
+    { season: 'autumn', code: osz + '/' + String((osz + 1) % 100).padStart(2, '0') + '/1', start: new Date(osz, 8, 1) },
+  ].sort((a, b) => a.start - b.start);
+}
+// Egyetlen szövegcsomópont, hogy a nyelvváltó kifejezés-mintája ráilleszkedjen.
+function PROG_termLabel(code, rovid) {
+  const m = /^(\d{4})\/(\d{2})\/([12])$/.exec(String(code || ''));
+  if (!m) return String(code || '');
+  const osz = m[3] === '1';
+  const alap = `${m[1]}/${m[2]} ${osz ? 'őszi' : 'tavaszi'} félév`;
+  if (rovid) return alap;
+  return `${alap} (kezdés: ${osz ? m[1] + '. szeptember' : (Number(m[1]) + 1) + '. február'})`;
+}
+const PROG_MAX_DEGREES = 3;
+// Egy jelentkezés képzései preferencia-sorrendben (azonosítók).
+const PROG_appIds = (a) => (a && Array.isArray(a.program_ids) && a.program_ids.length) ? a.program_ids
+  : (a && a.data && Array.isArray(a.data.program_ids) && a.data.program_ids.length) ? a.data.program_ids
+  : (a && a.program_id ? [a.program_id] : []);
+/* Több képzés EGY folyamatban: a lépések és a kötelező dokumentumok uniója; a
+   lépések a PROG_STEP_DEFS sorrendjében, a beadás mindig a végén. */
+function PROG_mergeFlow(progs) {
+  const rend = Object.keys(PROG_STEP_DEFS);
+  const lepesek = new Set(), dok = [];
+  (progs || []).forEach(p => {
+    (p.steps || []).forEach(x => lepesek.add(x));
+    (p.required_docs || []).forEach(x => { if (!dok.includes(x)) dok.push(x); });
+  });
+  const steps = rend.filter(x => lepesek.has(x) && x !== 'review' && x !== 'choice').concat(['review']);
+  return { steps, required_docs: dok };
+}
 
 const PROG_IMGS = {
   'prep-engmath': 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=70',
@@ -238,6 +300,8 @@ async function PROG_loadPrograms() {
     if (DL_PROBE[PROG_TABLE] === 'ls') { try { dlLocalSave(PROG_LS, merged); } catch (e) {} }
     else if (DL_PROBE[PROG_TABLE] === 'sb' && missing.length && window.sb) { try { await window.sb.from(PROG_TABLE).upsert(missing.map(s => ({ ...s, image_url: PROG_IMGS[s.id] || null })), { onConflict: 'id', ignoreDuplicates: true }); } catch (e) {} }
   }
+  // A 60-as migráció után a sorok hordozzák az intakes mezőt; localStorage-ban bármi tárolható.
+  PROG_INTAKE_COL = DL_PROBE[PROG_TABLE] === 'ls' || list.some(x => x && Object.prototype.hasOwnProperty.call(x, 'intakes'));
   return merged;
 }
 const PROG_loadApps = async () =>
@@ -289,6 +353,7 @@ function PROG_Detail({ program, myApp, onClose, onApply }) {
         <div className="flex flex-wrap gap-2">
           <UBadge tone={PROG_LEVEL_TONE[program.level]}>{PROG_LEVELS[program.level]}</UBadge>
           {(program.tags || []).map(t => <UBadge key={t} tone="slate">{t}</UBadge>)}
+          {PROG_kind(program) === 'degree' && PROG_intakesOf(program).map(k => <UBadge key={'i' + k} tone="violet">{PROG_INTAKES[k]}</UBadge>)}
         </div>
         <p className="text-sm text-slate-500 leading-relaxed">{program.summary}</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -325,42 +390,69 @@ function PROG_Detail({ program, myApp, onClose, onApply }) {
   );
 }
 
-/* ---------- student: the apply flow (runs the programme's own steps) ---------- */
-function ProgramApply({ program, app, user, onExit, onSaved }) {
-  const steps = program.steps || ['personal', 'review'];
-  const [cur, setCur] = useState(app);
-  const [idx, setIdx] = useState(Math.min(app.step_index || 0, steps.length - 1));
-  const [saving, setSaving] = useState(false);
+/* ---------- student: the apply flow (runs the programme's own steps) ----------
+   KÉPZÉSNÉL a jelentkezés legfeljebb 3 képzésre szólhat — EGY felvételi folyamat.
+   Az első lépés a képzések és a félév kiválasztása, a többi a kiválasztott
+   képzések lépéseinek és kötelező dokumentumainak uniója. Az interjú után a
+   felvételi iroda dönt, melyik képzésre vesszük fel (admission_decide).
+   Kisebb programnál minden a régi: egy program, a saját lépései. */
+function ProgramApply({ program, programs, app, user, onExit, onSaved, notice }) {
+  const isDeg = PROG_kind(program) === 'degree';
+  const regiPiszkozat = isDeg && !(app.data && Array.isArray(app.data.program_ids) && app.data.program_ids.length);
+  const [cur, setCur] = useState(() => regiPiszkozat
+    ? { ...app, data: { ...(app.data || {}), program_ids: PROG_appIds(app).length ? PROG_appIds(app) : [program.id] } }
+    : app);
   const data = cur.data || {};
   const setData = (patch) => setCur(c => ({ ...c, data: { ...(c.data || {}), ...patch } }));
+  const katalogus = programs && programs.length ? programs : [program];
+  const valasztott = isDeg ? PROG_appIds({ data }).map(id => katalogus.find(x => x.id === id)).filter(Boolean) : [program];
+  const folyam = isDeg ? PROG_mergeFlow(valasztott.length ? valasztott : [program]) : { steps: program.steps || ['personal', 'review'], required_docs: program.required_docs || [] };
+  const steps = isDeg ? ['choice', ...folyam.steps] : folyam.steps;
+  const nevek = valasztott.map(x => x.name);
+  const virt = { ...program, steps, required_docs: folyam.required_docs, name: nevek.length > 1 ? nevek.join(', ') : program.name, _valasztott: valasztott, _katalogus: katalogus };
+  // A régi piszkozatnál az új első lépés miatt eggyel odébb van a mentett lépés.
+  const [idx, setIdx] = useState(Math.min((app.step_index || 0) + (regiPiszkozat ? 1 : 0), steps.length - 1));
+  const lepes = Math.max(0, Math.min(idx, steps.length - 1));
+  const [saving, setSaving] = useState(false);
 
   const persist = async (extra = {}) => {
     setSaving(true);
-    const patch = { student_step: idx, data: cur.data || {}, updated_at: new Date().toISOString(), ...extra };
+    const ids = PROG_appIds({ data: cur.data || {} });
+    const patch = { student_step: lepes, data: cur.data || {}, updated_at: new Date().toISOString(), ...(isDeg && ids.length ? { program_id: ids[0] } : {}), ...extra };
     const saved = await dlUpdate(APP_TABLE, cur.id, patch, APP_LS);
     setSaving(false);
     if (saved) { const m = PROG_fromRow(saved); setCur(m); onSaved && onSaved(m); }
     return saved;
   };
-  const goNext = async () => { const n = Math.min(idx + 1, steps.length - 1); setIdx(n); await persist({ student_step: n }); };
-  const goPrev = () => setIdx(i => Math.max(0, i - 1));
-  const stepKey = steps[idx];
+  const goNext = async () => { const n = Math.min(lepes + 1, steps.length - 1); setIdx(n); await persist({ student_step: n }); };
+  const goPrev = () => setIdx(Math.max(0, lepes - 1));
+  const stepKey = steps[lepes];
+  const statusz = PROG_STATUS[cur.status] || null;
 
   return (
     <div className="max-w-5xl 2xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 animate-in fade-in duration-300">
       <button onClick={onExit} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-primary mb-4 transition-colors"><Lucide.ArrowLeft size={16} /> Vissza a képzésekhez</button>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <div>
-          <p className="text-primary font-black text-xs uppercase tracking-widest mb-1">{program.degree} jelentkezés</p>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">{program.name}</h1>
+        <div className="min-w-0">
+          <p className="text-primary font-black text-xs uppercase tracking-widest mb-1">{isDeg && valasztott.length > 1 ? `Jelentkezés ${valasztott.length} képzésre` : <>{program.degree} jelentkezés</>}</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">{isDeg && nevek.length > 1 ? nevek.join(' · ') : program.name}</h1>
+          {isDeg && data.term && <p className="text-sm font-bold text-slate-400 mt-1">{PROG_termLabel(data.term)}</p>}
         </div>
-        <UBadge tone={PROG_STATUS[cur.status] ? PROG_STATUS[cur.status].tone : 'slate'}>{PROG_STATUS[cur.status] ? PROG_STATUS[cur.status].label : cur.status}</UBadge>
+        <div className="flex items-center gap-2 flex-none">
+          {cur.ref_no && <UBadge>{'FV-' + String(cur.ref_no).padStart(5, '0')}</UBadge>}
+          <UBadge tone={statusz ? statusz.tone : 'slate'}>{statusz ? statusz.label : cur.status}</UBadge>
+        </div>
       </div>
+      {notice && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800" role="status">
+          <Lucide.Info size={16} className="flex-none mt-0.5" /><span>{notice}</span>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-[240px,1fr] gap-6">
         {/* step rail */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-3 h-fit">
-          {steps.map((s, i) => { const def = PROG_STEP_DEFS[s] || { label: s, icon: Lucide.Circle }; const I = def.icon; const done = i < idx; const active = i === idx; return (
+          {steps.map((s, i) => { const def = PROG_STEP_DEFS[s] || { label: s, icon: Lucide.Circle }; const I = def.icon; const done = i < lepes; const active = i === lepes; return (
             <button key={s} onClick={() => setIdx(i)} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors ' + (active ? 'bg-primary/10 text-primary' : done ? 'text-emerald-600 hover:bg-slate-50' : 'text-slate-500 hover:bg-slate-50')}>
               <span className={'w-7 h-7 rounded-lg flex items-center justify-center flex-none ' + (active ? 'bg-primary text-white' : done ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400')}>{done ? <Lucide.Check size={15} /> : <I size={15} />}</span>
               <span className="text-[13px] font-bold">{def.label}</span>
@@ -370,11 +462,11 @@ function ProgramApply({ program, app, user, onExit, onSaved }) {
 
         {/* step body */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 sm:p-8 min-h-[360px]">
-          <PROG_StepBody stepKey={stepKey} program={program} data={data} setData={setData} user={user} cur={cur} setCur={setCur}
+          <PROG_StepBody stepKey={stepKey} program={virt} data={data} setData={setData} user={user} cur={cur} setCur={setCur}
             onSubmit={async () => {
               /* Előbb mentünk (hogy az utolsó lépés adatai is bent legyenek),
                  utána a szerver fordítja át a sort az irodai szakaszba. */
-              await persist({ student_step: idx });
+              await persist({ student_step: lepes });
               if (!window.sb) return;
               const { error } = await window.sb.rpc('application_submit', { p_id: cur.id });
               if (error) { alert(error.message || 'A beadás nem sikerült. Próbáld újra.'); return; }
@@ -382,10 +474,10 @@ function ProgramApply({ program, app, user, onExit, onSaved }) {
               onSaved && onSaved({ ...cur, status: 'submitted' });
             }} />
           <div className="flex items-center justify-between gap-3 mt-8 pt-5 border-t border-slate-100">
-            <button onClick={goPrev} disabled={idx === 0} className={U_btnGhost + (idx === 0 ? ' opacity-0 pointer-events-none' : '')}><Lucide.ArrowLeft size={15} /> Vissza</button>
+            <button onClick={goPrev} disabled={lepes === 0} className={U_btnGhost + (lepes === 0 ? ' opacity-0 pointer-events-none' : '')}><Lucide.ArrowLeft size={15} /> Vissza</button>
             <div className="flex items-center gap-3">
               <button onClick={async () => { await persist(); onExit && onExit(); }} disabled={saving} className="text-sm font-bold text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50">{saving ? 'Mentés…' : 'Mentés és kilépés'}</button>
-              {idx < steps.length - 1 && <button onClick={goNext} className={U_btnPrimary} disabled={!PROG_canAdvance(stepKey, program, data)}>Folytatás <Lucide.ArrowRight size={15} /></button>}
+              {lepes < steps.length - 1 && <button onClick={goNext} className={U_btnPrimary} disabled={!PROG_canAdvance(stepKey, virt, data)}>Folytatás <Lucide.ArrowRight size={15} /></button>}
             </div>
           </div>
         </div>
@@ -395,10 +487,18 @@ function ProgramApply({ program, app, user, onExit, onSaved }) {
 }
 
 function PROG_canAdvance(stepKey, program, data) {
+  if (stepKey === 'choice') {
+    const ids = PROG_appIds({ data });
+    const evszak = PROG_termSeason(data.term);
+    const kat = program._katalogus || [];
+    return !!evszak && ids.length >= 1 && ids.length <= PROG_MAX_DEGREES
+      && ids.every(id => { const p = kat.find(x => x.id === id); return !p || PROG_intakesOf(p).includes(evszak); });
+  }
   if (stepKey === 'documents') return (program.required_docs || []).every(d => data.docs && data.docs[d]);
   if (stepKey === 'math') return data.math && data.math.passed;
   if (stepKey === 'motivation') return (data.motivation || '').trim().length >= 40;
-  if (stepKey === 'interview') return data.interview && data.interview.slot;
+  // Új (61-es) formában a `booked` dönt; a régi, beégetett foglalásnak csak `slot`-ja van.
+  if (stepKey === 'interview') return !!(data.interview && (data.interview.booked || (!data.interview.status && data.interview.slot)));
   if (stepKey === 'fee') return program.tuition === 0 || (data.fee && data.fee.paid);
   if (stepKey === 'personal') return data.personal && data.personal.name && data.personal.country;
   return true;
@@ -412,6 +512,71 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
   const [docBusy, setDocBusy] = useState('');
   const [docErr, setDocErr] = useState('');
 
+  if (stepKey === 'choice') {
+    const kat = program._katalogus || [];
+    const beadva = !!(cur.status && cur.status !== 'draft');
+    const felevek = PROG_upcomingTerms();
+    const term = data.term || '';
+    const evszak = PROG_termSeason(term);
+    const ids = PROG_appIds({ data });
+    const setIds = (uj) => setData({ program_ids: uj.slice(0, PROG_MAX_DEGREES) });
+    const mozgat = (i, irany) => { const u = [...ids]; const j = i + irany; if (j < 0 || j >= u.length) return; [u[i], u[j]] = [u[j], u[i]]; setIds(u); };
+    const nyitott = kat.filter(x => PROG_kind(x) === 'degree' && x.is_open && !ids.includes(x.id));
+    return (
+      <div className="space-y-7" data-lepes-kepzesek="1">
+        <PROG_Head icon={Lucide.ListChecks} title="Képzések és félév" sub="Egy jelentkezésben legfeljebb 3 képzést jelölhetsz meg. A sorrend a preferenciád — az interjú után a felvételi iroda dönt, melyikre veszünk fel." />
+        <div>
+          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Melyik félévre jelentkezel?</div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {felevek.map(t => { const on = term === t.code; return (
+              <button key={t.code} type="button" disabled={beadva} aria-pressed={on} onClick={() => setData({ term: t.code })}
+                className={'text-left p-4 rounded-2xl border transition-all disabled:cursor-not-allowed ' + (on ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'border-slate-100 hover:border-slate-300')}>
+                <div className="flex items-center gap-2"><Lucide.CalendarRange size={16} className={on ? 'text-primary' : 'text-slate-400'} /><span className="font-black text-slate-800">{PROG_termLabel(t.code, true)}</span></div>
+                <div className="text-[12px] font-semibold text-slate-400 mt-1">{PROG_termLabel(t.code)}</div>
+              </button>
+            ); })}
+          </div>
+          {term && !felevek.some(t => t.code === term) && <p className="mt-2 text-[12px] font-bold text-slate-500">{'Mentett félév: ' + PROG_termLabel(term)}</p>}
+        </div>
+        <div>
+          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{`Megjelölt képzések (${ids.length}/${PROG_MAX_DEGREES})`}</div>
+          <div className="space-y-2">
+            {ids.map((id, i) => { const x = kat.find(k => k.id === id); const nemIndul = !!(x && evszak && !PROG_intakesOf(x).includes(evszak)); return (
+              <div key={id} className={'flex items-center gap-3 p-3 rounded-2xl border ' + (nemIndul ? 'border-red-200 bg-red-50/60' : 'border-slate-100')}>
+                <span className="w-7 h-7 rounded-lg bg-primary text-white text-xs font-black flex items-center justify-center flex-none">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-slate-800 truncate">{x ? x.name : id}</div>
+                  <div className="text-[11px] font-semibold text-slate-400 flex flex-wrap gap-x-2">
+                    {x && <span>{x.degree}</span>}
+                    {x && <span>{PROG_intakesOf(x).map(k => PROG_INTAKES[k]).join(' · ')}</span>}
+                  </div>
+                  {nemIndul && <div className="text-[11px] font-bold text-red-600 mt-0.5">Ez a képzés a választott félévben nem indul.</div>}
+                </div>
+                {!beadva && (
+                  <div className="flex items-center gap-1 flex-none">
+                    <button type="button" aria-label="Feljebb" onClick={() => mozgat(i, -1)} disabled={i === 0} className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 disabled:opacity-30 flex items-center justify-center"><Lucide.ChevronUp size={16} /></button>
+                    <button type="button" aria-label="Lejjebb" onClick={() => mozgat(i, 1)} disabled={i === ids.length - 1} className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 disabled:opacity-30 flex items-center justify-center"><Lucide.ChevronDown size={16} /></button>
+                    <button type="button" aria-label="Eltávolítás" onClick={() => setIds(ids.filter(k => k !== id))} disabled={ids.length === 1} className="w-8 h-8 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 disabled:opacity-30 flex items-center justify-center"><Lucide.X size={16} /></button>
+                  </div>
+                )}
+              </div>
+            ); })}
+          </div>
+          {!beadva && ids.length < PROG_MAX_DEGREES && nyitott.length > 0 && (
+            <div className="mt-3">
+              <UField label="További képzés hozzáadása">
+                <select className={U_input} value="" onChange={e => { if (e.target.value) setIds([...ids, e.target.value]); }}>
+                  <option value="">Válassz képzést…</option>
+                  {nyitott.map(x => { const ok = !evszak || PROG_intakesOf(x).includes(evszak); return <option key={x.id} value={x.id} disabled={!ok}>{x.name + (ok ? '' : ' — ebben a félévben nem indul')}</option>; })}
+                </select>
+              </UField>
+            </div>
+          )}
+          {beadva && <p className="mt-3 text-[12px] font-semibold text-slate-400">A beadott jelentkezés képzései és féléve már nem módosíthatók.</p>}
+        </div>
+      </div>
+    );
+  }
   if (stepKey === 'personal') {
     const p = data.personal || { name: (user && user.name) || '', email: (user && user.email) || '', phone: '', country: '', dob: '' };
     const set = (k, v) => setData({ personal: { ...p, [k]: v } });
@@ -529,23 +694,33 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
   if (stepKey === 'math') return <PROG_MathStep data={data} setData={setData} />;
   if (stepKey === 'interview') {
     const iv = data.interview || {};
+    /* A régi, beégetett időpontlista CSAK akkor jelenik meg, ha a 61-es
+       migráció még nem futott le (vagy nincs adatbázis-kapcsolat) — az
+       IV_ProcessInterview ilyenkor ezt a tartalékot rendereli. */
     const slots = PROG_slots();
     const book = (s) => setData({ interview: { slot: s.time, interviewer: s.interviewer, teamsUrl: 'https://teams.microsoft.com/l/meetup-join/nje-' + s.id } });
+    const regi = iv.slot ? (
+      <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-100">
+        <div className="flex items-center gap-2 text-emerald-700 font-black mb-2"><Lucide.CalendarCheck size={18} /> Interjú lefoglalva</div>
+        <div className="text-sm text-slate-600 font-bold">{DL_dateLong(iv.slot)} · {new Date(iv.slot).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
+        <div className="text-sm text-slate-500">Interjúztató: {iv.interviewer} · Microsoft Teams</div>
+        <button className="text-xs font-bold text-slate-400 hover:text-primary mt-2" onClick={() => setData({ interview: {} })}>Időpont módosítása</button>
+      </div>
+    ) : (
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {slots.map(s => <button key={s.id} onClick={() => book(s)} className="text-left p-4 rounded-2xl border border-slate-100 hover:border-primary hover:bg-primary/5 transition-all"><div className="font-black text-slate-800 text-sm">{DL_date(s.time)}</div><div className="text-primary font-bold text-sm">{new Date(s.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div><div className="text-[11px] text-slate-400 mt-1">{s.interviewer}</div></button>)}
+      </div>
+    );
+    // A szerver állapotát tükrözzük a data.interview-ban: ettől nyílik a „Folytatás”.
+    const allapot = (st) => {
+      const c = st && st.current;
+      const uj = c ? { slotId: c.id, status: c.status, booked: c.status === 'Booked', slot: c.start, start: c.start, end: c.end, interviewer: c.interviewer_name, teamsUrl: c.teams_url } : {};
+      if ((iv.slotId || '') !== (uj.slotId || '') || (iv.status || '') !== (uj.status || '')) setData({ interview: uj });
+    };
     return (
       <div className="space-y-5">
         <PROG_Head icon={Lucide.Video} title="Online interjú foglalása" sub="A foglaláskor automatikusan létrejön a Microsoft Teams meeting." />
-        {iv.slot ? (
-          <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-100">
-            <div className="flex items-center gap-2 text-emerald-700 font-black mb-2"><Lucide.CalendarCheck size={18} /> Interjú lefoglalva</div>
-            <div className="text-sm text-slate-600 font-bold">{DL_dateLong(iv.slot)} · {new Date(iv.slot).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
-            <div className="text-sm text-slate-500">Interjúztató: {iv.interviewer} · Microsoft Teams</div>
-            <button className="text-xs font-bold text-slate-400 hover:text-primary mt-2" onClick={() => setData({ interview: {} })}>Időpont módosítása</button>
-          </div>
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {slots.map(s => <button key={s.id} onClick={() => book(s)} className="text-left p-4 rounded-2xl border border-slate-100 hover:border-primary hover:bg-primary/5 transition-all"><div className="font-black text-slate-800 text-sm">{DL_date(s.time)}</div><div className="text-primary font-bold text-sm">{new Date(s.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div><div className="text-[11px] text-slate-400 mt-1">{s.interviewer}</div></button>)}
-          </div>
-        )}
+        <IV_ProcessInterview processId={cur.id} fallback={regi} onState={allapot} />
       </div>
     );
   }
@@ -586,6 +761,15 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
           </div>
         ) : (
           <>
+            {PROG_kind(program) === 'degree' && (program._valasztott || []).length > 0 && (
+              <div className="p-4 rounded-2xl border border-slate-100 space-y-2">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Megjelölt képzések és félév</div>
+                <ol className="space-y-1">
+                  {program._valasztott.map((x, i) => <li key={x.id} className="text-sm font-bold text-slate-700">{(i + 1) + '. ' + x.name}</li>)}
+                </ol>
+                {data.term && <div className="text-[12px] font-semibold text-slate-500">{PROG_termLabel(data.term)}</div>}
+              </div>
+            )}
             <div className="space-y-2">
               {program.steps.filter(s => s !== 'review').map(s => { const def = PROG_STEP_DEFS[s]; const done = PROG_canAdvance(s, program, data); return (
                 <div key={s} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50"><span className={'w-6 h-6 rounded-lg flex items-center justify-center flex-none ' + (done ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-white')}>{done ? <Lucide.Check size={13} /> : <Lucide.Minus size={13} />}</span><span className="text-sm font-bold text-slate-600">{def ? def.label : s}</span><span className="ml-auto text-[11px] font-black uppercase tracking-wider text-slate-400">{done ? 'Kész' : 'Hiányos'}</span></div>
@@ -665,10 +849,14 @@ function PROG_hataridoSzoveg(p) {
   return { szoveg: d === 0 ? 'ma jár le a határidő' : `még ${d} nap a határidőig`, surgos: d <= 7 };
 }
 
-function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg }) {
+function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg, felev, setFelev, kijelolt, onKijelol }) {
   const [level, setLevel] = useState('all');
   const [q, setQ] = useState('');
-  const list = programs.filter(p => (level === 'all' || p.level === level) && (!q || (p.name + ' ' + p.faculty).toLowerCase().includes(q.toLowerCase())));
+  const evszak = isDeg ? PROG_termSeason(felev) : '';
+  const alapLista = programs.filter(p => (level === 'all' || p.level === level) && (!q || (p.name + ' ' + p.faculty).toLowerCase().includes(q.toLowerCase())));
+  // Képzésnél csak a választott félévben induló látszik — a saját jelentkezéseié mindig.
+  const list = alapLista.filter(p => !evszak || PROG_intakesOf(p).includes(evszak) || myApps.some(a => PROG_appIds(a).includes(p.id)));
+  const rejtett = alapLista.length - list.length;
   // Csak a saját kínálat típusai, és közülük is csak azok, amelyekből van tétel —
   // egy üres szűrőgomb csak zsákutca.
   const chips = [['all', isDeg ? 'Minden szint' : 'Minden típus'],
@@ -680,7 +868,7 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg }) {
      sorrendben. A rendezés a SZŰRT listán fut, tehát a szint- és a keresőszűrő
      ugyanúgy működik, mint eddig. */
   const ordered = list
-    .map((p, i) => { const mine = myApps.find(a => a.program_id === p.id); return { p, i, mine, st: PROG_myState(p, mine) }; })
+    .map((p, i) => { const mine = myApps.find(a => PROG_appIds(a).includes(p.id)); return { p, i, mine, st: PROG_myState(p, mine) }; })
     .sort((a, b) => {
       if (a.st.tier !== b.st.tier) return a.st.tier - b.st.tier;
       if (a.st.tier === 0) {
@@ -702,6 +890,19 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg }) {
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1"><Lucide.Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" /><input className={U_input + ' pl-10'} placeholder={isDeg ? 'Keresés a képzések között…' : 'Keresés a programok között…'} value={q} onChange={e => setQ(e.target.value)} /></div>
       </div>
+      {isDeg && felev && setFelev && (
+        <div className="mb-5 rounded-2xl border border-slate-100 bg-white p-4" data-felev-valaszto="1">
+          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Melyik félévre jelentkeznél?</div>
+          <div className="flex flex-wrap gap-2">
+            {PROG_upcomingTerms().map(t => (
+              <button key={t.code} type="button" aria-pressed={felev === t.code} onClick={() => setFelev(t.code)}
+                className={'px-4 py-2 rounded-full text-[13px] font-bold transition-all ' + (felev === t.code ? 'bg-primary text-white' : 'bg-slate-50 border border-slate-100 text-slate-600 hover:border-slate-300')}>{PROG_termLabel(t.code, true)}</button>
+            ))}
+          </div>
+          <p className="text-[12px] text-slate-400 font-semibold mt-2">Egy jelentkezésben legfeljebb 3 képzést jelölhetsz meg — jelöld ki őket a kártyákon.</p>
+          {rejtett > 0 && <p className="text-[12px] text-slate-500 font-bold mt-1">{`${rejtett} képzés ebben a félévben nem indul, ezért nem látszik.`}</p>}
+        </div>
+      )}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-5 custom-scrollbar">
         {chips.map(([k, label]) => <button key={k} onClick={() => setLevel(k)} className={'flex-none px-4 py-2 rounded-full text-[13px] font-bold transition-all ' + (level === k ? 'bg-slate-900 text-white' : 'bg-white border border-slate-100 text-slate-500 hover:border-slate-300')}>{label}</button>)}
       </div>
@@ -746,9 +947,16 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg }) {
             <div className="p-5 flex flex-col flex-1">
               <h3 className="font-black text-slate-900 tracking-tight leading-snug">{p.name}</h3>
               <p className="text-[12px] text-slate-400 font-semibold mt-1">{p.faculty}</p>
+              {isDeg && <p className="text-[11px] font-bold text-violet-600 mt-1">{PROG_intakesOf(p).map(k => PROG_INTAKES[k]).join(' · ')}</p>}
               <p className="text-sm text-slate-500 mt-3 leading-relaxed line-clamp-3 flex-1">{p.summary}</p>
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-50">
                 <div><div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Tandíj</div><div className="font-black text-slate-800">{DL_money(p.tuition)}{p.tuition ? <span className="text-[11px] text-slate-400 font-bold">/sem</span> : ''}</div></div>
+                {isDeg && !mine && p.is_open && onKijelol && (() => { const on = (kijelolt || []).includes(p.id); const tele = !on && (kijelolt || []).length >= PROG_MAX_DEGREES; return (
+                  <button type="button" onClick={() => onKijelol(p.id)} disabled={tele} aria-pressed={on} title={tele ? 'Legfeljebb 3 képzés jelölhető meg.' : undefined}
+                    className={'mr-auto ml-3 px-3 py-1.5 rounded-xl text-[12px] font-black inline-flex items-center gap-1.5 border transition-all disabled:opacity-40 ' + (on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-primary')}>
+                    {on ? <Lucide.CheckSquare size={14} /> : <Lucide.Square size={14} />}{on ? 'Kijelölve' : 'Kijelölés'}
+                  </button>
+                ); })()}
                 {kiemelt ? (
                   <button onClick={() => onContinue(p, mine)} className={U_btnPrimary + ' py-2 px-4 text-[13px]'}>Folytatás <Lucide.ArrowRight size={15} /></button>
                 ) : (
@@ -768,7 +976,7 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg }) {
 function PROG_Editor({ open, program, onClose, onSaved, scope }) {
   const isDeg = scope === 'degrees';
   const levelOpts = isDeg ? PROG_DEGREE_LEVELS : PROG_PROGRAM_LEVELS;
-  const blank = { id: '', code: '', name: '', level: isDeg ? 'bachelor' : 'course', faculty: '', degree: isDeg ? 'BSc' : 'Short course', duration_semesters: isDeg ? 7 : 2, ects: isDeg ? 210 : 30, tuition: isDeg ? 2500 : 400, currency: 'EUR', language: 'English', deadline: '2026-06-30', capacity: 30, seats_taken: 0, is_open: true, summary: '', image_url: '', required_docs: isDeg ? ['passport', 'hs_diploma', 'english'] : ['passport'], steps: isDeg ? ['personal', 'documents', 'interview', 'fee', 'review'] : ['personal', 'fee', 'review'], tags: [] };
+  const blank = { id: '', code: '', name: '', level: isDeg ? 'bachelor' : 'course', faculty: '', degree: isDeg ? 'BSc' : 'Short course', duration_semesters: isDeg ? 7 : 2, ects: isDeg ? 210 : 30, tuition: isDeg ? 2500 : 400, currency: 'EUR', language: 'English', deadline: '2026-06-30', capacity: 30, seats_taken: 0, is_open: true, summary: '', image_url: '', required_docs: isDeg ? ['passport', 'hs_diploma', 'english'] : ['passport'], steps: isDeg ? ['personal', 'documents', 'interview', 'fee', 'review'] : ['personal', 'fee', 'review'], tags: [], intakes: ['autumn', 'spring'] };
   const [f, setF] = useState(blank);
   const [busy, setBusy] = useState(false);
   // Egyedi dokumentumtípusok: minden megnyitáskor frissen, hogy a más admin
@@ -807,12 +1015,15 @@ function PROG_Editor({ open, program, onClose, onSaved, scope }) {
   const setLevel = (uj) => setF(p => ({ ...p, level: uj,
     degree: (!p.degree || Object.values(PROG_DEFAULT_DEGREE).includes(p.degree)) ? (PROG_DEFAULT_DEGREE[uj] || p.degree) : p.degree }));
   const toggleArr = (key, val) => setF(p => ({ ...p, [key]: p[key].includes(val) ? p[key].filter(x => x !== val) : [...p[key], val] }));
+  const toggleIntake = (k) => setF(p => { const most = PROG_intakesOf(p); const uj = most.includes(k) ? most.filter(x => x !== k) : [...most, k]; return uj.length ? { ...p, intakes: ['autumn', 'spring'].filter(x => uj.includes(x)) } : p; });
   const moveStep = (i, dir) => setF(p => { const s = [...p.steps]; const j = i + dir; if (j < 0 || j >= s.length) return p; [s[i], s[j]] = [s[j], s[i]]; return { ...p, steps: s }; });
   const uploadImg = async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; const dataUrl = await KB_readFileAsDataUrl(file); set('image_url', dataUrl); };
 
   const save = async () => {
     if (!f.name.trim()) return; setBusy(true);
     const row = { ...f, tuition: Number(f.tuition) || 0, ects: Number(f.ects) || 0, duration_semesters: Number(f.duration_semesters) || 0, capacity: Number(f.capacity) || 0, tags: typeof f.tags === 'string' ? f.tags.split(',').map(s => s.trim()).filter(Boolean) : f.tags };
+    // A 60-as migráció előtt nincs intakes oszlop: a mezőt nem küldjük, különben az egész mentés elbukna.
+    if (!PROG_INTAKE_COL) delete row.intakes; else row.intakes = PROG_intakesOf(f);
     if (program) { await dlUpdate(PROG_TABLE, program.id, row, PROG_LS); }
     else { row.id = uid('prog'); row.created_at = todayStr(); await dlInsert(PROG_TABLE, row, PROG_LS); }
     setBusy(false); onSaved && onSaved(); onClose();
@@ -852,11 +1063,26 @@ function PROG_Editor({ open, program, onClose, onSaved, scope }) {
           </div>
         </div>
 
+        {isDeg && (
+          <div className="rounded-2xl border border-slate-100 p-4" data-inditas-felev="1">
+            <div className="flex items-center gap-2 mb-1"><Lucide.CalendarRange size={16} className="text-primary" /><span className="text-sm font-black text-slate-700">Indulás féléve</span></div>
+            <p className="text-[12px] text-slate-400 mb-3">A jelentkező csak olyan félévre jelölheti meg a képzést, amelyben az elindul.</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {Object.entries(PROG_INTAKES).map(([k, label]) => { const on = PROG_intakesOf(f).includes(k); return (
+                <button key={k} type="button" aria-pressed={on} onClick={() => toggleIntake(k)} className={'flex items-center gap-2 px-3 py-2 rounded-xl border text-[13px] font-bold transition-all ' + (on ? 'border-primary bg-primary/5 text-primary' : 'border-slate-100 text-slate-400 hover:border-slate-200')}>
+                  <span className={'w-4 h-4 rounded flex-none flex items-center justify-center ' + (on ? 'bg-primary text-white' : 'bg-slate-200')}>{on && <Lucide.Check size={11} />}</span>{label}
+                </button>
+              ); })}
+            </div>
+            {!PROG_INTAKE_COL && <p className="text-[12px] font-semibold text-amber-700 mt-2">A félév mentéséhez futtasd le a 60-as adatbázis-migrációt — addig minden képzés mindkét félévben indul.</p>}
+          </div>
+        )}
+
         {/* flow editor */}
         <div className="rounded-2xl border border-slate-100 p-4">
           <div className="flex items-center gap-2 mb-3"><Lucide.ListChecks size={16} className="text-primary" /><span className="text-sm font-black text-slate-700">Felvételi folyamat — lépések</span></div>
           <div className="grid sm:grid-cols-2 gap-2 mb-4">
-            {Object.entries(PROG_STEP_DEFS).map(([k, def]) => { const on = f.steps.includes(k); const I = def.icon; return (
+            {Object.entries(PROG_STEP_DEFS).filter(([k]) => k !== 'choice').map(([k, def]) => { const on = f.steps.includes(k); const I = def.icon; return (
               <button key={k} onClick={() => toggleArr('steps', k)} className={'flex items-center gap-2 px-3 py-2 rounded-xl border text-[13px] font-bold transition-all ' + (on ? 'border-primary bg-primary/5 text-primary' : 'border-slate-100 text-slate-400 hover:border-slate-200')}><I size={15} /> {def.label}{on && <Lucide.Check size={14} className="ml-auto" />}</button>
             ); })}
           </div>
@@ -928,7 +1154,7 @@ function PROG_Editor({ open, program, onClose, onSaved, scope }) {
 /* ---------- admin: applicants review ---------- */
 function PROG_Applicants({ programs, apps, onChange }) {
   const [pid, setPid] = useState('all');
-  const rows = apps.filter(a => pid === 'all' || a.program_id === pid);
+  const rows = apps.filter(a => pid === 'all' || PROG_appIds(a).includes(pid));
   const nameOf = (id) => { const p = programs.find(x => x.id === id); return p ? p.name : id; };
   /* A BEADÁS nem sima mezőírás, hanem RPC: a hallgatói -> irodai szakaszváltás
      egyirányú, és innen indul az ügyintézés. Egy elgépelt UPDATE ne tudja
@@ -957,15 +1183,18 @@ function PROG_Applicants({ programs, apps, onChange }) {
       {rows.length === 0 ? <div className="bg-white rounded-3xl border border-slate-100"><UEmpty icon={<Lucide.Inbox size={24} />} title="Még nincs jelentkezés" subtitle="A hallgatói jelentkezések itt fognak megjelenni." /></div> : (
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100"><th className="px-5 py-3">Jelentkező</th><th className="px-5 py-3">Képzés</th><th className="px-5 py-3">Előrehaladás</th><th className="px-5 py-3">Beadva</th><th className="px-5 py-3">Státusz</th></tr></thead>
+            <thead><tr className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100"><th className="px-5 py-3">Jelentkező</th><th className="px-5 py-3">Képzés</th><th className="px-5 py-3">Előrehaladás</th><th className="px-5 py-3">Beadva</th><th className="px-5 py-3">Státusz</th><th className="px-5 py-3">Döntés</th></tr></thead>
             <tbody>
               {rows.map(a => { const p = programs.find(x => x.id === a.program_id); const total = p ? (p.steps || []).length : 1; const prog = Math.round(((a.step_index || 0) / Math.max(total - 1, 1)) * 100); return (
                 <tr key={a.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
-                  <td className="px-5 py-3"><div className="font-bold text-slate-700">{a.applicant_name || '—'}</div><div className="text-[11px] text-slate-400">{a.applicant_email}</div></td>
-                  <td className="px-5 py-3 text-slate-600 font-semibold">{nameOf(a.program_id)}</td>
+                  <td className="px-5 py-3"><div className="font-bold text-slate-700">{a.applicant_name || '—'}</div><div className="text-[11px] text-slate-400">{a.applicant_email}</div>{a.ref_no && <div className="text-[10px] font-mono font-bold text-slate-400">{'FV-' + String(a.ref_no).padStart(5, '0')}</div>}</td>
+                  <td className="px-5 py-3 text-slate-600 font-semibold"><div className="space-y-0.5">{PROG_appIds(a).map((id, i, all) => <div key={id}>{(all.length > 1 ? (i + 1) + '. ' : '') + nameOf(id)}</div>)}</div>{a.term && <div className="text-[11px] font-bold text-violet-600 mt-0.5">{PROG_termLabel(a.term, true)}</div>}</td>
                   <td className="px-5 py-3"><div className="flex items-center gap-2"><div className="w-20 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: prog + '%' }} /></div><span className="text-[11px] font-bold text-slate-400">{prog}%</span></div></td>
                   <td className="px-5 py-3 text-[12px] text-slate-400 font-semibold">{a.status === 'draft' ? '—' : DL_date(a.updated_at || a.created_at)}</td>
-                  <td className="px-5 py-3"><select value={a.status} onChange={e => setStatus(a, e.target.value)} className="text-[12px] font-bold rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20">{Object.entries(PROG_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></td>
+                  <td className="px-5 py-3">{a.status === 'draft'
+                    ? <div className="flex flex-col items-start gap-1"><UBadge tone="slate">Piszkozat</UBadge><button onClick={() => setStatus(a, 'submitted')} className="text-[11px] font-bold text-primary hover:underline">Beadás az iroda nevében</button></div>
+                    : <UBadge tone="blue">Beadva</UBadge>}</td>
+                  <td className="px-5 py-3">{(() => { const dd = a.data && a.data.decision; if (!dd) return <span className="text-[11px] text-slate-300">—</span>; const tone = dd.outcome === 'admitted' ? 'green' : dd.outcome === 'rejected' ? 'red' : 'slate'; const label = { admitted: 'Felvéve', rejected: 'Elutasítva', withdrawn: 'Visszalépett' }[dd.outcome] || dd.outcome; return <div className="space-y-0.5"><UBadge tone={tone}>{label}</UBadge>{dd.outcome === 'admitted' && dd.programId && <div className="text-[11px] font-semibold text-slate-500">{nameOf(dd.programId)}</div>}</div>; })()}</td>
                 </tr>
               ); })}
             </tbody>
@@ -1020,18 +1249,66 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
     setDetail(null); setApplying({ program, app });
   };
 
+  /* KÉPZÉS: legfeljebb 3 képzés EGY jelentkezésben, egy félévre. Ha van
+     folyamatban lévő (be nem adott) képzés-jelentkezés, az új képzés abba kerül:
+     a rendszer egy felvételi folyamatként kezeli. */
+  const [felev, setFelev] = useState(() => PROG_upcomingTerms()[0].code);
+  const [kijelolt, setKijelolt] = useState([]);
+  useEffect(() => {
+    const evszak = PROG_termSeason(felev);
+    setKijelolt(k => k.filter(id => { const x = (programs || []).find(p => p.id === id); return !x || PROG_intakesOf(x).includes(evszak); }));
+  }, [felev]);
+  const kijelol = (id) => setKijelolt(k => k.includes(id) ? k.filter(x => x !== id) : (k.length >= PROG_MAX_DEGREES ? k : [...k, id]));
+  const startDegreeApply = async (idsBe, term) => {
+    const ids = idsBe.filter((x, i) => idsBe.indexOf(x) === i);
+    if (!ids.length || !user) return;
+    const keres = (id) => (programs || []).find(x => x.id === id);
+    const kepzesE = (a) => PROG_appIds(a).some(id => { const x = keres(id); return x && PROG_kind(x) === 'degree'; });
+    if (ids.length === 1) {
+      const beadott = myApps.find(a => a.status !== 'draft' && PROG_appIds(a).includes(ids[0]));
+      if (beadott) { setDetail(null); setApplying({ program: keres(PROG_appIds(beadott)[0]) || keres(ids[0]), app: beadott }); return; }
+    }
+    let app = myApps.find(a => a.status === 'draft' && !(a.data && a.data._cancelled) && kepzesE(a));
+    let notice = '';
+    if (app) {
+      const regi = PROG_appIds(app);
+      const uj = [...regi, ...ids.filter(id => !regi.includes(id))];
+      if (uj.length > PROG_MAX_DEGREES) {
+        notice = 'Egy jelentkezésben legfeljebb 3 képzés lehet. A folyamatban lévő jelentkezésedben cserélheted a képzéseket.';
+      } else if (uj.length !== regi.length || !(app.data && app.data.term)) {
+        const ujData = { ...(app.data || {}), program_ids: uj, term: (app.data && app.data.term) || term };
+        const saved = await dlUpdate(APP_TABLE, app.id, { data: ujData, program_id: uj[0], updated_at: new Date().toISOString() }, APP_LS);
+        app = saved ? PROG_fromRow(saved) : { ...app, data: ujData, program_ids: uj, program_id: uj[0] };
+        if (uj.length !== regi.length) notice = 'A képzést hozzáadtuk a folyamatban lévő jelentkezésedhez — egy jelentkezés több képzésre is szólhat.';
+        await refetch();
+      }
+    } else {
+      const most = new Date().toISOString();
+      const sor = {
+        id: uid('APP'), program_id: ids[0],
+        owner_email: (user.email || '').toLowerCase(), applicant_name: user.name,
+        stage: 'student', student_step: 0, step: 0, max_reached: 0, done: false,
+        data: { program_ids: ids, term }, created_at: most, updated_at: most,
+      };
+      app = PROG_fromRow(await dlInsert(APP_TABLE, sor, APP_LS) || sor);
+      await refetch();
+    }
+    setKijelolt([]); setDetail(null);
+    setApplying({ program: keres(PROG_appIds(app)[0]) || keres(ids[0]), app, notice });
+  };
+
   if (programs === null) return <div className={keret}><div className="grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">{[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="h-56 rounded-3xl bg-white border border-slate-100 animate-pulse" />)}</div></div>;
 
   if (applying) {
     const fresh = apps.find(a => a.id === applying.app.id) || applying.app;
-    return <ProgramApply program={applying.program} app={fresh} user={user} onExit={() => { refetch(); setApplying(null); }} onSaved={() => refetch()} />;
+    return <ProgramApply program={applying.program} programs={programs} app={fresh} user={user} notice={applying.notice} onExit={() => { refetch(); setApplying(null); }} onSaved={() => refetch()} />;
   }
 
   const staff = kezelo && !embedded;
   // A hallgató is csak a saját kínálatát látja: a Programok alatt a kisebb
   // programokat, a Képzések alatt a féléves képzéseket — nem a kettő keverékét.
   const scopedPrograms = programs.filter(p => PROG_kind(p) === (isDeg ? 'degree' : 'program'));
-  const scopedApps = apps.filter(a => scopedPrograms.some(p => p.id === a.program_id));
+  const scopedApps = apps.filter(a => scopedPrograms.some(p => PROG_appIds(a).includes(p.id)));
   return (
     <div className={keret}>
       {!embedded && <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
@@ -1050,13 +1327,30 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
 
       {!staff && (
         <>
-          <PROG_Catalog programs={scopedPrograms} isDeg={isDeg} myApps={myApps} onOpen={setDetail} onContinue={(p, a) => setApplying({ program: p, app: a })} />
+          <PROG_Catalog programs={scopedPrograms} isDeg={isDeg} myApps={myApps} onOpen={setDetail}
+            onContinue={(p, a) => setApplying({ program: (isDeg && scopedPrograms.find(x => x.id === PROG_appIds(a)[0])) || p, app: a })}
+            felev={felev} setFelev={setFelev} kijelolt={kijelolt} onKijelol={isDeg ? kijelol : null} />
+          {isDeg && kijelolt.length > 0 && (
+            <div className="sticky bottom-4 z-30 mt-6" data-kijeloles-sav="1">
+              <div className="mx-auto max-w-3xl rounded-3xl bg-slate-900 text-white shadow-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-black">{`${kijelolt.length} képzés kijelölve (legfeljebb ${PROG_MAX_DEGREES})`}</div>
+                  <div className="text-[12px] text-white/70 truncate">{kijelolt.map(id => (scopedPrograms.find(x => x.id === id) || {}).name || id).join(' · ')}</div>
+                  <div className="text-[12px] text-white/70">{PROG_termLabel(felev)}</div>
+                </div>
+                <div className="flex items-center gap-2 flex-none">
+                  <button type="button" onClick={() => setKijelolt([])} className="px-3 py-2 rounded-xl text-sm font-bold text-white/70 hover:text-white">Kijelölés törlése</button>
+                  <button type="button" onClick={() => startDegreeApply(kijelolt, felev)} className={U_btnPrimary + ' !py-2.5'}><Lucide.Send size={16} /> Jelentkezés indítása</button>
+                </div>
+              </div>
+            </div>
+          )}
           {(() => {
             // Ugyanaz a rangsor, mint a katalógusban — a két helyen ne álljon más sorrendben ugyanaz.
             // Csak ennek a kínálatnak a jelentkezései: a képzésre adott jelentkezés
             // a Képzések, a programra adott a Programok alatt látszik.
             const sorok = myApps
-              .map(a => ({ a, p: scopedPrograms.find(x => x.id === a.program_id) }))
+              .map(a => ({ a, p: scopedPrograms.find(x => x.id === PROG_appIds(a)[0]) }))
               .filter(x => x.p)
               .map(x => ({ ...x, st: PROG_myState(x.p, x.a) }))
               .sort((x, y) => (x.st.tier - y.st.tier) ||
@@ -1072,7 +1366,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
                       + (st.tier === 0 ? 'border-amber-300 ring-1 ring-amber-200 hover:border-amber-400' : 'border-slate-100 hover:border-primary')}>
                     <div className={'w-11 h-11 rounded-2xl flex items-center justify-center flex-none ' + (st.tier === 0 ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary')}><Lucide.GraduationCap size={20} /></div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-bold text-slate-800 truncate">{p.name}</div>
+                      <div className="font-bold text-slate-800 truncate">{PROG_appIds(a).map(id => (scopedPrograms.find(x => x.id === id) || {}).name).filter(Boolean).join(' · ') || p.name}</div>
                       <div className="text-[11px] text-slate-400">{st.tier === 0 ? (`${st.lepes}/${st.osszes} lépés kész` + (st.kell ? ` · ${st.feltoltve}/${st.kell} dokumentum` : '')) : p.degree}</div>
                     </div>
                     {st.tier === 0 ? <UBadge tone="amber">Folytatandó</UBadge>
@@ -1093,12 +1387,13 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
       {staff && tab === 'manage' && scopedPrograms.length > 0 && (
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100"><th className="px-5 py-3">{isDeg ? 'Képzés' : 'Program'}</th><th className="px-5 py-3">Szint</th><th className="px-5 py-3">Tandíj</th><th className="px-5 py-3">Folyamat</th><th className="px-5 py-3">Határidő</th><th className="px-5 py-3">Státusz</th><th className="px-5 py-3"></th></tr></thead>
+            <thead><tr className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100"><th className="px-5 py-3">{isDeg ? 'Képzés' : 'Program'}</th><th className="px-5 py-3">Szint</th>{isDeg && <th className="px-5 py-3">Indulás</th>}<th className="px-5 py-3">Tandíj</th><th className="px-5 py-3">Folyamat</th><th className="px-5 py-3">Határidő</th><th className="px-5 py-3">Státusz</th><th className="px-5 py-3"></th></tr></thead>
             <tbody>
-              {scopedPrograms.map(p => { const apps4 = apps.filter(a => a.program_id === p.id).length; return (
+              {scopedPrograms.map(p => { const apps4 = apps.filter(a => PROG_appIds(a).includes(p.id)).length; return (
                 <tr key={p.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
                   <td className="px-5 py-3"><div className="flex items-center gap-3"><div className="w-12 h-9 rounded-lg overflow-hidden flex-none"><PROG_Banner program={p} className="h-full w-full" /></div><div><div className="font-bold text-slate-700">{p.name}</div><div className="text-[11px] text-slate-400">{p.faculty}{apps4 ? ' · ' + apps4 + ' jelentkező' : ''}</div></div></div></td>
                   <td className="px-5 py-3"><UBadge tone={PROG_LEVEL_TONE[p.level]}>{p.degree}</UBadge></td>
+                  {isDeg && <td className="px-5 py-3 text-[12px] font-bold text-violet-600 whitespace-nowrap">{PROG_intakesOf(p).map(k => PROG_INTAKES[k]).join(' · ')}</td>}
                   <td className="px-5 py-3 font-black text-slate-700">{DL_money(p.tuition)}</td>
                   <td className="px-5 py-3 text-[12px] font-bold text-slate-400">{(p.steps || []).length + ' lépés'}</td>
                   <td className="px-5 py-3 text-[12px] font-semibold text-slate-500">{DL_date(p.deadline)}</td>
@@ -1113,7 +1408,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
 
       {staff && tab === 'applicants' && <PROG_Applicants programs={scopedPrograms} apps={scopedApps} onChange={refetch} />}
 
-      <PROG_Detail program={detail} myApp={detail ? myApps.find(a => a.program_id === detail.id) : null} onClose={() => setDetail(null)} onApply={openApply} />
+      <PROG_Detail program={detail} myApp={detail ? myApps.find(a => PROG_appIds(a).includes(detail.id)) : null} onClose={() => setDetail(null)} onApply={isDeg ? (x) => startDegreeApply([x.id], felev) : openApply} />
       <PROG_Editor open={editor.open} program={editor.program} scope={scope} onClose={() => setEditor({ open: false, program: null })} onSaved={refetch} />
     </div>
   );

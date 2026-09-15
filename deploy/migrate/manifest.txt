@@ -70,3 +70,5 @@
 57_raw_attendance.sql
 58_program_doc_types.sql
 59_legal_consents.sql
+60_admission_decision_terms.sql
+61_interview_calendar.sql

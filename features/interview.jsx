@@ -661,7 +661,9 @@ function IV_useFreeSlots(ctx, interviewer) {
   return { rows, loading, error, reload: load };
 }
 
-const IV_SlotPicker = ({ ctx, studentId, onBooked, compact }) => {
+/* `processId`: a felvételi folyamathoz kötött foglalás (61-es migráció) —
+   ilyenkor az interview_book_process fut, amely a szünetet is tartja. */
+const IV_SlotPicker = ({ ctx, studentId, processId, onBooked, compact }) => {
   const [interviewer, setInterviewer] = useState('');
   const { rows, loading, error, reload } = IV_useFreeSlots(ctx, interviewer);
   const [day, setDay] = useState('');
@@ -692,9 +694,9 @@ const IV_SlotPicker = ({ ctx, studentId, onBooked, compact }) => {
 
   const book = async (slot) => {
     setBusy(slot.slot_start); setErr(''); setOk('');
-    const { data, error } = await IV_rpc('interview_book', {
-      p_interviewer: slot.iv_id, p_start: slot.slot_start, p_student_id: studentId || null,
-    });
+    const { data, error } = processId
+      ? await IV_rpc('interview_book_process', { p_process_id: processId, p_interviewer: slot.iv_id, p_start: slot.slot_start })
+      : await IV_rpc('interview_book', { p_interviewer: slot.iv_id, p_start: slot.slot_start, p_student_id: studentId || null });
     setBusy('');
     if (error) { setErr(IV_msg(error)); reload(); return; }
     setOk('Sikeres foglalás! Az időpontot rögzítettük, a Teams-link elkészült.');
