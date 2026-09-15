@@ -587,7 +587,7 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
           <UField label="Teljes név"><input className={U_input} value={p.name} onChange={e => set('name', e.target.value)} /></UField>
           <UField label="E-mail"><input className={U_input} value={p.email} onChange={e => set('email', e.target.value)} /></UField>
           <UField label="Telefon"><input className={U_input} value={p.phone} onChange={e => set('phone', e.target.value)} placeholder="+…" /></UField>
-          <UField label="Állampolgárság szerinti ország"><input className={U_input} value={p.country} onChange={e => set('country', e.target.value)} placeholder="pl. Nigéria" /></UField>
+          <UField label="Állampolgárság szerinti ország"><CTRY_Select value={p.country} onChange={v => set('country', v)} inputClassName={U_input} /></UField>
           <UField label="Születési dátum"><input type="date" className={U_input} value={p.dob} onChange={e => set('dob', e.target.value)} /></UField>
         </div>
       </div>

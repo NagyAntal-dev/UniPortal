@@ -31,6 +31,9 @@ const root = dirname(fileURLToPath(import.meta.url));
 
 const FEATURE_FILES = [
   'features/data-layer.jsx',
+  // Zászlós országválasztó (CTRY_Select) — a programs.jsx és az app.jsx
+  // jelentkezési űrlapjai használják; zászlók: assets/flags/*.svg.
+  'features/countries.jsx',
   'features/echo.jsx',
   'features/knowledge-base.jsx',
   'features/feed.jsx',

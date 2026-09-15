@@ -17,6 +17,8 @@ FROM nginxinc/nginx-unprivileged:1.27-alpine
 USER root
 RUN rm -rf /usr/share/nginx/html/*
 COPY index.html reset-password.html privacy.html terms.html config.js favicon.svg nje-logo.svg /usr/share/nginx/html/
+# Országzászlók az országválasztóhoz (features/countries.jsx).
+COPY assets/ /usr/share/nginx/html/assets/
 COPY --from=build /src/app.html /src/app.bundle.js /usr/share/nginx/html/
 # Az auth szolgáltatás innen tölti le a jelszó-visszaállító levél sablonját.
 COPY deploy/web/email/ /usr/share/nginx/html/email/

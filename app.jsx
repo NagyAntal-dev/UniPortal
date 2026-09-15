@@ -7445,30 +7445,12 @@ const AdmissionsHub = (() => {
   const inputCls = 'w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all';
   const labelCls = 'block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5';
 
+  /* A közös, zászlós országválasztó a features/countries.jsx-ben él (CTRY_Select). */
   function CountrySelect({ value, onChange }) {
-    const [open, setOpen] = useState(false);
-    const [q, setQ] = useState('');
-    const list = COUNTRIES.filter(o => o.toLowerCase().includes((open ? q : '').toLowerCase())).slice(0, 80);
     return (
-      <div className="relative">
+      <div>
         <label className={labelCls}>Állampolgárság</label>
-        <div className="relative">
-          <input className={inputCls + ' pr-9'} value={open ? q : (value || '')} placeholder="Kezdjen el gépelni…"
-            onFocus={() => { setOpen(true); setQ(''); }} onBlur={() => setTimeout(() => setOpen(false), 150)}
-            onChange={(e) => { setQ(e.target.value); setOpen(true); }} />
-          <Lucide.ChevronsUpDown size={16} className="text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-        {open && (
-          <div className="absolute z-30 mt-1 w-full max-h-56 overflow-auto bg-white border border-slate-200 rounded-xl shadow-xl py-1">
-            {list.length ? list.map(o => (
-              <button key={o} type="button" onMouseDown={(e) => { e.preventDefault(); onChange(o); setOpen(false); }}
-                className="w-full text-left px-3.5 py-2 text-sm hover:bg-primary/5 flex items-center justify-between">
-                <span className={value === o ? 'font-bold text-primary' : 'text-slate-700'}>{o}</span>
-                {value === o && <Lucide.Check size={14} className="text-primary" />}
-              </button>
-            )) : <div className="px-3.5 py-2 text-sm text-slate-400">Nincs találat</div>}
-          </div>
-        )}
+        <CTRY_Select value={value} onChange={onChange} inputClassName={inputCls} />
       </div>
     );
   }
@@ -11199,7 +11181,7 @@ const AccountPage = ({ user, onUpdate, onClose }) => {
             <div><label className={lblCls}>Teljes név</label><input className={inCls} value={name} onChange={e => setName(e.target.value)} /></div>
             <div><label className={lblCls}>E-mail</label><input className={inCls + ' bg-slate-50 text-slate-400 cursor-not-allowed'} value={user.email} disabled /><p className="text-[11px] text-slate-400 mt-1">Az e-mail cím nem módosítható.</p></div>
             <div><label className={lblCls}>Telefonszám</label><input className={inCls} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+36…" /></div>
-            <div><label className={lblCls}>Állampolgárság</label><input className={inCls} list="acc-countries" value={country} onChange={e => setCountry(e.target.value)} placeholder="Pl. Nigeria" /><datalist id="acc-countries">{((JourneyShared && JourneyShared.COUNTRIES) || []).map(c => <option key={c} value={c} />)}</datalist></div>
+            <div><label className={lblCls}>Állampolgárság</label><CTRY_Select value={country} onChange={setCountry} inputClassName={inCls} /></div>
             <div><label className={lblCls}>Születési dátum</label><input type="date" className={inCls} value={birthDate} onChange={e => setBirthDate(e.target.value)} /></div>
           </div>
           <div className="mt-6 flex items-center gap-3">
