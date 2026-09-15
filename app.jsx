@@ -12875,6 +12875,16 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// Jelentkezés indítása meglévő jelentkezés mellett (features/programs.jsx: PROG_InditasValaszto).
+Object.entries({
+  'Kijelölt képzések': 'Selected programmes', 'Folyamatban lévő jelentkezéseid': 'Your applications in progress',
+  'Már beadott jelentkezésed ezekre a képzésekre': 'Your submitted applications for these programmes',
+  'Ugyanezekre a képzésekre és félévre már van folyamatban lévő jelentkezésed — érdemes azt folytatni.': 'You already have an application in progress for these programmes and semester — you may want to continue that one.',
+  'Hozzáadás ehhez': 'Add to this one', 'Más félévre szól.': 'It is for a different semester.', 'Ezek a képzések már benne vannak.': 'These programmes are already included.',
+  'Új jelentkezés indítása': 'Start a new application', 'Indítás…': 'Starting…',
+  'A kijelölt képzéseket hozzáadtuk a folyamatban lévő jelentkezésedhez.': 'The selected programmes have been added to your application in progress.',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push([/^Így (\d+) képzés lenne \(legfeljebb (\d+)\)\.$/, 'That would be $1 programmes (maximum $2).']);
 // Üzenetváltás a felvételi eljárásban (features/messages.jsx, 62_admission_chat.sql).
 Object.entries({
   'Üzenetváltás a felvételi irodával': 'Conversation with the admissions office',

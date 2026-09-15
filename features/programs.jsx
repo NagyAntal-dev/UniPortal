@@ -1077,6 +1077,95 @@ function PROG_FolyamatMegnyitas({ processId, user, onExit }) {
   return <ProgramApply key={allapot.app.id} program={program} programs={allapot.programs} app={allapot.app} user={user} onExit={onExit} onSaved={() => betolt()} backLabel="Vissza a felvételi folyamatokhoz" />;
 }
 
+/* ---------- jelentkezés indítása, ha már van jelentkezése ----------
+   A kijelölés alapból ÚJ jelentkezést indít. A választó megmutatja a
+   folyamatban lévő és a már beadott jelentkezéseket, és ezekből kínál:
+   • Folytatás — ha pontosan ugyanezekre a képzésekre és félévre szól;
+   • Hozzáadás ehhez — ha ugyanarra a félévre szól, és így sem lesz 3-nál több;
+   • Megnyitás — beadott jelentkezésnél, vagy ha a képzések már benne vannak. */
+function PROG_InditasValaszto({ ids, term, programs, myApps, busy, onClose, onUj, onHozzaad, onMegnyit }) {
+  const keres = (id) => (programs || []).find(x => x.id === id);
+  const nev = (id) => (keres(id) || {}).name || id;
+  const kepzesApp = (a) => PROG_appIds(a).some(id => { const x = keres(id); return x && PROG_kind(x) === 'degree'; });
+  const azon = (a) => a.ref_no ? 'FV-' + String(a.ref_no).padStart(5, '0') : '';
+  const kulcs = (arr) => [...arr].sort().join('|');
+  const felevE = (a) => (a.data && a.data.term) || '';
+  const nyitott = (myApps || []).filter(a => a.status === 'draft' && !(a.data && a.data._cancelled) && kepzesApp(a));
+  const beadott = (myApps || []).filter(a => a.status !== 'draft' && !(a.data && a.data._cancelled) && kepzesApp(a) && PROG_appIds(a).some(id => ids.includes(id)));
+  const azonos = nyitott.find(a => kulcs(PROG_appIds(a)) === kulcs(ids) && felevE(a) === term) || null;
+  const cimke = 'text-[10px] font-black text-slate-400 uppercase tracking-widest';
+
+  const kartya = (a, gomb) => {
+    const fa = PROG_folyamatAllapot(a, programs);
+    return (
+      <div key={a.id} data-inditas-app={a.id} className="rounded-2xl border border-slate-100 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {azon(a) && <span className="font-mono text-[11px] font-bold text-slate-500">{azon(a)}</span>}
+            {felevE(a) && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-violet-50 text-violet-700">{PROG_termLabel(felevE(a), true)}</span>}
+            <UBadge tone={PROG_allapotTone(fa)}>{fa.cimke}</UBadge>
+          </div>
+          <div className="text-sm font-bold text-slate-700 mt-1">{PROG_appIds(a).map(nev).join(' · ')}</div>
+          <div className="text-[11px] text-slate-400">{`${fa.kesz}/${fa.osszes} lépés kész`}</div>
+        </div>
+        <div className="flex-none">{gomb}</div>
+      </div>
+    );
+  };
+
+  return (
+    <UModal open onClose={busy ? () => {} : onClose} max="max-w-2xl" title="Jelentkezés indítása" subtitle={PROG_termLabel(term, true)} icon={<Lucide.Send size={20} />}>
+      <div className="space-y-5" data-inditas-valaszto="1">
+        <div>
+          <div className={cimke + ' mb-1.5'}>Kijelölt képzések</div>
+          <ol className="space-y-1">{ids.map((id, i) => <li key={id} className="text-sm font-bold text-slate-700">{(i + 1) + '. ' + nev(id)}</li>)}</ol>
+        </div>
+        {azonos && (
+          <div role="note" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-2">
+            <Lucide.Info size={16} className="flex-none mt-0.5" />
+            <span>Ugyanezekre a képzésekre és félévre már van folyamatban lévő jelentkezésed — érdemes azt folytatni.</span>
+          </div>
+        )}
+        {nyitott.length > 0 && (
+          <div className="space-y-2">
+            <div className={cimke}>Folyamatban lévő jelentkezéseid</div>
+            {nyitott.map(a => {
+              if (a === azonos) return kartya(a, <button type="button" disabled={busy} onClick={() => onMegnyit(a)} className={U_btnPrimary + ' !py-2 text-sm'} data-inditas-folytat={a.id}>Folytatás</button>);
+              const regi = PROG_appIds(a);
+              const ujak = ids.filter(id => !regi.includes(id));
+              const osszesen = regi.length + ujak.length;
+              const miert = felevE(a) && felevE(a) !== term ? 'Más félévre szól.'
+                : !ujak.length ? 'Ezek a képzések már benne vannak.'
+                : osszesen > PROG_MAX_DEGREES ? `Így ${osszesen} képzés lenne (legfeljebb ${PROG_MAX_DEGREES}).` : '';
+              const hozzaadhato = !miert;
+              return kartya(a, (
+                <div className="flex flex-col items-stretch sm:items-end gap-1">
+                  {!ujak.length
+                    ? <button type="button" disabled={busy} onClick={() => onMegnyit(a)} className={U_btnGhost + ' !py-2 text-sm'}>Megnyitás</button>
+                    : <button type="button" disabled={busy || !hozzaadhato} onClick={() => onHozzaad(a)} className={U_btnGhost + ' !py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed'} data-inditas-hozzaad={a.id}>Hozzáadás ehhez</button>}
+                  {miert && <span className="text-[11px] font-semibold text-slate-400" data-inditas-miert={a.id}>{miert}</span>}
+                </div>
+              ));
+            })}
+          </div>
+        )}
+        {beadott.length > 0 && (
+          <div className="space-y-2">
+            <div className={cimke}>Már beadott jelentkezésed ezekre a képzésekre</div>
+            {beadott.map(a => kartya(a, <button type="button" disabled={busy} onClick={() => onMegnyit(a)} className={U_btnGhost + ' !py-2 text-sm'}>Megnyitás</button>))}
+          </div>
+        )}
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4 border-t border-slate-100">
+          <button type="button" disabled={busy} onClick={onClose} className={U_btnGhost}>Mégse</button>
+          <button type="button" disabled={busy} onClick={onUj} className={U_btnPrimary} data-inditas-uj="1">
+            {busy ? <Lucide.Loader2 size={16} className="animate-spin" /> : <Lucide.Plus size={16} />} {busy ? 'Indítás…' : 'Új jelentkezés indítása'}
+          </button>
+        </div>
+      </div>
+    </UModal>
+  );
+}
+
 function PROG_MathStep({ data, setData }) {
   const [tasks, setTasks] = useState(null);
   const [ans, setAns] = useState({});
@@ -1556,42 +1645,57 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
     setKijelolt(k => k.filter(id => { const x = (programs || []).find(p => p.id === id); return !x || PROG_intakesOf(x).includes(evszak); }));
   }, [felev]);
   const kijelol = (id) => setKijelolt(k => k.includes(id) ? k.filter(x => x !== id) : (k.length >= PROG_MAX_DEGREES ? k : [...k, id]));
-  const startDegreeApply = async (idsBe, term) => {
-    const ids = idsBe.filter((x, i) => idsBe.indexOf(x) === i);
-    if (!ids.length || !user) return;
-    const keres = (id) => (programs || []).find(x => x.id === id);
-    const kepzesE = (a) => PROG_appIds(a).some(id => { const x = keres(id); return x && PROG_kind(x) === 'degree'; });
-    if (ids.length === 1) {
-      const beadott = myApps.find(a => a.status !== 'draft' && PROG_appIds(a).includes(ids[0]));
-      if (beadott) { setDetail(null); setApplying({ program: keres(PROG_appIds(beadott)[0]) || keres(ids[0]), app: beadott }); return; }
-    }
-    let app = myApps.find(a => a.status === 'draft' && !(a.data && a.data._cancelled) && kepzesE(a));
-    let notice = '';
-    if (app) {
-      const regi = PROG_appIds(app);
-      const uj = [...regi, ...ids.filter(id => !regi.includes(id))];
-      if (uj.length > PROG_MAX_DEGREES) {
-        notice = 'Egy jelentkezésben legfeljebb 3 képzés lehet. A folyamatban lévő jelentkezésedben cserélheted a képzéseket.';
-      } else if (uj.length !== regi.length || !(app.data && app.data.term)) {
-        const ujData = { ...(app.data || {}), program_ids: uj, term: (app.data && app.data.term) || term };
-        const saved = await dlUpdate(APP_TABLE, app.id, { data: ujData, program_id: uj[0], updated_at: new Date().toISOString() }, APP_LS);
-        app = saved ? PROG_fromRow(saved) : { ...app, data: ujData, program_ids: uj, program_id: uj[0] };
-        if (uj.length !== regi.length) notice = 'A képzést hozzáadtuk a folyamatban lévő jelentkezésedhez — egy jelentkezés több képzésre is szólhat.';
-        await refetch();
-      }
-    } else {
-      const most = new Date().toISOString();
-      const sor = {
-        id: uid('APP'), program_id: ids[0],
-        owner_email: (user.email || '').toLowerCase(), applicant_name: user.name,
-        stage: 'student', student_step: 0, step: 0, max_reached: 0, done: false,
-        data: { program_ids: ids, term }, created_at: most, updated_at: most,
-      };
-      app = PROG_fromRow(await dlInsert(APP_TABLE, sor, APP_LS) || sor);
-      await refetch();
-    }
-    setKijelolt([]); setDetail(null);
-    setApplying({ program: keres(PROG_appIds(app)[0]) || keres(ids[0]), app, notice });
+  /* INDÍTÁS. Korábban az új kijelölés NÉMÁN a folyamatban lévő (be nem adott)
+     jelentkezésbe került — ha az már tele volt (3 képzés), a rendszer a régit
+     nyitotta meg új jelentkezés helyett (mérve: FV-00037). Most az új kijelölés
+     ÚJ jelentkezést indít; meglévőhöz csak a hallgató kifejezett választására
+     kerül (PROG_InditasValaszto), egy félévre és legfeljebb 3 képzésig. A dupla
+     kattintás nem hoz létre két piszkozatot (inditasRef) — ez okozta az
+     FV-00036/37 párost. */
+  const [inditas, setInditas] = useState(null);         // { ids, term } — nyitott választó
+  const [inditasBusy, setInditasBusy] = useState(false);
+  const inditasRef = useRef(false);
+  const zarolva = async (fn) => {
+    if (inditasRef.current) return;
+    inditasRef.current = true; setInditasBusy(true);
+    try { await fn(); } finally { inditasRef.current = false; setInditasBusy(false); }
+  };
+  const keresProg = (id) => (programs || []).find(x => x.id === id);
+  const kepzesApp = (a) => PROG_appIds(a).some(id => { const x = keresProg(id); return x && PROG_kind(x) === 'degree'; });
+  const megnyitJelentkezes = (app, notice, tartalekId) => {
+    setKijelolt([]); setDetail(null); setInditas(null);
+    setApplying({ program: keresProg(PROG_appIds(app)[0]) || keresProg(tartalekId), app, notice: notice || '' });
+  };
+  const ujJelentkezes = (ids, term) => zarolva(async () => {
+    const most = new Date().toISOString();
+    const sor = {
+      id: uid('APP'), program_id: ids[0],
+      owner_email: (user.email || '').toLowerCase(), applicant_name: user.name,
+      stage: 'student', student_step: 0, step: 0, max_reached: 0, done: false,
+      data: { program_ids: ids, term }, created_at: most, updated_at: most,
+    };
+    const app = PROG_fromRow(await dlInsert(APP_TABLE, sor, APP_LS) || sor);
+    await refetch();
+    megnyitJelentkezes(app, '', ids[0]);
+  });
+  const hozzaadas = (app, ids, term) => zarolva(async () => {
+    const regi = PROG_appIds(app);
+    const uj = [...regi, ...ids.filter(id => !regi.includes(id))].slice(0, PROG_MAX_DEGREES);
+    const ujData = { ...(app.data || {}), program_ids: uj, term: (app.data && app.data.term) || term };
+    const saved = await dlUpdate(APP_TABLE, app.id, { data: ujData, program_id: uj[0], updated_at: new Date().toISOString() }, APP_LS);
+    const kesz = saved ? PROG_fromRow(saved) : { ...app, data: ujData, program_ids: uj, program_id: uj[0] };
+    await refetch();
+    megnyitJelentkezes(kesz, 'A kijelölt képzéseket hozzáadtuk a folyamatban lévő jelentkezésedhez.', uj[0]);
+  });
+  const startDegreeApply = (idsBe, term) => {
+    const ids = idsBe.filter((x, i) => idsBe.indexOf(x) === i).slice(0, PROG_MAX_DEGREES);
+    if (!ids.length || !user || inditasRef.current) return;
+    const nyitott = myApps.filter(a => a.status === 'draft' && !(a.data && a.data._cancelled) && kepzesApp(a));
+    const beadott = myApps.filter(a => a.status !== 'draft' && !(a.data && a.data._cancelled) && kepzesApp(a) && PROG_appIds(a).some(id => ids.includes(id)));
+    // Ha nincs mivel ütköznie, azonnal indul; különben a hallgató választ.
+    if (!nyitott.length && !beadott.length) { ujJelentkezes(ids, term); return; }
+    setDetail(null);
+    setInditas({ ids, term });
   };
 
   if (programs === null) return <div className={keret}><div className="grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">{[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="h-56 rounded-3xl bg-white border border-slate-100 animate-pulse" />)}</div></div>;
@@ -1608,6 +1712,13 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
   const scopedApps = apps.filter(a => scopedPrograms.some(p => PROG_appIds(a).includes(p.id)));
   return (
     <div className={keret}>
+      {inditas && (
+        <PROG_InditasValaszto ids={inditas.ids} term={inditas.term} programs={programs} myApps={myApps} busy={inditasBusy}
+          onClose={() => setInditas(null)}
+          onUj={() => ujJelentkezes(inditas.ids, inditas.term)}
+          onHozzaad={(a) => hozzaadas(a, inditas.ids, inditas.term)}
+          onMegnyit={(a) => megnyitJelentkezes(a, '', inditas.ids[0])} />
+      )}
       {!embedded && <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
         <div>
           <p className="text-primary font-black text-xs uppercase tracking-widest mb-1">{isDeg ? 'Képzések' : 'Programok'}</p>
@@ -1637,7 +1748,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
                 </div>
                 <div className="flex items-center gap-2 flex-none">
                   <button type="button" onClick={() => setKijelolt([])} className="px-3 py-2 rounded-xl text-sm font-bold text-white/70 hover:text-white">Kijelölés törlése</button>
-                  <button type="button" onClick={() => startDegreeApply(kijelolt, felev)} className={U_btnPrimary + ' !py-2.5'}><Lucide.Send size={16} /> Jelentkezés indítása</button>
+                  <button type="button" disabled={inditasBusy} onClick={() => startDegreeApply(kijelolt, felev)} className={U_btnPrimary + ' !py-2.5'}>{inditasBusy ? <Lucide.Loader2 size={16} className="animate-spin" /> : <Lucide.Send size={16} />} Jelentkezés indítása</button>
                 </div>
               </div>
             </div>
@@ -1649,7 +1760,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
             const sorok = myApps
               .map(a => ({ a, p: scopedPrograms.find(x => x.id === PROG_appIds(a)[0]) }))
               .filter(x => x.p)
-              .map(x => ({ ...x, st: PROG_myState(x.p, x.a) }))
+              .map(x => ({ ...x, st: PROG_myState(x.p, x.a, scopedPrograms) }))
               .sort((x, y) => (x.st.tier - y.st.tier) ||
                 ((Date.parse(y.a.updated_at || '') || 0) - (Date.parse(x.a.updated_at || '') || 0)));
             if (!sorok.length) return null;
