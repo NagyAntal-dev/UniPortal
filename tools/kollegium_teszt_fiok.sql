@@ -4,7 +4,7 @@
 --
 --  BELÉPÉS
 --    e-mail:  kollegium@teszt.hu
---    jelszó:  KoliAdmin2026!Nje
+--    jelszó:  NINCS A FÁJLBAN. Futtatás előtt írd be a v_pw sorba; jelszóval kitöltve NE commitold (a repó nyilvános).
 --
 --  MIT KAP, ÉS MIÉRT ÉPPEN AZT
 --  A kollégiumi modulban ÖT szerepkör van (26_dorm.sql, 1.x szakasz), és
@@ -84,10 +84,14 @@ do $$
 declare
   v_id    uuid := 'c1a0de00-0000-4000-8000-00000000d0d0';
   v_email text := 'kollegium@teszt.hu';
-  v_hash  text := crypt('KoliAdmin2026!Nje', gen_salt('bf'));
+  v_pw    text := '<UJ_JELSZO_IDE>';
+  v_hash  text := crypt(v_pw, gen_salt('bf'));
   v_ep    uuid;
   v_n     int;
 begin
+  if v_pw = '<UJ_JELSZO_IDE>' or length(v_pw) < 12 then
+    raise exception 'Futtatás előtt adj meg új, legalább 12 karakteres jelszót a v_pw sorban (a fájlt jelszóval ne commitold).';
+  end if;
   -- A GoTrue a varchar mezőket Go string-be olvassa: NULL-ra "Database error
   -- querying schema" hibát ad, helyes jelszóval is. Ezért ÜRES SZÖVEG.
   insert into auth.users (
@@ -160,7 +164,7 @@ begin
 
   select count(*) into v_n from dorm.role_grant where person = v_id;
   raise notice 'Kesz: % (%). Kollegiumi kiosztas: % db. Epulet: %',
-               'kollegium@teszt.hu', 'KoliAdmin2026!Nje', v_n,
+               'kollegium@teszt.hu', '(jelszó: a v_pw sor szerint)', v_n,
                coalesce((select name from dorm.building where id = v_ep), '(nincs)');
 end $$;
 

@@ -18,14 +18,18 @@
 --   'ADMIN'-ra — akkor a Regisztrációkat nem fogom tudni tesztelni, minden
 --   mást igen.
 --
--- JELSZÓ:  NjeeJHYMHJdhH6ZfUGDki!7
+-- JELSZÓ:  NINCS A FÁJLBAN. Futtatás előtt írd be a v_pw sorba; jelszóval kitöltve NE commitold (a repó nyilvános).
 -- ============================================================================
 
 do $$
 declare
   v_id   uuid := 'c1a0de00-0000-4000-8000-000000000001';
-  v_hash text := crypt('NjeeJHYMHJdhH6ZfUGDki!7', gen_salt('bf'));
+  v_pw   text := '<UJ_JELSZO_IDE>';
+  v_hash text := crypt(v_pw, gen_salt('bf'));
 begin
+  if v_pw = '<UJ_JELSZO_IDE>' or length(v_pw) < 12 then
+    raise exception 'Futtatás előtt adj meg új, legalább 12 karakteres jelszót a v_pw sorban (a fájlt jelszóval ne commitold).';
+  end if;
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password,
     email_confirmed_at, created_at, updated_at,
