@@ -162,6 +162,23 @@ function MSG_menuJelvenyKell(user, id) {
   return id === AppView.ENGAGEMENT_CRM || id === AppView.ADMISSIONS_CORE;
 }
 
+/* ---------- a felvételi levél értesítője (63/64) ----------
+   A szerver (letter_log_send) „Felvételi leveled elkészült” rendszerüzenetet ír;
+   a 64-es migráció óta a levél PDF-je is csatolmánya (kind = 'letter'). A régebbi,
+   PDF nélküli értesítőt a tárgyáról ismerjük fel. */
+const MSG_LEVEL_TARGY = 'Felvételi leveled elkészült';
+const MSG_levelUzenet = (m) => !!m && m.sender_role === 'system'
+  && ((Array.isArray(m.files) && m.files.some(f => f && f.kind === 'letter')) || m.subject === MSG_LEVEL_TARGY);
+/* A jelentkezőnél a levél megnyitása: a StudentPortal a Felvételi folyamat fülre vált,
+   az AdmissionsHub a levél lépésén nyitja meg az eljárást (window.__njeLevel). */
+function MSG_levelMegnyitas(processId) {
+  if (!processId) return;
+  try {
+    window.__njeLevel = { processId };
+    window.dispatchEvent(new CustomEvent('nje:level', { detail: { processId } }));
+  } catch (e) {}
+}
+
 /* ============================================================
    Beszélgetés egy felvételi eljárásban
    role: 'staff' | 'applicant'
@@ -169,7 +186,7 @@ function MSG_menuJelvenyKell(user, id) {
    hivatkozasok / onHivatkozasTorles: az ügyintéző a dokumentumlistából
      jelölhet ki hivatkozott dokumentumot (a régi „Hivatkozás” gomb)
    ============================================================ */
-function MSG_Thread({ processId, role, docs, hivatkozasok, onHivatkozasTorles, magassag }) {
+function MSG_Thread({ processId, role, docs, hivatkozasok, onHivatkozasTorles, magassag, onLevelMegnyit }) {
   const [adat, setAdat] = useState(null);
   const [allapot, setAllapot] = useState('tolt');   // tolt | kesz | hianyzik | hiba
   const [hiba, setHiba] = useState('');
@@ -177,6 +194,7 @@ function MSG_Thread({ processId, role, docs, hivatkozasok, onHivatkozasTorles, m
   const [targy, setTargy] = useState('');
   const [fajlok, setFajlok] = useState([]);         // [{ id, file }]
   const [kuld, setKuld] = useState(false);
+  const [levelNezet, setLevelNezet] = useState(null);   // az irodánál: a kiküldött levél megtekintése
   const listaRef = useRef(null);
   const fajlRef = useRef(null);
   const refs = hivatkozasok || [];
@@ -269,7 +287,7 @@ function MSG_Thread({ processId, role, docs, hivatkozasok, onHivatkozasTorles, m
       onClick={async () => { const ok = await MSG_megnyit(f, docs); if (!ok) setHiba('A fájl most nem nyitható meg.'); }}
       title={f.ref ? 'dokumentum-hivatkozás' : f.name}
       className={'max-w-full inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-bold transition-colors ' + (sajat ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-white border border-slate-200 hover:border-primary text-slate-700')}>
-      {f.ref ? <Lucide.FileCheck size={12} className="flex-none" /> : <Lucide.Paperclip size={12} className="flex-none" />}
+      {f.ref ? <Lucide.FileCheck size={12} className="flex-none" /> : f.kind === 'letter' ? <Lucide.FileText size={12} className="flex-none" /> : <Lucide.Paperclip size={12} className="flex-none" />}
       <span className="truncate">{f.name}</span>
       {f.size ? <span className={sajat ? 'text-white/70' : 'text-slate-400'}>{DOC_fmtSize(f.size)}</span> : null}
     </button>
@@ -277,18 +295,37 @@ function MSG_Thread({ processId, role, docs, hivatkozasok, onHivatkozasTorles, m
 
   return (
     <div className="space-y-3" data-msg-szal={processId}>
+      {levelNezet && <LEVEL_Megtekinto processId={processId} letterId={levelNezet.letterId} onClose={() => setLevelNezet(null)} />}
       <div ref={listaRef} className={'space-y-3 overflow-y-auto pr-1 ' + (magassag || 'max-h-[420px]')} aria-live="polite">
         {allapot === 'tolt' && <div className="text-center py-8 text-slate-400 text-sm">Betöltés...</div>}
         {allapot === 'hiba' && <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-700">{hiba}</div>}
         {allapot === 'kesz' && uzenetek.length === 0 && <div className="text-center py-8 text-slate-400 text-sm">Még nincs üzenet ebben a beszélgetésben.</div>}
         {uzenetek.map(m => {
           if (m.sender_role === 'system') {
+            const levelE = MSG_levelUzenet(m);
+            const levelFajl = levelE && Array.isArray(m.files) ? m.files.find(f => f && f.kind === 'letter') : null;
             return (
               <div key={m.id} className="flex justify-center" data-msg-uzenet="system">
-                <div className="max-w-[92%] rounded-2xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-center">
+                <div className={'max-w-[92%] rounded-2xl border px-4 py-2.5 text-center ' + (levelE ? 'border-emerald-100 bg-emerald-50/60' : 'border-slate-100 bg-slate-50')}>
                   <div className="text-[10px] font-bold text-slate-400">{[m.sender_name, MSG_ido(m.created_at)].filter(Boolean).join(' · ')}</div>
                   {m.subject && <div className="text-sm font-bold text-slate-700">{m.subject}</div>}
                   {m.body && <div className="text-sm text-slate-600 whitespace-pre-wrap">{m.body}</div>}
+                  {Array.isArray(m.files) && m.files.length > 0 && <div className="flex flex-wrap justify-center gap-1.5 mt-2">{m.files.map((f, i) => fajlChip(f, i, false))}</div>}
+                  {levelE && (
+                    <div className="mt-2 flex justify-center" data-msg-level={m.id}>
+                      {role === 'applicant' ? (
+                        <button type="button" data-msg-level-megnyit={processId} onClick={() => (onLevelMegnyit ? onLevelMegnyit() : MSG_levelMegnyitas(processId))}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[12px] font-bold text-white hover:bg-primary/90 transition-colors">
+                          <Lucide.ExternalLink size={13} /> Megnyitás a Felvételi folyamatban
+                        </button>
+                      ) : (
+                        <button type="button" data-msg-level-megnyit={processId} onClick={() => setLevelNezet({ letterId: (levelFajl && levelFajl.letter_id) || null })}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-bold text-slate-700 hover:border-primary transition-colors">
+                          <Lucide.Eye size={13} /> Kiküldött levél megtekintése
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

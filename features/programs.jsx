@@ -541,7 +541,7 @@ function PROG_Detail({ program, myApp, onClose, onApply }) {
    képzések lépéseinek és kötelező dokumentumainak uniója. Az interjú után a
    felvételi iroda dönt, melyik képzésre vesszük fel (admission_decide).
    Kisebb programnál minden a régi: egy program, a saját lépései. */
-function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, backLabel }) {
+function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, backLabel, kezdoLepes }) {
   const isDeg = PROG_kind(program) === 'degree';
   const regiPiszkozat = isDeg && !(app.data && Array.isArray(app.data.program_ids) && app.data.program_ids.length);
   const [cur, setCur] = useState(() => regiPiszkozat
@@ -575,6 +575,9 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
      eggyel odébb), így a frissen indított jelentkezés a képzésválasztással
      kezdődik. */
   const [idx, setIdx] = useState(() => {
+    // A levél-értesítés hivatkozásáról nyitva (kezdoLepes = 'letter') a kért lépésen indul.
+    const kert = kezdoLepes ? rail.findIndex(l => l.key === kezdoLepes) : -1;
+    if (kert >= 0) return kert;
     const elso = rail.findIndex(l => !l.kesz && !l.kihagyva);
     const nyitott = elso < 0 ? rail.length - 1 : elso;
     if (beadva) return nyitott;
@@ -632,7 +635,14 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
             <div className="flex items-center gap-2"><Lucide.MessageSquare size={16} className="text-primary" /><span className="text-sm font-black text-slate-800">Üzenetváltás a felvételi irodával</span></div>
             <button type="button" onClick={() => setUzenetNyitva(false)} aria-label="Bezárás" title="Bezárás" className="text-slate-400 hover:text-slate-700"><Lucide.X size={18} /></button>
           </div>
-          <MSG_Thread processId={cur.id} role="applicant" docs={data.docs || {}} magassag="max-h-[360px]" />
+          <MSG_Thread processId={cur.id} role="applicant" docs={data.docs || {}} magassag="max-h-[360px]"
+            onLevelMegnyit={() => {
+              // Ugyanebben a nézetben: a levél lépésére vált, és bezárja az üzenetpanelt.
+              const k = rail.findIndex(l => l.key === 'letter');
+              if (k >= 0) setIdx(k);
+              setUzenetNyitva(false);
+              try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+            }} />
         </div>
       )}
       <div className="grid lg:grid-cols-[240px,1fr] gap-6">
@@ -1061,9 +1071,8 @@ function PROG_IrodaiLepes({ lepes, cur, data, program }) {
               <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
                 <Lucide.CheckCircle2 size={18} className="text-emerald-600 flex-none" />
                 <span className="text-sm font-bold text-emerald-800 flex-1 min-w-0"><span>Felvételi leveled elkészült</span>{data.letter && data.letter.sentAt ? <span className="font-semibold text-emerald-700">{' · ' + DL_date(data.letter.sentAt)}</span> : null}</span>
-                <button type="button" data-level-letoltes="1"
-                  onClick={() => LEVEL_nyomtat(document.querySelector('[data-level-hallgato="1"] [data-no-i18n="1"]'), 'Acceptance Letter ' + ((data.letter && data.letter.fileNumber) || ''))}
-                  className={U_btnPrimary + ' !py-2 text-sm'}><Lucide.Download size={15} /> Letöltés (PDF)</button>
+                <LEVEL_LetoltesGomb processId={cur.id} fileNumber={data.letter && data.letter.fileNumber}
+                  forras='[data-level-hallgato="1"] [data-no-i18n="1"]' className={U_btnPrimary + ' !py-2 text-sm'} />
               </div>
               <LetterDoc proc={proc} />
             </div>
@@ -1077,7 +1086,7 @@ function PROG_IrodaiLepes({ lepes, cur, data, program }) {
 
 /* A „Felvételi folyamat” gyűjtőnézetből megnyitott, kártyáról indított
    jelentkezés: ugyanaz a nézet (ProgramApply), mint a Képzési kínálatból. */
-function PROG_FolyamatMegnyitas({ processId, user, onExit }) {
+function PROG_FolyamatMegnyitas({ processId, user, onExit, kezdoLepes }) {
   const [allapot, setAllapot] = useState(null);
   const betolt = async () => {
     const [programs, apps] = await Promise.all([PROG_loadPrograms(), PROG_loadApps(), PROG_loadDocTypes()]);
@@ -1089,7 +1098,7 @@ function PROG_FolyamatMegnyitas({ processId, user, onExit }) {
   if (!allapot.app) return <div className="bg-white rounded-3xl border border-slate-100 p-8 text-center space-y-4"><p className="text-slate-500 font-semibold">A jelentkezés nem található.</p>{vissza}</div>;
   const program = allapot.programs.find(x => x.id === PROG_appIds(allapot.app)[0]);
   if (!program) return <div className="bg-white rounded-3xl border border-slate-100 p-8 text-center space-y-4"><p className="text-slate-500 font-semibold">A jelentkezés képzése már nem szerepel a kínálatban.</p>{vissza}</div>;
-  return <ProgramApply key={allapot.app.id} program={program} programs={allapot.programs} app={allapot.app} user={user} onExit={onExit} onSaved={() => betolt()} backLabel="Vissza a felvételi folyamatokhoz" />;
+  return <ProgramApply key={allapot.app.id} program={program} programs={allapot.programs} app={allapot.app} user={user} onExit={onExit} onSaved={() => betolt()} backLabel="Vissza a felvételi folyamatokhoz" kezdoLepes={kezdoLepes} />;
 }
 
 /* ---------- jelentkezés indítása, ha már van jelentkezése ----------

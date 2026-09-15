@@ -2685,6 +2685,161 @@ function LEVEL_nyomtat(elem, cim) {
   w.document.close();
   return true;
 }
+/* LEVÉL PDF (64): a kiküldött levél valódi PDF-fájlja. A PDF-készítő (html2pdf,
+   cdnjs) csak kiküldéskor töltődik be. A levelet a képernyőn kívül ugyanazzal a
+   LetterDoc komponenssel rendereli, amit a hallgató lát, és A4-es oldalakra tördeli. */
+const LEVEL_PDF_KONYVTAR = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+let LEVEL_pdfBetoltes = null;
+function LEVEL_pdfKonyvtar() {
+  if (typeof window !== 'undefined' && window.html2pdf) return Promise.resolve(window.html2pdf);
+  if (!LEVEL_pdfBetoltes) {
+    LEVEL_pdfBetoltes = new Promise((kesz, hiba) => {
+      const s = document.createElement('script');
+      s.src = LEVEL_PDF_KONYVTAR;
+      s.async = true;
+      s.onload = () => (window.html2pdf ? kesz(window.html2pdf) : hiba(new Error('A PDF-készítő nem töltődött be.')));
+      s.onerror = () => { LEVEL_pdfBetoltes = null; hiba(new Error('A PDF-készítő nem tölthető be (hálózati hiba).')); };
+      document.head.appendChild(s);
+    });
+  }
+  return LEVEL_pdfBetoltes;
+}
+async function LEVEL_pdf(proc, fajlnev) {
+  const LetterDoc = JourneyShared && JourneyShared.LetterDoc;
+  if (!LetterDoc) throw new Error('A levél nem állítható össze.');
+  const html2pdf = await LEVEL_pdfKonyvtar();
+  const doboz = document.createElement('div');
+  doboz.setAttribute('aria-hidden', 'true');
+  doboz.setAttribute('data-level-pdf-forras', '1');
+  doboz.style.cssText = 'position:fixed;left:-12000px;top:0;width:794px;background:#fff;pointer-events:none;';
+  document.body.appendChild(doboz);
+  const gyoker = ReactDOM.createRoot(doboz);
+  const var_ = (ms) => new Promise(r => setTimeout(r, ms));
+  try {
+    gyoker.render(<LetterDoc proc={proc} />);
+    const kezdet = Date.now();
+    let elem = null;
+    // Várunk, amíg a levél megjelenik és a fejléclogó betöltődik.
+    while (Date.now() - kezdet < 10000) {
+      elem = doboz.querySelector('[data-level-dok]');
+      if (elem && Array.from(elem.querySelectorAll('img')).every(i => i.complete)) break;
+      if (!elem && doboz.firstChild && Date.now() - kezdet > 800) break;
+      await var_(80);
+    }
+    if (!elem) throw new Error('A levél nem állítható össze — nincs kiválasztott képzés.');
+    await var_(250); // a Tailwind a frissen megjelent osztályok stílusát ekkorra elkészíti
+    // A PDF-ben nincs kártyakeret: a levél a lap teljes szélességét kapja.
+    Object.assign(elem.style, { border: '0', boxShadow: 'none', borderRadius: '0', maxWidth: 'none' });
+    const blob = await html2pdf().set({
+      margin: [8, 6, 10, 6],
+      filename: fajlnev,
+      image: { type: 'jpeg', quality: 0.92 },
+      // scrollX/scrollY 0: a görgetett oldal ne tolja el a képet; ablakszélességet nem adunk meg, különben a kivágás elcsúszik.
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['li', 'p', '[data-level-alairas]'] },
+    }).from(elem).outputPdf('blob');
+    if (!blob || !blob.size) throw new Error('A PDF üres lett.');
+    return new File([blob], fajlnev, { type: 'application/pdf' });
+  } finally {
+    try { gyoker.unmount(); } catch (e) {}
+    doboz.remove();
+  }
+}
+// A tárolt PDF megnyitása aláírt hivatkozással. Az ablak a kattintáskor nyílik meg,
+// hogy a felugró ablakok tiltása ne akassza meg a hivatkozás lekérése után.
+async function LEVEL_pdfMegnyit(fajl) {
+  if (!fajl || !fajl.path) return false;
+  const w = window.open('', '_blank');
+  try {
+    const url = await DOC_src({ path: fajl.path });
+    if (!url) { if (w) w.close(); return false; }
+    if (w) { try { w.opener = null; } catch (e) {} w.location.href = url; } else window.open(url, '_blank', 'noopener');
+    return true;
+  } catch (e) {
+    if (w) w.close();
+    return false;
+  }
+}
+/* LETÖLTÉS (PDF): ha a kiküldéskor elkészült PDF megvan (64), azt nyitja meg;
+   különben — és a 64-es migráció előtt — a böngésző nyomtatási ablakát. */
+function LEVEL_LetoltesGomb({ processId, fileNumber, forras, className }) {
+  const [pdf, setPdf] = useState(null);
+  const [hiba, setHiba] = useState('');
+  useEffect(() => {
+    let el = true;
+    setPdf(null);
+    if (!processId || String(processId).startsWith('PROC-demo')) return undefined;
+    MSG_rpc('letter_log_list', { p_process_id: processId }).then(r => {
+      if (!el || r.error || !Array.isArray(r.data)) return;
+      const x = r.data.find(sor => sor.status === 'sent' && sor.file && sor.file.path);
+      setPdf(x ? x.file : null);
+    });
+    return () => { el = false; };
+  }, [processId]);
+  const letolt = async () => {
+    setHiba('');
+    if (pdf) {
+      if (await LEVEL_pdfMegnyit(pdf)) return;
+      setHiba('A PDF most nem nyitható meg — a nyomtatási ablakot nyitjuk meg.');
+    }
+    LEVEL_nyomtat(document.querySelector(forras), 'Acceptance Letter ' + (fileNumber || ''));
+  };
+  return (
+    <>
+      <button type="button" data-level-letoltes="1" data-level-pdf={pdf ? '1' : '0'} onClick={letolt} className={className}>
+        <Lucide.Download size={15} /> Letöltés (PDF)
+      </button>
+      {hiba && <span className="text-[11px] font-semibold text-red-600" role="alert">{hiba}</span>}
+    </>
+  );
+}
+/* A KIKÜLDÖTT LEVÉL MEGTEKINTÉSE az iroda beszélgetéséből (features/messages.jsx):
+   a napló rögzített változata, a PDF-fel és nyomtatással. */
+function LEVEL_Megtekinto({ processId, letterId, onClose }) {
+  const [sor, setSor] = useState(undefined);   // undefined: töltés, null: nincs ilyen
+  const [hiba, setHiba] = useState('');
+  useEffect(() => {
+    let el = true;
+    MSG_rpc('letter_log_list', { p_process_id: processId }).then(r => {
+      if (!el) return;
+      if (r.error) { setHiba(r.hianyzik ? 'A kiküldési napló a 63-as adatbázis-migráció után érhető el.' : MSG_hiba(r.error)); setSor(null); return; }
+      const lista = Array.isArray(r.data) ? r.data : [];
+      setSor(lista.find(x => letterId && x.id === letterId) || lista.find(x => x.status === 'sent') || lista[0] || null);
+    });
+    return () => { el = false; };
+  }, [processId, letterId]);
+  const LetterDoc = JourneyShared && JourneyShared.LetterDoc;
+  return (
+    <UModal open onClose={onClose} max="max-w-4xl" title={'Felvételi levél' + (sor && sor.file_number ? ' · ' + sor.file_number : '')}
+      subtitle={sor ? ADM_datum(sor.sent_at) + (sor.sent_by_name ? ' · ' + sor.sent_by_name : '') : ''} icon={<Lucide.FileCheck size={20} />}>
+      <div className="space-y-4" data-level-megtekinto={processId}>
+        {sor === undefined && <div className="text-center py-8 text-slate-400 text-sm">Betöltés...</div>}
+        {sor === null && <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 text-sm text-slate-600">{hiba || 'A kiküldött levél nem található.'}</div>}
+        {sor && (
+          <>
+            {sor.status !== 'sent' && (
+              <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-sm text-amber-800">
+                {sor.status === 'revoked' ? 'Ezt a kiküldést visszavonták.' : 'Ezt a levelet azóta újra kiküldték.'}
+              </div>
+            )}
+            <div className="flex flex-wrap justify-end gap-2">
+              {sor.file && sor.file.path && (
+                <button type="button" data-level-megtekinto-pdf="1" onClick={() => LEVEL_pdfMegnyit(sor.file)} className={U_btnGhost + ' !py-2 text-sm'}>
+                  <Lucide.FileText size={15} /> PDF megnyitása
+                </button>
+              )}
+              <button type="button" onClick={() => LEVEL_nyomtat(document.querySelector('[data-level-megtekinto] [data-no-i18n="1"]'), 'Acceptance Letter ' + (sor.file_number || ''))} className={U_btnGhost + ' !py-2 text-sm'}>
+                <Lucide.Printer size={15} /> Nyomtatás
+              </button>
+            </div>
+            {LetterDoc && <LetterDoc proc={{ data: { letter: sor.snapshot } }} />}
+          </>
+        )}
+      </div>
+    </UModal>
+  );
+}
 /* KIKÜLDÖTT FELVÉTELI LEVELEK NAPLÓJA (63): minden kiküldés rögzített változata —
    megnyitható és nyomtatható, akkor is, ha a levelet azóta újragenerálták. */
 function ADM_LevelNaplo({ processId, jel }) {
@@ -3165,18 +3320,39 @@ const AdmissionsCore = ({ user }) => {
       const ok = await levelMent(proc, kuldottLevel, { done: true },
         'A levelet kiküldtük. A hallgató a Felvételi folyamatban látja és letöltheti, és üzenetet is kapott róla.');
       if (!ok) return;
-      /* KIKÜLDÉSI NAPLÓ (63): pontosan az a levél, ami kiment, minden értékével. A szerver
-         a jelentkező beszélgetésébe is üzenetet ír — ilyenkor a kliens nem küld külön. */
-      const napl = await MSG_rpc('letter_log_send', {
-        p_process_id: proc.id, p_file_number: kuldottLevel.fileNumber || null,
-        p_snapshot: JourneyShared.letterSnapshot({ ...proc, data: { ...(proc.data || {}), letter: kuldottLevel } }, kuldottLevel),
-      });
-      if (!napl.error) { MSG_valtozott(); setLevelNaploJel(x => x + 1); return; }
+      /* KIKÜLDÉSI NAPLÓ (63) + PDF (64): pontosan az a levél, ami kiment, minden értékével.
+         A PDF-je a jelentkező beszélgetésének mappájába kerül (chat/<eljárás>/…), és a szerver
+         az értesítő üzenethez csatolja — a kliens nem küld külön üzenetet. */
+      const snapshot = JourneyShared.letterSnapshot({ ...proc, data: { ...(proc.data || {}), letter: kuldottLevel } }, kuldottLevel);
+      let pdfFajl = null;
+      let pdfHiba = '';
+      if (!String(proc.id || '').startsWith('PROC-demo')) {
+        setLevelBusy(true);
+        setLevelUzenet({ id: proc.id, tone: 'ok', text: 'A levél PDF-je készül…' });
+        try {
+          const nev = 'Conditional_Acceptance_Letter_' + String(kuldottLevel.fileNumber || proc.id).replace(/[^A-Za-z0-9._-]+/g, '-') + '.pdf';
+          pdfFajl = await MSG_feltolt(proc.id, await LEVEL_pdf({ data: { letter: snapshot } }, nev));
+        } catch (e) {
+          pdfHiba = MSG_hiba(e);
+        } finally {
+          setLevelBusy(false);
+        }
+      }
+      let csatolva = false;
+      const kiirVege = () => setLevelUzenet({ id: proc.id, tone: pdfHiba ? 'error' : 'ok',
+        text: pdfHiba ? 'A levelet kiküldtük, de a PDF csatolása nem sikerült: ' + pdfHiba
+          : 'A levelet kiküldtük. A hallgató a Felvételi folyamatban látja és letöltheti, és üzenetet is kapott róla.' + (csatolva ? ' A levél PDF-jét csatoltuk az üzenethez.' : '') });
+      const naploArgs = { p_process_id: proc.id, p_file_number: kuldottLevel.fileNumber || null, p_snapshot: snapshot };
+      let napl = await MSG_rpc('letter_log_send', pdfFajl ? { ...naploArgs, p_file: pdfFajl } : naploArgs);
+      csatolva = !!pdfFajl && !napl.error;
+      // A 64-es migráció előtt a p_file paraméter ismeretlen: PDF nélkül naplózunk.
+      if (napl.error && napl.hianyzik && pdfFajl) napl = await MSG_rpc('letter_log_send', naploArgs);
+      if (!napl.error) { MSG_valtozott(); setLevelNaploJel(x => x + 1); kiirVege(); return; }
       const owner = proc._owner || 'demo';
       const levelSzoveg = 'A Conditional Acceptance Letter (' + (L.fileNumber || '') + ') elkészült. A Felvételi folyamat → Felvételi levél lépésnél megtekintheted és kinyomtathatod.';
-      // A jelentkező a beszélgetésben (62) kapja meg az értesítést; a migráció előtt a régi úton.
-      const r = await MSG_rpc('msg_send', { p_process_id: proc.id, p_body: levelSzoveg, p_subject: 'Feltételes felvételi levél kiállítva', p_files: [], p_tone: 'success' });
-      if (!r.error) { MSG_valtozott(); return; }
+      // A jelentkező a beszélgetésben (62) kapja meg az értesítést; a 63-as migráció előtt a régi úton.
+      const r = await MSG_rpc('msg_send', { p_process_id: proc.id, p_body: levelSzoveg, p_subject: 'Feltételes felvételi levél kiállítva', p_files: pdfFajl ? [pdfFajl] : [], p_tone: 'success' });
+      if (!r.error) { csatolva = !!pdfFajl; MSG_valtozott(); kiirVege(); return; }
       const msg = { id: 'msg-staff-' + Date.now().toString(36), processId: proc.id, owner, applicant: pName(proc), sender: (user && user.name) || 'Ügyintéző', subject: 'Feltételes felvételi levél kiállítva', preview: levelSzoveg, attachments: [], date: todayStr(), read: false, tone: 'success' };
       try { const k = 'nje_messages_' + owner; const arr = JSON.parse(localStorage.getItem(k) || '[]'); localStorage.setItem(k, JSON.stringify([msg, ...(Array.isArray(arr) ? arr : [])])); } catch (e) {}
       spSaveMsg(msg);
@@ -7905,7 +8081,7 @@ const AdmissionsHub = (() => {
     );
   }
 
-  const AdmissionsJourney = ({ user, process, onChange, onExit }) => {
+  const AdmissionsJourney = ({ user, process, onChange, onExit, kezdoLepes }) => {
     const step = process.step || 0;
     const maxReached = process.maxReached || 0;
     const data = process.data || {};
@@ -7920,8 +8096,16 @@ const AdmissionsHub = (() => {
     /* A MEGTEKINTETT lépés helyi állapot. A korábbi fázisok böngészése nem írja
        át a haladást (process.step): sem a hallgató lépéssávját, sem azt, amit az
        ügyintéző a listában lát. A haladás csak a „Tovább” gombbal nő. */
-    const [view, setView] = useState(step);
-    useEffect(() => { setView(step); }, [step]);
+    const [view, setView] = useState(() => {
+      // A levél-értesítés hivatkozásáról nyitva a kért lépésen indul (pl. 'letter').
+      const k = kezdoLepes ? STEP_DEFS.findIndex(sd => sd.id === kezdoLepes) : -1;
+      return k >= 0 ? k : step;
+    });
+    const elsoNezet = useRef(true);
+    useEffect(() => {
+      if (elsoNezet.current) { elsoNezet.current = false; if (kezdoLepes) return; }
+      setView(step);
+    }, [step]);
     useEffect(() => {
       if (STEP_DEFS[view] && STEP_DEFS[view].id === 'math' && !mathQs) setMathQs(generateMathTest());
     }, [view]);
@@ -8298,8 +8482,8 @@ const AdmissionsHub = (() => {
               <span className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1"><Lucide.CheckCircle2 size={12} />{L.sentAt ? 'Kiküldve · ' + ADM_datum(L.sentAt) : 'Kiküldve'}</span>
               <div className="flex-1"></div>
               <span className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-primary/10 text-primary inline-flex items-center gap-1"><Lucide.Hash size={12} />{L.fileNumber}</span>
-              <button type="button" data-level-letoltes="1" onClick={() => LEVEL_nyomtat(document.querySelector('[data-level-hallgato="1"] [data-no-i18n="1"]'), 'Acceptance Letter ' + (L.fileNumber || ''))}
-                className="px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 inline-flex items-center gap-1.5"><Lucide.Download size={14} /> Letöltés (PDF)</button>
+              <LEVEL_LetoltesGomb processId={process.id} fileNumber={L.fileNumber} forras='[data-level-hallgato="1"] [data-no-i18n="1"]'
+                className="px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 inline-flex items-center gap-1.5" />
             </div>
             <div data-level-hallgato="1"><LetterDoc proc={process} /></div>
           </div>
@@ -8463,7 +8647,9 @@ const AdmissionsHub = (() => {
     const LS = 'nje_processes_' + ((user && user.email) || 'guest');
     const loadAll = () => { try { const v = JSON.parse(localStorage.getItem(LS)); return Array.isArray(v) ? migrateStepOrderAll(v) : null; } catch (e) { return null; } };
     const [processes, setProcesses] = useState(() => { const s = loadAll(); return Array.isArray(s) ? s.filter(p => !String(p.id || '').startsWith('PROC-demo') && !(p.data && p.data._cancelled)) : []; });
-    const [openId, setOpenId] = useState(null);
+    // A levél-értesítés hivatkozása (features/messages.jsx → MSG_levelMegnyitas) a levél lépésén nyitja az eljárást.
+    const [openId, setOpenId] = useState(() => { try { return (window.__njeLevel && window.__njeLevel.processId) || null; } catch (e) { return null; } });
+    const [kezdoLepes, setKezdoLepes] = useState(() => { try { return window.__njeLevel && window.__njeLevel.processId ? 'letter' : null; } catch (e) { return null; } });
     const [procsLoading, setProcsLoading] = useState(true);
     const [procsRefreshing, setProcsRefreshing] = useState(false);
     const firstSync = React.useRef(true);
@@ -8511,21 +8697,40 @@ const AdmissionsHub = (() => {
        A képzéskatalógus a képzésnevekhez és a valós állapothoz kell
        (PROG_folyamatAllapot): a kártya ugyanazt mutatja, mint a Képzési kínálat. */
     const [kat, setKat] = useState([]);
+    const [katKesz, setKatKesz] = useState(false);
     const msgTerkep = MSG_useInboxTerkep();
     useEffect(() => {
       let el = true;
-      Promise.all([PROG_loadPrograms(), PROG_loadDocTypes()]).then(([p]) => { if (el) setKat(p || []); }).catch(() => {});
+      Promise.all([PROG_loadPrograms(), PROG_loadDocTypes()]).then(([p]) => { if (el) { setKat(p || []); setKatKesz(true); } }).catch(() => { if (el) setKatKesz(true); });
       return () => { el = false; };
+    }, []);
+    useEffect(() => {
+      const nyit = (id) => {
+        if (!id) return;
+        try { window.__njeLevel = null; } catch (e) {}
+        setKezdoLepes('letter');
+        setOpenId(id);
+        spFetchProc(id).then(full => { if (full) setProcesses(ps => ps.map(x => x.id === id ? { ...x, ...full } : x)); }).catch(() => {});
+      };
+      try { if (window.__njeLevel && window.__njeLevel.processId) nyit(window.__njeLevel.processId); } catch (e) {}
+      const f = (e) => nyit(e && e.detail && e.detail.processId);
+      window.addEventListener('nje:level', f);
+      return () => window.removeEventListener('nje:level', f);
     }, []);
     const delProcess = (id) => { if (typeof window !== 'undefined' && window.confirm && !window.confirm('Biztosan megszakítja ezt a jelentkezést? Az ügyintéző látni fogja, hogy megszakította.')) return; const proc = processes.find(p => p.id === id); if (proc) spSaveProc((user && user.email) || 'guest', { ...proc, data: { ...(proc.data || {}), _cancelled: true, _cancelledAt: todayStr() } }); setProcesses(ps => ps.filter(p => p.id !== id)); };
 
+    const bezar = () => { setOpenId(null); setKezdoLepes(null); };
     if (openId) {
       const proc = processes.find(p => p.id === openId);
-      if (!proc) return null;
-      // A kártyáról indított jelentkezés ugyanabban a nézetben nyílik, mint a Képzési kínálatban.
-      if (PROG_folyamatAllapot(proc, kat).tipus === 'kepzes') return <PROG_FolyamatMegnyitas processId={openId} user={user} onExit={() => setOpenId(null)} />;
-      // A régi, még itt indított (irodai) eljárás megnyitható marad.
-      return <AdmissionsJourney user={user} process={proc} onChange={(patch) => updateProcess(openId, patch)} onExit={() => setOpenId(null)} />;
+      if (!proc || !katKesz) {
+        // A lista vagy a képzéskatalógus még töltődik (pl. hivatkozásról nyitva); ha nincs ilyen eljárás, a lista látszik.
+        if (procsLoading || !katKesz) return <div className="h-64 rounded-3xl bg-white border border-slate-100 animate-pulse" data-hub-nyitas-tolt="1" />;
+      } else {
+        // A kártyáról indított jelentkezés ugyanabban a nézetben nyílik, mint a Képzési kínálatban.
+        if (PROG_folyamatAllapot(proc, kat).tipus === 'kepzes') return <PROG_FolyamatMegnyitas processId={openId} user={user} kezdoLepes={kezdoLepes} onExit={bezar} />;
+        // A régi, még itt indított (irodai) eljárás megnyitható marad.
+        return <AdmissionsJourney user={user} process={proc} kezdoLepes={kezdoLepes} onChange={(patch) => updateProcess(openId, patch)} onExit={bezar} />;
+      }
     }
 
     return (
@@ -8635,6 +8840,12 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
     const f = () => { try { window.__njeUzenetek = false; } catch (e) {} setActiveTab('messages'); };
     window.addEventListener('nje:uzenetek', f);
     return () => window.removeEventListener('nje:uzenetek', f);
+  }, []);
+  // A levél-értesítés hivatkozása: Felvételi folyamat fül — az AdmissionsHub a levél lépésén nyitja az eljárást.
+  useEffect(() => {
+    const f = () => setActiveTab('journey');
+    window.addEventListener('nje:level', f);
+    return () => window.removeEventListener('nje:level', f);
   }, []);
   const [isLoading, setIsLoading] = useState(true);
   const [showVideoInterview, setShowVideoInterview] = useState(false);
@@ -13118,6 +13329,25 @@ HU_EN_PHRASES.push(
   [/^A kért időpont túl közel esik egy másik interjúhoz: két interjú között (\d+) perc szünet kell\.$/g, 'The requested time is too close to another interview: a $1-minute break is needed between interviews.'],
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
+);
+// Levél PDF az értesítő üzenetben, hivatkozás a levél lépésére (64_letter_pdf_message.sql).
+Object.entries({
+  'Megnyitás a Felvételi folyamatban': 'Open in Admission process',
+  'Kiküldött levél megtekintése': 'View sent letter',
+  'A levél PDF-je készül…': 'Generating the letter PDF…',
+  'PDF megnyitása': 'Open PDF',
+  'Nyomtatás': 'Print',
+  'A kiküldött levél nem található.': 'The sent letter could not be found.',
+  'Ezt a kiküldést visszavonták.': 'This sending was revoked.',
+  'Ezt a levelet azóta újra kiküldték.': 'This letter has since been re-sent.',
+  'A PDF most nem nyitható meg — a nyomtatási ablakot nyitjuk meg.': 'The PDF cannot be opened right now — opening the print window instead.',
+  'A levelet kiküldtük. A hallgató a Felvételi folyamatban látja és letöltheti, és üzenetet is kapott róla. A levél PDF-jét csatoltuk az üzenethez.': 'The letter has been sent. The applicant can view and download it in the Admission process, received a message about it, and the letter PDF is attached to that message.',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push(
+  [/A feltételes felvételi leveled \(([^)]+)\) elkészült\. A Felvételi folyamatban megtekintheted és letöltheted\./g, 'Your conditional acceptance letter ($1) is ready. You can view and download it in the Admission process.'],
+  [/A levelet PDF-ben csatoltuk\./g, 'The letter is attached as a PDF.'],
+  [/A levelet kiküldtük, de a PDF csatolása nem sikerült:/g, 'The letter was sent, but attaching the PDF failed:'],
+  [/^Felvételi levél ·/g, 'Admission letter ·'],
 );
 // Levélnapló és letöltés, interjúfelvételek (63_letter_log_recordings.sql, features/recordings.jsx).
 Object.entries({

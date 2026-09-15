@@ -74,3 +74,4 @@
 61_interview_calendar.sql
 62_admission_chat.sql
 63_letter_log_recordings.sql
+64_letter_pdf_message.sql
