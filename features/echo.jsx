@@ -4183,6 +4183,15 @@ function ECHO_RawResults({ nyers, lang }) {
         </div>
       </div>
 
+      {Number(nyers.eltero_verzio) > 0 && (
+        <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 flex gap-2" data-echo-eltero-verzio={nyers.eltero_verzio}>
+          <Lucide.AlertTriangle size={14} className="flex-none mt-0.5 text-amber-600" />
+          <p className="text-[12px] font-semibold text-amber-800">
+            {`${nyers.eltero_verzio} válasz a kampány korábbi kérdőívverziójával érkezett. Ezeknél a kérdésazonosítók eltérhetnek a mostani kérdőívtől, ezért egyes válaszaik nem köthetők a mostani kérdésekhez.`}
+          </p>
+        </div>
+      )}
+
       {kerdesek.length === 0 ? (
         <p className="px-5 py-6 text-sm text-slate-400 font-bold">Ehhez a bontáshoz nincs kérdés.</p>
       ) : (
@@ -4293,6 +4302,18 @@ function ECHO_ResultBlock({ r, lang, cim, ikon, tajekoztato }) {
           valló hallgatók válaszai a 3. § (9) szerint külön, tájékoztató blokkba kerülnek,
           és ebbe a bontásba nem számítanak bele.
         </p>
+      )}
+
+      {/* KÉRDŐÍVCSERE A VÁLASZOK UTÁN (65_echo_results_questions.sql). A kérdéslista a
+          kampány MOSTANI kérdőívverziójából jön; a korábbi verzióval beküldött sorok
+          kérdésazonosítói eltérhetnek. A számot a szerver csak adminnak adja vissza. */}
+      {!tajekoztato && Number(r.eltero_verzio) > 0 && (
+        <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 flex gap-2.5" data-echo-eltero-verzio={r.eltero_verzio}>
+          <Lucide.AlertTriangle size={15} className="flex-none mt-0.5 text-amber-600" />
+          <p className="text-[12px] font-semibold text-amber-800 leading-relaxed">
+            {`${r.eltero_verzio} válasz a kampány korábbi kérdőívverziójával érkezett. Ezeknél a kérdésazonosítók eltérhetnek a mostani kérdőívtől, ezért egyes válaszaik nem köthetők a mostani kérdésekhez.`}
+          </p>
+        </div>
       )}
 
       {r.rejtve ? (

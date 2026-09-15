@@ -13330,6 +13330,11 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// Oktatói eredmények: eltérő kérdőívverzióval érkezett válaszok (65_echo_results_questions.sql).
+HU_EN_PHRASES.push(
+  [/(\d+) válasz a kampány korábbi kérdőívverziójával érkezett\. Ezeknél a kérdésazonosítók eltérhetnek a mostani kérdőívtől, ezért egyes válaszaik nem köthetők a mostani kérdésekhez\./g,
+   '$1 response(s) were submitted with an earlier questionnaire version of the campaign. Their question IDs may differ from the current questionnaire, so some of their answers cannot be matched to the current questions.'],
+);
 // Levél PDF az értesítő üzenetben, hivatkozás a levél lépésére (64_letter_pdf_message.sql).
 Object.entries({
   'Megnyitás a Felvételi folyamatban': 'Open in Admission process',
