@@ -36,6 +36,10 @@
        alapcímre küldte), a kliens itt új jelszó NÉLKÜL léptetné be a
        felhasználót. Ehelyett továbbadjuk az erre szolgáló oldalnak, a címsor
        tartalmával együtt — és itt nem is dolgozzuk fel a linket. */
+    /* Nyelv: az alkalmazás beállítása (nje_lang), különben a böngészőé — mint a privacy/terms oldalon. */
+    window.NJE_LANG = 'en';
+    try { window.NJE_LANG = localStorage.getItem('nje_lang') || ((navigator.language || '').toLowerCase().indexOf('hu') === 0 ? 'hu' : 'en'); } catch (e) {}
+    if (window.NJE_LANG !== 'hu') window.NJE_LANG = 'en';
     window.__RECOVERY_REDIRECT = /(^|[#&])type=recovery(&|$)/.test(location.hash);
     if (window.__RECOVERY_REDIRECT) location.replace('reset-password.html' + location.hash);
     try { window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY,
@@ -87,6 +91,7 @@
         <a href="#modules" class="hover:text-primary-600 transition-colors">Modules</a>
       </nav>
       <div class="flex items-center gap-2">
+        <button id="langToggle" type="button" data-noi18n onclick="njeNyelvValtas()" title="Language / Nyelv" aria-label="Language / Nyelv" class="px-3 py-2.5 rounded-xl text-[11px] font-black tracking-wide text-slate-500 hover:bg-slate-100 transition-colors">EN</button>
         <button onclick="openAuth('login')" class="px-4 py-2.5 rounded-xl text-sm font-bold text-ink hover:bg-slate-100 transition-colors">Sign in</button>
         <button onclick="openAuth('register')" class="px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Sign up</button>
       </div>
@@ -755,17 +760,17 @@
        a 59-es migráció auth.users-triggere ebből naplóz. A szövegek textContent-tel
        kerülnek az oldalra (a katalógus tartalma nem kerül HTML-ként értelmezésre). */
     const LEGAL_FALLBACK = [
-      { id: 'terms', kind: 'terms', version: '2026-09-11', required: true, roles: [], label_en: 'I have read and accept the Terms of Use.', url: 'terms.html' },
-      { id: 'privacy', kind: 'notice', version: '2026-09-11', required: true, roles: [], label_en: 'I have read the Privacy Notice.', url: 'privacy.html' },
-      { id: 'age16', kind: 'declaration', version: '2026-09-11', required: true, roles: [], label_en: 'I confirm that I am at least 16 years old.', url: 'privacy.html#kiskoru' },
-      { id: 'agent_terms', kind: 'terms', version: '2026-09-11', required: true, roles: ['AGENT'], label_en: "I accept the Partner Agency Terms and confirm that I submit applicants' data only after informing them and with their authorisation.", url: 'terms.html#partner' },
-      { id: 'marketing', kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: "I agree to receive emails about the university's programmes and events. I can withdraw this at any time.", url: 'privacy.html#marketing' },
-      { id: 'whatsapp', kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: 'I agree that the International Office may also contact me via WhatsApp (a Meta Platforms service). I can withdraw this at any time.', url: 'privacy.html#whatsapp' },
+      { id: 'terms', label_hu: "Elolvastam és elfogadom a Felhasználási feltételeket.", kind: 'terms', version: '2026-09-11', required: true, roles: [], label_en: 'I have read and accept the Terms of Use.', url: 'terms.html' },
+      { id: 'privacy', label_hu: "Megismertem az Adatkezelési tájékoztatót.", kind: 'notice', version: '2026-09-11', required: true, roles: [], label_en: 'I have read the Privacy Notice.', url: 'privacy.html' },
+      { id: 'age16', label_hu: "Kijelentem, hogy elmúltam 16 éves.", kind: 'declaration', version: '2026-09-11', required: true, roles: [], label_en: 'I confirm that I am at least 16 years old.', url: 'privacy.html#kiskoru' },
+      { id: 'agent_terms', label_hu: "Elfogadom a Partnerügynökségi feltételeket, és kijelentem, hogy a jelentkezők adatait az ő tájékoztatásuk és felhatalmazásuk alapján adom meg.", kind: 'terms', version: '2026-09-11', required: true, roles: ['AGENT'], label_en: "I accept the Partner Agency Terms and confirm that I submit applicants' data only after informing them and with their authorisation.", url: 'terms.html#partner' },
+      { id: 'marketing', label_hu: "Hozzájárulok, hogy az egyetem képzési ajánlatairól és eseményeiről e-mailben tájékoztatást kapjak. Bármikor visszavonhatom.", kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: "I agree to receive emails about the university's programmes and events. I can withdraw this at any time.", url: 'privacy.html#marketing' },
+      { id: 'whatsapp', label_hu: "Hozzájárulok, hogy a Nemzetközi Iroda WhatsAppon is felvegye velem a kapcsolatot (a Meta Platforms szolgáltatásán keresztül). Bármikor visszavonhatom.", kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: 'I agree that the International Office may also contact me via WhatsApp (a Meta Platforms service). I can withdraw this at any time.', url: 'privacy.html#whatsapp' },
     ];
     let legalDocs = LEGAL_FALLBACK;
     async function loadLegalDocs(){
       try {
-        const { data, error } = await window.sb.from('legal_document').select('id,kind,version,required,roles,label_en,url,sort_order').eq('active', true).order('sort_order');
+        const { data, error } = await window.sb.from('legal_document').select('id,kind,version,required,roles,label_hu,label_en,url,sort_order').eq('active', true).order('sort_order');
         if (!error && Array.isArray(data) && data.length) legalDocs = data;
       } catch (e) { /* tartalék marad */ }
       renderLegal();
@@ -784,7 +789,7 @@
         cb.dataset.legal = d.id; cb.dataset.version = d.version; cb.dataset.required = d.required ? '1' : '';
         cb.checked = !!prev[d.id];
         const span = document.createElement('span');
-        span.appendChild(document.createTextNode(d.label_en + ' '));
+        span.appendChild(document.createTextNode(((window.NJE_LANG === 'hu' && d.label_hu) || d.label_en) + ' '));
         if (d.required) { const st = document.createElement('b'); st.className = 'text-red-500'; st.textContent = '*'; span.appendChild(st); span.appendChild(document.createTextNode(' ')); }
         if (d.url) { const a = document.createElement('a'); a.href = d.url; a.target = '_blank'; a.rel = 'noopener'; a.className = 'font-bold text-primary-600 hover:underline whitespace-nowrap'; a.textContent = 'Read'; a.addEventListener('click', ev => ev.stopPropagation()); span.appendChild(a); }
         lab.appendChild(cb); lab.appendChild(span); return lab;
@@ -875,6 +880,223 @@
       openAuth('login');
       showErr('loginError', 'This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link with “Forgot password?”.');
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    })();
+  </script>
+  <script>
+    /* ---- Magyar nézet ----
+       Az oldal forrásnyelve angol. Magyar beállításnál (nje_lang = 'hu', vagy ha nincs beállítás,
+       magyar böngésző) a szövegcsomópontokat és a helykitöltőket szótárból cseréljük; a figyelő a
+       később beírt szövegeket (demófeliratok, hibaüzenetek, gombállapotok) is lefordítja.
+       A nyelvváltó ugyanazt a kulcsot írja, amit az alkalmazás és a jogi oldalak olvasnak. */
+    function njeNyelvValtas(){
+      try { localStorage.setItem('nje_lang', window.NJE_LANG === 'hu' ? 'en' : 'hu'); } catch (e) {}
+      location.reload();
+    }
+    (function(){
+      var gomb = document.getElementById('langToggle');
+      if (gomb) gomb.textContent = window.NJE_LANG === 'hu' ? 'HU' : 'EN';
+      if (window.NJE_LANG !== 'hu') return;
+      var HU = {
+      "Who it's for": "Kiknek szól",
+      "See it in action": "Működés közben",
+      "Process": "Folyamat",
+      "Modules": "Modulok",
+      "Sign in": "Belépés",
+      "Sign up": "Regisztráció",
+      "John von Neumann University · International Admissions": "Neumann János Egyetem · Nemzetközi felvételi",
+      "The entire admissions journey on": "A teljes felvételi folyamat",
+      "one platform": "egy platformon",
+      "From application through review and visa to enrollment. Built for applicants, agents, and university staff — in one transparent system.": "A jelentkezéstől a bírálaton és a vízumon át a beiratkozásig. Jelentkezőknek, ügynököknek és egyetemi munkatársaknak — egyetlen átlátható rendszerben.",
+      "Create account": "Fiók létrehozása",
+      "Watch demos": "Bemutatók megtekintése",
+      "Try it instantly": "Próbáld ki azonnal",
+      "12 integrated modules": "12 integrált modul",
+      "Finance": "Pénzügyek",
+      "Admissions": "Felvételi",
+      "Visa": "Vízum",
+      "Reports": "Riportok",
+      "Revenue & receivables": "Bevételek és kintlévőségek",
+      "Revenue (monthly)": "Bevétel (havi)",
+      "Pending": "Függőben",
+      "3 items": "3 tétel",
+      "One platform, three perspectives": "Egy platform, három nézőpont",
+      "Every role gets its own focused interface — on shared, real-time data.": "Minden szerepkör saját, fókuszált felületet kap — közös, valós idejű adatokon.",
+      "For applicants": "Jelentkezőknek",
+      "Apply and track your progress transparently, from admission to enrollment.": "Jelentkezz, és kövesd átláthatóan a folyamatot a felvételtől a beiratkozásig.",
+      "Online application & document upload": "Online jelentkezés és dokumentumfeltöltés",
+      "Video interview & status tracking": "Videóinterjú és státuszkövetés",
+      "Visa checklist & online payment": "Vízum-ellenőrzőlista és online fizetés",
+      "Sign up as applicant": "Regisztráció jelentkezőként",
+      "For agents & partners": "Ügynököknek és partnereknek",
+      "Manage your submitted applicants and commission in a single portal.": "Kezeld a beküldött jelentkezőidet és a jutalékodat egyetlen portálon.",
+      "Manage applicants in one place": "Jelentkezők kezelése egy helyen",
+      "Track commission & performance": "Jutalék és teljesítmény követése",
+      "Shared admissions pipeline": "Közös felvételi folyamat",
+      "Sign up as agent": "Regisztráció ügynökként",
+      "For university staff": "Egyetemi munkatársaknak",
+      "Review, finance, CRM and reporting — full end-to-end administration.": "Bírálat, pénzügyek, CRM és riportok — teljes körű ügyintézés.",
+      "Admissions review & finance": "Felvételi bírálat és pénzügyek",
+      "CRM, communication & marketing": "CRM, kommunikáció és marketing",
+      "Reports & system administration": "Riportok és rendszerkezelés",
+      "Staff sign in": "Munkatársi belépés",
+      "Short guided demos": "Rövid bemutatók",
+      "Watch the key features at work — pick a topic to play its quick walkthrough.": "Nézd meg működés közben a fő funkciókat — válassz egy témát a rövid bemutatóhoz.",
+      "Auto-playing demo": "Automatikusan futó bemutató",
+      "Admissions review": "Felvételi bírálat",
+      "Applicant evaluation": "Jelentkező értékelése",
+      "BSc Business Admin": "BSc Gazdálkodás és menedzsment",
+      "Submitted": "Beadva",
+      "Accepted": "Felvéve",
+      "Overall score": "Összpontszám",
+      "Motivation": "Motiváció",
+      "GPA": "Tanulmányi átlag",
+      "Language": "Nyelvtudás",
+      "Payments": "Befizetések",
+      "Application Fee · €50": "Jelentkezési díj · €50",
+      "Chen Wei · Bank transfer": "Chen Wei · Banki átutalás",
+      "Paid": "Fizetve",
+      "Verify": "Jóváhagyás",
+      "Verified transfers post to revenue instantly.": "A jóváhagyott átutalások azonnal megjelennek a bevételben.",
+      "Interview slots · Mar 25": "Interjúidőpontok · márc. 25.",
+      "Available": "Szabad",
+      "Booked": "Foglalt",
+      "Teams meeting link generated automatically": "A Teams-link automatikusan elkészül",
+      "Dear Chen Wei, your application has been": "Kedves Chen Wei! A jelentkezésedet",
+      "accepted": "elfogadtuk",
+      "! Please complete enrollment by Apr 1. 🎓": ". Kérjük, április 1-ig fejezd be a beiratkozást. 🎓",
+      "Reviewers score an applicant — the status updates to Accepted in real time.": "A bírálók pontozzák a jelentkezőt — a státusz valós időben Felvételre vált.",
+      "The process": "A folyamat",
+      "The admission journey, end to end": "A felvételi út, elejétől a végéig",
+      "Application": "Jelentkezés",
+      "Online form, documents and recommendation letters.": "Online űrlap, dokumentumok és ajánlólevelek.",
+      "Review & interview": "Bírálat és interjú",
+      "Scoring, video interview and slot booking in one place.": "Pontozás, videóinterjú és időpontfoglalás egy helyen.",
+      "Offer & visa": "Ajánlat és vízum",
+      "Conditional offer, visa checklist and compliance.": "Feltételes ajánlat, vízum-ellenőrzőlista és megfelelőség.",
+      "Enrollment": "Beiratkozás",
+      "Payment, invoicing and finalized enrollment.": "Fizetés, számlázás és véglegesített beiratkozás.",
+      "One system, twelve modules": "Egy rendszer, tizenkét modul",
+      "Everything you need for international admissions and the student lifecycle.": "Minden, ami a nemzetközi felvételihez és a hallgatói életúthoz kell.",
+      "Ready to get started?": "Kezdhetjük?",
+      "Create your account in seconds, or sign in as staff.": "Hozd létre a fiókodat pár másodperc alatt, vagy lépj be munkatársként.",
+      "John von Neumann University · UniPortal Pro": "Neumann János Egyetem · UniPortal Pro",
+      "© 2026 John von Neumann University. Demo interface. ·": "© 2026 Neumann János Egyetem. Bemutató felület. ·",
+      "Privacy Notice": "Adatkezelési tájékoztató",
+      "Terms of Use": "Felhasználási feltételek",
+      "Email address": "E-mail-cím",
+      "Password": "Jelszó",
+      "Forgot password?": "Elfelejtett jelszó?",
+      "Reset your password": "Jelszó visszaállítása",
+      "Enter the email address you sign in with. We'll send you a link to set a new password.": "Add meg az e-mail-címet, amellyel belépsz. Küldünk egy linket, amellyel új jelszót állíthatsz be.",
+      "Send reset link": "Visszaállító link küldése",
+      "← Back to sign in": "← Vissza a belépéshez",
+      "I'm signing up as": "Így regisztrálok",
+      "Applicant": "Jelentkező",
+      "Agent": "Ügynök",
+      "Full name": "Teljes név",
+      "Your agency is created in a pending state. An administrator reviews it before you can see any applicant.": "Az ügynökséged függő állapotban jön létre. Egy adminisztrátor átnézi, mielőtt bármely jelentkezőt látnál.",
+      "Agency name": "Ügynökség neve",
+      "Country of origin": "Székhely szerinti ország",
+      "Countries of recruitment": "Toborzási országok",
+      "Separate several countries with commas.": "Több országot vesszővel válassz el.",
+      "You will need to confirm your email address, and an administrator approves every new account before it can be used.": "Meg kell erősítened az e-mail-címedet, és minden új fiókot egy adminisztrátor hagy jóvá, mielőtt használható lenne.",
+      "Welcome,": "Üdv,",
+      "Your account is ready.": "A fiókod elkészült.",
+      "Enter the platform": "Belépés a platformra",
+      "Back to sign in": "Vissza a belépéshez",
+      "At least 6 characters": "Legalább 6 karakter",
+      "e.g. Anna Kovács": "pl. Kovács Anna",
+      "e.g. Global Study Ltd.": "pl. Global Study Kft.",
+      "e.g. Nigeria": "pl. Nigéria",
+      "e.g. Nigeria, Ghana, Kenya": "pl. Nigéria, Ghána, Kenya",
+      "e.g. admin@uni.hu": "pl. admin@uni.hu",
+      "e.g. anna@example.com": "pl. anna@example.com",
+      "Agent & partner portal": "Ügynök- és partnerportál",
+      "Manage applicants and commissions.": "Jelentkezők és jutalékok kezelése.",
+      "Application & admissions": "Jelentkezés és felvételi",
+      "Handle applications and documents.": "Jelentkezések és dokumentumok kezelése.",
+      "Communication & CRM": "Kommunikáció és CRM",
+      "Email, WhatsApp and campaigns.": "E-mail, WhatsApp és kampányok.",
+      "Revenue, fees and invoicing.": "Bevételek, díjak és számlázás.",
+      "Visa & compliance": "Vízum és megfelelőség",
+      "Visa checklist and risk management.": "Vízum-ellenőrzőlista és kockázatkezelés.",
+      "Scoring and reviewer collaboration.": "Pontozás és bírálói együttműködés.",
+      "Interview scheduling": "Interjúszervezés",
+      "Slots and video interviews.": "Időpontok és videóinterjúk.",
+      "Marketing & leads": "Marketing és érdeklődők",
+      "Leads and campaign performance.": "Érdeklődők és kampányeredmények.",
+      "Student portal": "Hallgatói portál",
+      "A dedicated space for applicants.": "Saját felület a jelentkezőknek.",
+      "Dashboards and exports.": "Irányítópultok és exportok.",
+      "Intelligence": "Elemzések",
+      "Automations and insights.": "Automatizmusok és kimutatások.",
+      "System administration": "Rendszerkezelés",
+      "Permissions and integrations.": "Jogosultságok és integrációk.",
+      "Verify a bank transfer and watch monthly revenue update instantly.": "Hagyj jóvá egy banki átutalást, és nézd, ahogy a havi bevétel azonnal frissül.",
+      "Interview booking": "Interjúfoglalás",
+      "Applicants book an interview slot; a Teams link is generated automatically.": "A jelentkező interjúidőpontot foglal; a Teams-link automatikusan elkészül.",
+      "Communication": "Kommunikáció",
+      "Send templated WhatsApp messages to applicants without leaving the platform.": "Sablonos WhatsApp-üzenetek a jelentkezőknek, a platform elhagyása nélkül.",
+      "Signing in…": "Belépés…",
+      "Sign-in failed.": "A belépés nem sikerült.",
+      "Connection error. Please try again.": "Kapcsolódási hiba. Kérjük, próbáld újra.",
+      "Sending…": "Küldés…",
+      "Too many requests. Please wait a minute before requesting another link.": "Túl sok kérés. Várj egy percet, mielőtt új linket kérsz.",
+      "The request failed. Please try again.": "A kérés nem sikerült. Kérjük, próbáld újra.",
+      "Read": "Elolvasom",
+      "Optional — you can change these later in your profile": "Nem kötelező — később a profilodban módosíthatod",
+      "Creating…": "Létrehozás…",
+      "Please accept the required items marked with *.": "Fogadd el a *-gal jelölt kötelező tételeket.",
+      "Sign-up failed.": "A regisztráció nem sikerült.",
+      "Your account has been created and is now waiting for administrator approval. You can sign in, but the platform stays locked until it is approved.": "A fiókod létrejött, és adminisztrátori jóváhagyásra vár. Be tudsz lépni, de a platform a jóváhagyásig zárolva marad.",
+      "Check your inbox and confirm your email address. After that an administrator reviews your registration — you will be able to sign in once it is approved.": "Nézd meg a postafiókodat, és erősítsd meg az e-mail-címedet. Ezután egy adminisztrátor átnézi a regisztrációdat — a jóváhagyás után tudsz belépni.",
+      "Continue": "Tovább",
+      "This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link with “Forgot password?”.": "Ez az e-mailes link érvénytelen vagy lejárt — minden link csak egyszer és korlátozott ideig működik. Ha jelszót állítottál vissza, kérj új linket az „Elfelejtett jelszó?” gombbal.",
+      "Invalid login credentials": "Hibás e-mail-cím vagy jelszó.",
+      "Email not confirmed": "Az e-mail-cím még nincs megerősítve.",
+      "User already registered": "Ezzel az e-mail-címmel már van fiók."
+      };
+      var MINTAK = [
+        [/^If an account exists for (.+), we have sent it a link to set a new password\. Check your inbox \(and the spam folder\)\. The link works once and expires after a while\.$/,
+         'Ha létezik fiók a(z) $1 címhez, elküldtük rá az új jelszó beállításához szükséges linket. Nézd meg a postafiókodat (és a levélszemét mappát is). A link egyszer használható, és egy idő után lejár.'],
+        [/^Send reset link \((\d+)\)$/, 'Visszaállító link küldése ($1)'],
+      ];
+      var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1 };
+      function forditas(t){
+        var k = t.replace(/\s+/g, ' ').trim();
+        if (!k) return null;
+        if (Object.prototype.hasOwnProperty.call(HU, k)) return HU[k];
+        for (var i = 0; i < MINTAK.length; i++) if (MINTAK[i][0].test(k)) return k.replace(MINTAK[i][0], MINTAK[i][1]);
+        return null;
+      }
+      function szoveg(n){
+        var p = n.parentNode;
+        if (!p || SKIP[p.nodeName] || (p.closest && p.closest('[data-noi18n]'))) return;
+        var uj = forditas(n.nodeValue);
+        if (uj === null) return;
+        var m = n.nodeValue.match(/^(\s*)[\s\S]*?(\s*)$/);
+        n.nodeValue = m[1] + uj + m[2];
+      }
+      function bejar(gyoker){
+        if (gyoker.nodeType === 3) { szoveg(gyoker); return; }
+        if (gyoker.nodeType !== 1 || SKIP[gyoker.nodeName]) return;
+        ['placeholder', 'title', 'aria-label'].forEach(function(a){
+          var el = gyoker.querySelectorAll ? [gyoker].concat([].slice.call(gyoker.querySelectorAll('[' + a + ']'))) : [];
+          el.forEach(function(e){ var v = e.getAttribute && e.getAttribute(a); if (v && !e.closest('[data-noi18n]')) { var u = forditas(v); if (u !== null) e.setAttribute(a, u); } });
+        });
+        var w = document.createTreeWalker(gyoker, NodeFilter.SHOW_TEXT), n, lista = [];
+        while ((n = w.nextNode())) lista.push(n);
+        lista.forEach(szoveg);
+      }
+      document.documentElement.lang = 'hu';
+      document.title = 'UniPortal Pro — Neumann János Egyetem | Nemzetközi felvételi platform';
+      bejar(document.body);
+      new MutationObserver(function(ms){
+        ms.forEach(function(m){
+          if (m.type === 'characterData') szoveg(m.target);
+          else m.addedNodes.forEach(bejar);
+        });
+      }).observe(document.body, { childList: true, subtree: true, characterData: true });
     })();
   </script>
 </body>

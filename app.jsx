@@ -5665,9 +5665,9 @@ const Finance: React.FC = () => {
                       int.status === 'Connected' ? 'bg-emerald-500' : 
                       int.status === 'Error' ? 'bg-red-500' : 'bg-slate-300'
                     }`} />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">{int.status}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{STATUSZ_FELIRAT[int.status] || int.status}</span>
                     <span className="text-[10px] text-slate-300">•</span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">{int.mode} MODE</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{int.mode === 'Live' ? 'Éles mód' : 'Teszt mód'}</span>
                   </div>
                 </div>
               </div>
@@ -5693,7 +5693,7 @@ const Finance: React.FC = () => {
                     <span className={`w-2 h-2 rounded-full ${
                       int.status === 'Connected' ? 'bg-emerald-500' : 'bg-slate-300'
                     }`} />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">{int.status}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{STATUSZ_FELIRAT[int.status] || int.status}</span>
                     {int.lastSync && (
                       <>
                         <span className="text-[10px] text-slate-300">•</span>
@@ -10027,7 +10027,7 @@ const MarketingLeads: React.FC = () => {
     leads.forEach(lead => {
       statuses[lead.status] = (statuses[lead.status] || 0) + 1;
     });
-    return Object.entries(statuses).map(([name, value]) => ({ name, value }));
+    return Object.entries(statuses).map(([name, value]) => ({ name: STATUSZ_FELIRAT[name] || name, value }));
   };
 
   const getCampaignPerformance = () => {
@@ -10173,7 +10173,7 @@ const MarketingLeads: React.FC = () => {
                     lead.status === 'New' ? 'bg-blue-100 text-blue-700' :
                     lead.status === 'Lost' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
                   }`}>
-                    {lead.status}
+                    {STATUSZ_FELIRAT[lead.status] || lead.status}
                   </span>
                 </td>
                 <td className="px-8 py-4 text-xs text-slate-500">{lead.createdAt}</td>
@@ -10297,31 +10297,38 @@ return MarketingLeads;
 const Reports = (() => {
 type ReportType = 'ApplicantRegistrations' | 'ApplicationLastRevised' | 'ApplicationRevisions' | 'DocumentUploads' | 'Status' | 'StatusByCitizenship' | 'StatusByInstitutionAll' | 'StatusByInstitutionTop1' | 'StatusByInstitutionTop3' | 'SizeByStatus' | 'Invoices' | 'StatusByCourseAdmin' | 'StatusByCourseApplicant' | 'StatusByCitizenshipAdmin' | 'StatusByCitizenshipApplicant' | 'ApplicationsMatrix' | 'OffersMatrix' | 'ApplicationsFunnelMonthly' | 'ApplicationsFunnelWeekly' | 'ApplicationsPriorities' | 'InvoicesDetails';
 
+/* Lead- és integrációs státuszok magyar felirata; az adatban az angol kulcs marad
+   (a színezés és a szűrés arra épül). Angol módban a HU_EN adja vissza az angolt. */
+const STATUSZ_FELIRAT: Record<string, string> = {
+  New: 'Új', Contacted: 'Kapcsolatfelvétel', Converted: 'Konvertált', Lost: 'Elveszett',
+  Connected: 'Csatlakoztatva', Disconnected: 'Nincs csatlakoztatva', Error: 'Hiba',
+};
+
 const Reports: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
 
   const reports = [
-    { id: 'ApplicantRegistrations', name: 'ApplicantRegistrations', description: 'Hány jelentkező regisztrált egy adott napon?' },
-    { id: 'ApplicationLastRevised', name: 'ApplicationLastRevised', description: 'Megmutatja, hány jelentkezést módosítottak *utoljára* (egyszer vagy többször) egy adott napon.' },
-    { id: 'ApplicationRevisions', name: 'ApplicationRevisions', description: 'Megmutatja, összesen hány módosítás történt egy adott napon.' },
-    { id: 'DocumentUploads', name: 'DocumentUploads', description: 'A dokumentumfeltöltési aktivitás — jelzi, hogy a jelentkezők dolgoznak-e a jelentkezésükön.' },
-    { id: 'Status', name: 'Status', description: 'Gyors áttekintés az egyes státuszokban lévő jelentkezések összesített számáról.' },
-    { id: 'StatusByCitizenship', name: 'StatusByCitizenship', description: 'Gyors áttekintés az egyes státuszokban lévő jelentkezések összesített számáról, állampolgárság szerinti bontásban.' },
-    { id: 'StatusByInstitutionAll', name: 'StatusByInstitutionAll', description: 'Megmutatja, hány jelentkezés és milyen státuszban tartalmaz egy adott intézmény képzését. Ez a riport minden prioritást figyelembe vesz.' },
-    { id: 'StatusByInstitutionTop1', name: 'StatusByInstitutionTop1', description: 'Megmutatja, hány jelentkezés és milyen státuszban tartalmaz egy adott intézmény képzését — csak akkor számít bele, ha az intézmény az 1. prioritás volt.' },
-    { id: 'StatusByInstitutionTop3', name: 'StatusByInstitutionTop3', description: 'Megmutatja, hány jelentkezés és milyen státuszban tartalmaz egy adott intézmény képzését — csak akkor számít bele, ha az intézmény a TOP 3 prioritás egyike volt.' },
-    { id: 'SizeByStatus', name: 'SizeByStatus', description: 'A jelentkezések méretének eloszlása (hisztogram) — így mérhető, mennyire haladtak a jelentkezők.' },
-    { id: 'Invoices', name: 'Invoices', description: 'A kiszámlázott összegek, befizetések és lejárt tartozások áttekintése.' },
-    { id: 'StatusByCourseAdmin', name: 'StatusByCourseAdmin', description: 'Ügyintézői státuszok áttekintése képzésenként' },
-    { id: 'StatusByCourseApplicant', name: 'StatusByCourseApplicant', description: 'Jelentkezői státuszok áttekintése képzésenként' },
-    { id: 'StatusByCitizenshipAdmin', name: 'StatusByCitizenshipAdmin', description: 'Ügyintézői státuszok áttekintése állampolgárságonként' },
-    { id: 'StatusByCitizenshipApplicant', name: 'StatusByCitizenshipApplicant', description: 'Jelentkezői státuszok áttekintése állampolgárságonként' },
-    { id: 'ApplicationsMatrix', name: 'ApplicationsMatrix', description: 'A jelentkezési státuszok és állampolgárságok mátrixa, mindkét irányú összesítéssel.' },
-    { id: 'OffersMatrix', name: 'OffersMatrix', description: 'Az ajánlattípusok és állampolgárságok mátrixa, mindkét irányú összesítéssel.' },
-    { id: 'ApplicationsFunnelMonthly', name: 'ApplicationsFunnelMonthly', description: 'Két év jelentkezési statisztikáját hasonlítja össze havi bontásban.' },
-    { id: 'ApplicationsFunnelWeekly', name: 'ApplicationsFunnelWeekly', description: 'Két év jelentkezési statisztikáját hasonlítja össze heti bontásban.' },
-    { id: 'ApplicationsPriorities', name: 'ApplicationsPriorities', description: 'A jelentkezők relatív rangsorát mutatja több intézmény között. Csak több intézmény közös használata esetén van értelme.' },
-    { id: 'InvoicesDetails', name: 'InvoicesDetails', description: 'Részletes riport a kiállított számlákról.' },
+    { id: 'ApplicantRegistrations', name: 'Regisztrációk naponta', description: 'Hány jelentkező regisztrált egy adott napon?' },
+    { id: 'ApplicationLastRevised', name: 'Utolsó módosítás napja', description: 'Megmutatja, hány jelentkezést módosítottak *utoljára* (egyszer vagy többször) egy adott napon.' },
+    { id: 'ApplicationRevisions', name: 'Módosítások naponta', description: 'Megmutatja, összesen hány módosítás történt egy adott napon.' },
+    { id: 'DocumentUploads', name: 'Dokumentumfeltöltések', description: 'A dokumentumfeltöltési aktivitás — jelzi, hogy a jelentkezők dolgoznak-e a jelentkezésükön.' },
+    { id: 'Status', name: 'Státuszok', description: 'Gyors áttekintés az egyes státuszokban lévő jelentkezések összesített számáról.' },
+    { id: 'StatusByCitizenship', name: 'Státusz állampolgárság szerint', description: 'Gyors áttekintés az egyes státuszokban lévő jelentkezések összesített számáról, állampolgárság szerinti bontásban.' },
+    { id: 'StatusByInstitutionAll', name: 'Státusz intézményenként (minden prioritás)', description: 'Megmutatja, hány jelentkezés és milyen státuszban tartalmaz egy adott intézmény képzését. Ez a riport minden prioritást figyelembe vesz.' },
+    { id: 'StatusByInstitutionTop1', name: 'Státusz intézményenként (1. prioritás)', description: 'Megmutatja, hány jelentkezés és milyen státuszban tartalmaz egy adott intézmény képzését — csak akkor számít bele, ha az intézmény az 1. prioritás volt.' },
+    { id: 'StatusByInstitutionTop3', name: 'Státusz intézményenként (TOP 3)', description: 'Megmutatja, hány jelentkezés és milyen státuszban tartalmaz egy adott intézmény képzését — csak akkor számít bele, ha az intézmény a TOP 3 prioritás egyike volt.' },
+    { id: 'SizeByStatus', name: 'Jelentkezések mérete státuszonként', description: 'A jelentkezések méretének eloszlása (hisztogram) — így mérhető, mennyire haladtak a jelentkezők.' },
+    { id: 'Invoices', name: 'Számlák', description: 'A kiszámlázott összegek, befizetések és lejárt tartozások áttekintése.' },
+    { id: 'StatusByCourseAdmin', name: 'Ügyintézői státusz képzésenként', description: 'Ügyintézői státuszok áttekintése képzésenként' },
+    { id: 'StatusByCourseApplicant', name: 'Jelentkezői státusz képzésenként', description: 'Jelentkezői státuszok áttekintése képzésenként' },
+    { id: 'StatusByCitizenshipAdmin', name: 'Ügyintézői státusz állampolgárságonként', description: 'Ügyintézői státuszok áttekintése állampolgárságonként' },
+    { id: 'StatusByCitizenshipApplicant', name: 'Jelentkezői státusz állampolgárságonként', description: 'Jelentkezői státuszok áttekintése állampolgárságonként' },
+    { id: 'ApplicationsMatrix', name: 'Jelentkezési mátrix', description: 'A jelentkezési státuszok és állampolgárságok mátrixa, mindkét irányú összesítéssel.' },
+    { id: 'OffersMatrix', name: 'Ajánlati mátrix', description: 'Az ajánlattípusok és állampolgárságok mátrixa, mindkét irányú összesítéssel.' },
+    { id: 'ApplicationsFunnelMonthly', name: 'Jelentkezési tölcsér (havi)', description: 'Két év jelentkezési statisztikáját hasonlítja össze havi bontásban.' },
+    { id: 'ApplicationsFunnelWeekly', name: 'Jelentkezési tölcsér (heti)', description: 'Két év jelentkezési statisztikáját hasonlítja össze heti bontásban.' },
+    { id: 'ApplicationsPriorities', name: 'Jelentkezési prioritások', description: 'A jelentkezők relatív rangsorát mutatja több intézmény között. Csak több intézmény közös használata esetén van értelme.' },
+    { id: 'InvoicesDetails', name: 'Számlák részletei', description: 'Részletes riport a kiállított számlákról.' },
   ];
 
   const renderReportContent = () => {
@@ -11415,11 +11422,11 @@ const Reports: React.FC = () => {
               onClick={() => setSelectedReport(null)}
               className="flex items-center gap-2 text-slate-400 hover:text-amber-600 font-bold text-sm mb-2 transition-all"
             >
-              <ICONS.ArrowLeft size={16} /> back
+              <ICONS.ArrowLeft size={16} /> Vissza
             </button>
           ) : null}
           <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            {selectedReport || 'Riportok'}
+            {selectedReport ? (reports.find(r => r.id === selectedReport)?.name || selectedReport) : 'Riportok'}
           </h2>
           <p className="text-slate-500 mt-1 max-w-[75ch]">
             {selectedReport ? reports.find(r => r.id === selectedReport)?.description : 'Válasszon egy riportot az adatok megtekintéséhez.'}
@@ -11681,11 +11688,15 @@ const PROFILE_EVENTS = [
 const CAL_TONE_DOT = { red: 'bg-red-500', amber: 'bg-amber-500', emerald: 'bg-emerald-500', primary: 'bg-primary' };
 const CAL_TONE_SOFT = { red: 'bg-red-50 text-red-600', amber: 'bg-amber-50 text-amber-600', emerald: 'bg-emerald-50 text-emerald-600', primary: 'bg-primary/10 text-primary' };
 const HU_MONTHS = ['Január','Február','Március','Április','Május','Június','Július','Augusztus','Szeptember','Október','November','December'];
+const EN_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+// A Profilom naptára a nyelvi beállítás szerint (a HU→EN fordító a hónapneveket nem ismeri).
+const CAL_angol = () => { try { return localStorage.getItem('nje_lang') === 'en'; } catch (e) { return false; } };
+const CAL_honap = (i) => (CAL_angol() ? EN_MONTHS : HU_MONTHS)[i];
 function MiniCalendar({ events }) {
   const start = events && events[0] ? new Date(events[0].date) : new Date();
   const [cur, setCur] = useState(new Date(start.getFullYear(), start.getMonth(), 1));
   const y = cur.getFullYear(), m = cur.getMonth();
-  const dayNames = ['H','K','Sze','Cs','P','Szo','V'];
+  const dayNames = CAL_angol() ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] : ['H','K','Sze','Cs','P','Szo','V'];
   const firstDow = (new Date(y, m, 1).getDay() + 6) % 7;
   const daysInMonth = new Date(y, m + 1, 0).getDate();
   const evByDay = {};
@@ -11698,7 +11709,7 @@ function MiniCalendar({ events }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <div className="font-bold text-slate-800">{HU_MONTHS[m]} {y}</div>
+        <div className="font-bold text-slate-800">{CAL_honap(m)} {y}</div>
         <div className="flex items-center gap-1">
           <button onClick={() => setCur(new Date(y, m - 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"><Lucide.ChevronLeft size={16} /></button>
           <button onClick={() => setCur(new Date(y, m + 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"><Lucide.ChevronRight size={16} /></button>
@@ -11787,7 +11798,7 @@ const AccountPage = ({ user, onUpdate, onClose }) => {
   const upcoming = [...events].filter(e => new Date(e.date) >= new Date('2026-06-30')).sort((a, b) => new Date(a.date) - new Date(b.date));
   const messages = React.useMemo(() => { try { const v = JSON.parse(localStorage.getItem('nje_messages_' + (user.email || 'guest'))); return Array.isArray(v) ? v : []; } catch (e) { return []; } }, [user.email]);
   const recentMsgs = [...messages].sort((a, b) => (a.read === b.read) ? 0 : (a.read ? 1 : -1)).slice(0, 5);
-  const fmtDate = (iso) => { const d = new Date(iso); return d.getFullYear() + '. ' + HU_MONTHS[d.getMonth()].toLowerCase() + ' ' + d.getDate() + '.'; };
+  const fmtDate = (iso) => { const d = new Date(iso); return CAL_angol() ? d.getDate() + ' ' + EN_MONTHS[d.getMonth()] + ' ' + d.getFullYear() : d.getFullYear() + '. ' + HU_MONTHS[d.getMonth()].toLowerCase() + ' ' + d.getDate() + '.'; };
 
   return (
     <div className="p-8 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -11858,7 +11869,7 @@ const AccountPage = ({ user, onUpdate, onClose }) => {
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Közelgő események</div>
             {upcoming.map((e, i) => (
               <div key={i} className="flex items-center gap-3">
-                <div className={'w-10 h-10 rounded-xl flex flex-col items-center justify-center font-bold flex-none ' + CAL_TONE_SOFT[e.tone]}><span className="text-[9px] uppercase leading-none">{HU_MONTHS[new Date(e.date).getMonth()].slice(0, 3)}</span><span className="text-sm leading-none">{new Date(e.date).getDate()}</span></div>
+                <div className={'w-10 h-10 rounded-xl flex flex-col items-center justify-center font-bold flex-none ' + CAL_TONE_SOFT[e.tone]}><span className="text-[9px] uppercase leading-none">{CAL_honap(new Date(e.date).getMonth()).slice(0, 3)}</span><span className="text-sm leading-none">{new Date(e.date).getDate()}</span></div>
                 <div className="min-w-0"><div className="text-sm font-bold text-slate-700 truncate">{e.label}</div><div className="text-xs text-slate-400">{fmtDate(e.date)}</div></div>
               </div>
             ))}
@@ -13330,6 +13341,220 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// Riportnevek és státuszfeliratok (magyar felirat → angol).
+Object.entries({
+  'Regisztrációk naponta': 'Registrations per day',
+  'Utolsó módosítás napja': 'Last revision date',
+  'Módosítások naponta': 'Revisions per day',
+  'Dokumentumfeltöltések': 'Document uploads',
+  'Státuszok': 'Statuses',
+  'Státusz állampolgárság szerint': 'Status by citizenship',
+  'Státusz intézményenként (minden prioritás)': 'Status by institution (all priorities)',
+  'Státusz intézményenként (1. prioritás)': 'Status by institution (1st priority)',
+  'Státusz intézményenként (TOP 3)': 'Status by institution (top 3)',
+  'Jelentkezések mérete státuszonként': 'Application size by status',
+  'Számlák': 'Invoices',
+  'Ügyintézői státusz képzésenként': 'Staff status by programme',
+  'Jelentkezői státusz képzésenként': 'Applicant status by programme',
+  'Ügyintézői státusz állampolgárságonként': 'Staff status by citizenship',
+  'Jelentkezői státusz állampolgárságonként': 'Applicant status by citizenship',
+  'Jelentkezési mátrix': 'Applications matrix',
+  'Ajánlati mátrix': 'Offers matrix',
+  'Jelentkezési tölcsér (havi)': 'Applications funnel (monthly)',
+  'Jelentkezési tölcsér (heti)': 'Applications funnel (weekly)',
+  'Jelentkezési prioritások': 'Application priorities',
+  'Számlák részletei': 'Invoice details',
+  'Vissza': 'Back', 'Kapcsolatfelvétel': 'Contacted', 'Konvertált': 'Converted', 'Elveszett': 'Lost',
+  'Csatlakoztatva': 'Connected', 'Nincs csatlakoztatva': 'Disconnected', 'Hiba': 'Error', 'Éles mód': 'Live mode', 'Teszt mód': 'Test mode',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+// Nyelvi bejárás (2026-09-15), admin felületek: Kurzusok, Jelentkezések, Interjú, Ügynökportál, Marketing,
+// Pénzügyek, ECHO-kampányok, Oktatói eredmények, Rendszerkezelés, Regisztrációk.
+Object.entries({
+  'Új': 'New',
+  'Bírálat Mentése': 'Save review',
+  'képzés': 'degree',
+  'Kurzusok, oktatók, hallgatói névsor és tananyagok · törzsadat, amire az ECHO kampányok célközönsége is épül': 'Courses, teachers, student rosters and materials · master data that ECHO campaign audiences are built on',
+  'Új kurzus': 'New course',
+  'nincs órarend': 'no timetable',
+  'Kampányban': 'In campaign',
+  'Leírás': 'Description',
+  '+ Oktató': '+ Teacher',
+  '+ Hallgató': '+ Student',
+  'Az óraarány az órarendi órák százaléka. A 28/2023. határozat küszöbe alatt az oktató nem véleményezhető ezen a kurzuson.':
+    'The teaching share is the percentage of timetabled classes. Below the threshold of Resolution 28/2023 the teacher cannot be evaluated on this course.',
+  'Tananyagok és dokumentumok': 'Materials and documents',
+  'nincs feltöltött fájl': 'no uploaded files',
+  'A fájlokat csak ügyintéző és a kurzus oktatója éri el. A hallgatók nem látják — ez belső nyilvántartás.':
+    'Only staff and the course teacher can access these files. Students cannot see them — this is an internal record.',
+  'Hallgatói névsor ·': 'Student roster ·',
+  'Ez a névsor mondja meg, kit ér el a kampány: célközönség-szűkítés nélkül a kérdőívet a félév kurzusaira beiratkozott hallgatók kapják meg.':
+    'This roster determines who the campaign reaches: without audience filters, the questionnaire goes to the students enrolled in the semester’s courses.',
+  'A kurzus története': 'Course history',
+  'kurzuskódú': '— course code;',
+  'félévek egy tantárgy egymást követő futásai. Minden félév a saját akkori oktatóját és létszámát mutatja.':
+    'semesters are consecutive runs of the same subject. Each semester shows its own teacher and enrolment at the time.',
+  'Ez a tantárgy egyelőre egyetlen félévvel szerepel. Amint ugyanezzel a kurzuskóddal létrejön a következő félév, itt egymás alatt fognak állni.':
+    'This subject has only one semester so far. Once the next semester is created with the same course code, they will be listed here one below the other.',
+  'Változásnapló': 'Change log',
+  'megnevezés': 'name',
+  '(törölve)': '(deleted)',
+  'létrehozás': 'created',
+  'Keresés kód vagy megnevezés szerint…': 'Search by code or name…',
+  'Szűrés névre vagy e-mailre…': 'Filter by name or email…',
+  'Dokumentum-ellenőrzésre vár (': 'Awaiting document check (',
+  'Összes (': 'All (',
+  'Elkezdte, még nem adta be.': 'Started, not yet submitted.',
+  'Dokumentum-ellenőrzésre vár.': 'Awaiting document check.',
+  'A dokumentumok rendben, mehet bírálatra.': 'Documents are in order, ready for review.',
+  'A bírálat alatt. Innen ágazik el a döntés.': 'Under review. The decision branches from here.',
+  'Feltételes felvételi levél kiállítva.': 'Conditional acceptance letter issued.',
+  'Végleges felvétel. Innen indulnak a beiratkozás utáni sávok.': 'Final admission. The post-enrolment stages start from here.',
+  'Végállapot — csak explicit újranyitással hagyható el.': 'Final state — can only be left by explicitly reopening.',
+  '· Alapértelmezett munkarend': '· Default working hours',
+  'Szünet két interjú között (perc)': 'Break between two interviews (minutes)',
+  'Módosult az interjúd időpontja': 'Your interview time has changed',
+  'Feltételes felvételi levél kiállítva': 'Conditional acceptance letter issued',
+  'Üdvözöljük a Global Study Ügynökség központi vezérlőpultján.': 'Welcome to the Global Study Agency dashboard.',
+  'Lejárat:': 'Expires:',
+  'hallgató · összesen': 'students · total',
+  '% Jutalék': '% Commission',
+  'Nigéria': 'Nigeria',
+  'Ghána': 'Ghana',
+  'Konverziók': 'Conversions',
+  '• Kezdés:': '• Start:',
+  'aktív kintlévőség': 'active receivables',
+  'db': 'pcs',
+  'Utolsó szinkron:': 'Last sync:',
+  'Az alkalmazás élesítésekor a `.env` fájlban kell megadni a megfelelő API kulcsokat. A rendszer automatikusan felismeri a kitöltött változókat és átvált "Live" módba.':
+    'When the application goes live, the API keys must be set in the `.env` file. The system detects the filled-in variables automatically and switches to "Live" mode.',
+  'Ez a felület szimulálja azt az oldalt, amit a jelentkező lát a Feltételes Felvételi levél kiküldése után. Választható bankkártyás fizetés vagy banki átutalás bizonylat feltöltéssel.':
+    'This screen simulates the page the applicant sees after the Conditional Acceptance Letter is sent. Card payment or bank transfer with proof upload can be chosen.',
+  'A fizetés a Pénzügyek listájába kerül; a felvételi státuszt NEM írja át. A tandíj befizetése pénzügyi tény, nem felvételi döntés — a kettőt a rendszer külön tartja nyilván. Éles üzemben itt történik az átirányítás a banki felületre.':
+    'The payment is added to the Finance list; it does NOT change the admission status. Paying tuition is a financial fact, not an admission decision — the system keeps the two separate. In live operation, this is where the redirect to the bank’s page happens.',
+  'lepecsételve': 'sealed',
+  'A kampány a lánc végén van: közzétett állapotból nincs továbblépés, és visszaút sincs.': 'The campaign is at the end of the chain: there is no next step from the published state, and no way back.',
+  'Eredményt most': 'Results right now:',
+  'az admin LÁT': 'the admin CAN SEE',
+  'az oktató': 'the teacher',
+  'LÁT': 'CAN SEE',
+  ', oktatónak a(z)': ', for the teacher the',
+  'állapot.': 'state is required.',
+  '(kényszerítve)': '(forced)',
+  'Minden kizárás okkal és §-hivatkozással rögzül az adatbázisban (echo.exclusion_log). Ha egy oktató megkérdezi, miért nem kapott visszajelzést, erre kell tudni mutatni.':
+    'Every exclusion is recorded in the database with a reason and a § reference (echo.exclusion_log). If a teacher asks why they received no feedback, this is what to point to.',
+  '· 28/2023. § — pontosítandó': '· 28/2023. § — to be specified',
+  'A SORONKÉNTI napló (melyik kurzus, melyik szabály, milyen adattal) még nem jeleníthető meg: a 15_echo_core.sql nem tartalmaz hozzá public RPC-t, az echo sémára pedig a kliensnek nincs joga. Itt most a kampányszintű darabszámok és a szabálykatalógus látszik.':
+    'The PER-ROW log (which course, which rule, with what data) cannot be shown yet: 15_echo_core.sql has no public RPC for it, and the client has no rights on the echo schema. Campaign-level counts and the rule catalogue are shown here instead.',
+  'Ez a fül szándékosan semmilyen válasz-tartalmat nem mutat, csak darabszámot és arányt. Az eredményt az „Oktatói eredmények” menüpont adja (echo_course_results / echo_teacher_results), k-anonimitási küszöbökkel. NYITOTT kampány alatt ott sem látszik eredmény, csak arány: az echo.results_gate() adminnak a closed / processing / sealed / published, oktatónak a sealed / published állapotot engedi — mérve.':
+    'This tab intentionally shows no response content, only counts and rates. Results are in the “Teaching results” menu (echo_course_results / echo_teacher_results), with k-anonymity thresholds. While a campaign is OPEN, only the rate is shown there too: echo.results_gate() allows closed / processing / sealed / published for admins and sealed / published for teachers — measured.',
+  'Hány kurzus–oktató kombinációt lehet véleményezni. Egy kurzuson több oktató is véleményezhető, ezért ez a szám nagyobb lehet a kurzusok számánál. A naplókban „jogosultsági pár” néven szerepel.':
+    'How many course–teacher combinations can be evaluated. Several teachers can be evaluated on one course, so this number can exceed the number of courses. In the logs it is called an “eligibility pair”.',
+  'Hány hallgató kapja meg a kérdőívet. Kattints a névsorért.': 'How many students receive the questionnaire. Click for the roster.',
+  'Hányan kértek jegyet a kitöltéshez. Azt, hogy KIK, nem mutatjuk: a kérdőív névtelen.': 'How many requested a ticket to respond. WHO did is not shown: the questionnaire is anonymous.',
+  'Hány kitöltött kérdőív érkezett be.': 'How many completed questionnaires have been received.',
+  'Várakozik': 'Pending',
+  'Új sor most': 'New in queue now',
+  'Elintézve most': 'Resolved now',
+  'Indok-katalógus': 'Reason catalogue',
+  'A sor sorrendje md5(response_id ‖ question_id) szerinti, NEM beérkezési sorrend — különben ez a képernyő adná vissza azt az érkezési sorrendet, amit az adatmodell szándékosan lebontott. Az oktató neve nem látszik: a moderálásnak nem kell tudnia, kiről szól a szöveg. Az „érvénytelen” döntés a szöveget NEM törli, csak kiveszi a visszacsatolásból, indokkal és moderátor-azonosítóval (echo.moderation).':
+    'The queue is ordered by md5(response_id ‖ question_id), NOT by arrival — otherwise this screen would reveal the arrival order that the data model deliberately removes. The teacher’s name is not shown: moderation does not need to know who the text is about. An “invalid” decision does NOT delete the text; it only removes it from the feedback, with a reason and moderator ID (echo.moderation).',
+  'A moderálási sor üres': 'The moderation queue is empty',
+  'Ebben a kampányban most nincs moderálásra váró szöveges válasz.': 'There are no text responses awaiting moderation in this campaign.',
+  'Az ECHO-jogosultság KÜLÖN dimenzió: nem a UniPortal szerepköréből (SUPERADMIN, ADMIN, STUDENT…) származik, hanem kizárólag az itt kiosztott, iktatható, lejáró grantból. Egy SUPERADMIN fióknak sincs ECHO-szerepköre, amíg nem kap egyet — mérve:':
+    'ECHO permissions are a SEPARATE dimension: they do not come from the UniPortal role (SUPERADMIN, ADMIN, STUDENT…), only from grants issued here, which can be registered and expire. Even a SUPERADMIN account has no ECHO role until it receives one — measured:',
+  'SUPERADMIN-ként is hamis. A hatókör LEFELÉ nyílik: a karra szóló grant a kar tanszékeit is fedi, a tanszéki a kart nem.':
+    'is false even as SUPERADMIN. Scope opens DOWNWARDS: a faculty grant also covers its departments, a department grant does not cover the faculty.',
+  'mindenki kötve': 'all linked',
+  'Ez tölti fel az': 'This fills the',
+  'mezőt, amitől az': 'field, which makes',
+  'értéket ad — enélkül az oktató minden eredmény-RPC-től ECHO_FORBIDDEN-t kap. Egy fiók legfeljebb EGY oktatói sorhoz köthető (részleges UNIQUE index tiltja a másodikat).':
+    'return a value — without it the teacher gets ECHO_FORBIDDEN from every results RPC. An account can be linked to at most ONE teacher record (a partial UNIQUE index prevents a second).',
+  'Nincs oktatói sor. Az echo.teacher sorokat a Neptun-szinkron hozza létre — ez a panel csak a MEGLÉVŐKET köti fiókhoz.':
+    'No teacher records. The echo.teacher records are created by the Neptun sync — this panel only links EXISTING ones to accounts.',
+  'A hatókör üresen hagyva intézményi szintű. A lejárat napra pontos; üresen hagyva határozatlan idejű. Az iktatószám a felhatalmazó dokumentum hivatkozása — a jogosultság így visszakereshető marad.':
+    'An empty scope means institution level. Expiry is precise to the day; empty means indefinite. The registration number refers to the authorising document — so the permission stays traceable.',
+  'Ezt a listát olvashatod (MIR jog), de kiosztani nem tudsz — ahhoz admin vagy ECHO SYSADMIN grant kell.':
+    'You can read this list (MIR permission) but cannot grant — that requires an admin or an ECHO SYSADMIN grant.',
+  'Nincs egyetlen ECHO-grant sem. Ez a rendszer alapállapota: jogosultság csak explicit kiosztásból keletkezik.':
+    'There are no ECHO grants. This is the system’s default state: permissions only arise from explicit grants.',
+  'A visszavonás NEM sortörlés: a grant lejárati ideje áll a mostani időpontra, és a sor megmarad — a kiosztás ténye, ideje és kiosztója auditálható marad. Minden itteni művelet egy sort ír az':
+    'Revoking does NOT delete the row: the grant’s expiry is set to now and the row remains — the fact, time and issuer of the grant stay auditable. Every action here writes a row to',
+  '-ba. A 16-os migráció eredmény- és moderálási RPC-inek kapuja EGYELŐRE': '. The gate of the results and moderation RPCs of migration 16 is FOR NOW still',
+  'maradt: ezek hatókörös szerepkörre cserélése külön migráció dolga, MIUTÁN a grantok ki vannak osztva — különben a csere pillanatában senki nem tudna moderálni.':
+    ': replacing them with scoped roles is a separate migration, AFTER the grants are issued — otherwise nobody could moderate at the moment of the switch.',
+  'Kérdésenkénti visszacsatolás · k-anonimitási küszöbökkel · 28/2023. szenátusi határozat': 'Per-question feedback · with k-anonymity thresholds · Senate resolution 28/2023',
+  'Válaszadási arány': 'Response rate',
+  'Kurzusszintű eredmény —': 'Course-level result —',
+  'válaszadási arány': 'response rate',
+  'Ez a bontás egészben elrejtve': 'This breakdown is fully hidden',
+  'Még': 'Another',
+  'válasz kellene ahhoz, hogy ez a rész megjelenjen.': 'responses are needed for this part to appear.',
+  'Kurzusszintű eredmény kivitele': 'Export course-level result',
+  '33% alatti óralátogatás —': 'Attendance below 33% —',
+  'válasz': 'responses',
+  'Ebben a blokkban nincs válasz.': 'There are no responses in this block.',
+  'Minden itt megjelenített bontás EGY sort ír az echo.access_log-ba (6. § (4)) — akkor is, ha a bontás elrejtve tér vissza. A napló semmilyen válasz-tartalmat és elemszámot nem tárol, különben maga lenne a második csatorna. A megtagadott hívás viszont NEM naplózódik: a tranzakció visszagördül, és vele a naplósor is.':
+    'Every breakdown shown here writes ONE row to echo.access_log (§6 (4)) — even if it comes back hidden. The log stores no response content or counts, otherwise it would itself be a second channel. A denied call, however, is NOT logged: the transaction rolls back, and the log row with it.',
+  'Pénzügyes': 'Finance officer',
+  'Felvételi Bíráló': 'Admissions reviewer',
+  'Diák Adatok': 'Student data',
+  'Számlák megtekintése': 'View invoices',
+  'Befizetések rögzítése': 'Record payments',
+  'Pénzügyi riportok exportálása': 'Export financial reports',
+  'Személyes adatok (PII) megtekintése': 'View personal data (PII)',
+  'Diák státusz módosítása': 'Change student status',
+  'Dokumentumok bírálata': 'Review documents',
+  'Audit logok megtekintése': 'View audit logs',
+  'API kulcsok kezelése': 'Manage API keys',
+  'Szerepkörök szerkesztése': 'Edit roles',
+  'Minden új fiók jóváhagyásra vár. A jóváhagyásig a felhasználó be tud lépni, de egyetlen adatot sem lát — ezt az adatbázis érvényesíti, nem csak a felület.':
+    'Every new account awaits approval. Until approved, the user can sign in but sees no data — this is enforced by the database, not just the interface.',
+  'Felhasználók': 'Users',
+  'Nincs függő regisztráció': 'No pending registrations',
+  'Az új jelentkezők és ügyintézők itt fognak megjelenni.': 'New applicants and staff will appear here.',
+  'Csoportosítás': 'Grouping',
+  'Keresés név, e-mail vagy szak szerint…': 'Search by name, email or major…',
+  'Nincs csoportosítás': 'No grouping',
+  'Csoportosítás: Tagozat': 'Group by: Study mode',
+  'Csoportosítás: Képzési szint': 'Group by: Level',
+  'Csoportosítás: Szak': 'Group by: Major',
+  'Csoportosítás: Kar': 'Group by: Faculty',
+  'Csoportosítás: Szerepkör': 'Group by: Role',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push(
+  [/^(\s*)· (\d+) jelentkező(\s*)$/, '$1· $2 applicant(s)$3'],
+  [/Az interjúd új időpontja: (.+?) \(korábban: (.+?)\)\. (?:Interjúztató|Interviewer): /, 'Your new interview time: $1 (previously: $2). Interviewer: '],
+  [/Kérjük, fogadd el az időpontot a felvételi folyamatodban\./, 'Please accept the time in your admission process.'],
+  [/(\d{4})\. (január|február|március|április|május|június|július|augusztus|szeptember|október|november|december) (\d{1,2})\./g,
+    (m, y, h, d) => d + ' ' + ({ január: 'January', február: 'February', március: 'March', április: 'April', május: 'May', június: 'June', július: 'July', augusztus: 'August', szeptember: 'September', október: 'October', november: 'November', december: 'December' })[h] + ' ' + y],
+  [/A Conditional Acceptance Letter \(([^)]+)\) elkészült\. A Felvételi folyamat → Felvételi levél lépésnél megtekintheted és kinyomtathatod\./, 'Your Conditional Acceptance Letter ($1) is ready. You can view and print it under Admission process → Admission letter.'],
+  [/\(visszalépés \/ hibajavítás\)/g, '(step back / correction)'],
+  [/^Oktatói bontás — /, 'Teacher breakdown — '],
+);
+// Nyelvi bejárás (2026-09-15): angol módban magyarul maradt feliratok — belépés, hírfolyam, Kurzusok, Kurzusértékelés.
+Object.entries({
+  'Belépés a rendszerbe': 'Sign in',
+  'Üdv újra itt,': 'Welcome back,',
+  'résztvevő': 'attending',
+  'Ott leszek': "I'll be there",
+  'Amikre félévről félévre beiratkoztál · oktatókkal és tárgyleírással': 'Courses you enrolled in, semester by semester · with teachers and course descriptions',
+  'félév': 'semester',
+  'Ez a lista a tanulmányi nyilvántartásból származik. Ha valami hiányzik vagy tévesen szerepel benne, a tanulmányi osztály tudja javítani — ezen a felületen nem szerkeszthető.':
+    'This list comes from the student records system. If something is missing or wrong, the Registrar’s Office can correct it — it cannot be edited here.',
+  'Értékelés újrakezdése': 'Resume evaluation',
+  'Célok megadása': 'Set goals',
+  'Célok szerkesztése': 'Edit goals',
+  'Még nem nyílt': 'Not open yet',
+  'A kampány még nem indult.': 'The campaign has not started yet.',
+  'Lezárt': 'Closed',
+  'A kitöltési ablak bezárt.': 'The response window has closed.',
+  'célok megadva': 'goals set',
+  'Az értékelésed beérkezett.': 'Your evaluation has been received.',
+  'új': 'new',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push(
+  [/^Őszi félév · Tavaszi félév$/, 'Autumn semester · Spring semester'],
+);
 // Oktatói eredmények: eltérő kérdőívverzióval érkezett válaszok (65_echo_results_questions.sql).
 HU_EN_PHRASES.push(
   [/(\d+) válasz a kampány korábbi kérdőívverziójával érkezett\. Ezeknél a kérdésazonosítók eltérhetnek a mostani kérdőívtől, ezért egyes válaszaik nem köthetők a mostani kérdésekhez\./g,
@@ -13778,6 +14003,12 @@ Object.assign(HU_EN, {
            angol módban, mert az OPTION a SKIP-ben van. */
         const c2 = k.match(/^(.*\S)\s*\(([A-Z][A-Z0-9_]*)\)$/);
         if (c2 && HU_EN[c2[1]]) to = HU_EN[c2[1]] + ' (' + c2[2] + ')';
+      }
+      if (!to) {
+        /* Félévnév: „2027/28 őszi félév” — a legördülőkben is angolul (a kifejezés-minták
+           a SKIP miatt ide nem futnak rá, ezért ez az egy, szűk minta külön áll). */
+        const c3 = k.match(/^(\d{4}\/\d{2}) (őszi|tavaszi) (félév|beiratkozás)( \(.+\))?$/);
+        if (c3) to = c3[1] + (c3[2] === 'őszi' ? ' autumn ' : ' spring ') + (c3[3] === 'félév' ? 'semester' : 'enrolment') + (c3[4] || '');
       }
       if (!to) return;
       const only = el.childNodes.length === 1 && el.firstChild.nodeType === 3;
