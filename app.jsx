@@ -2639,6 +2639,81 @@ function ADM_DokLista({ dok }) {
     </div>
   );
 }
+/* A felvételi levél nyomtatható külön ablakban — a böngésző „Mentés PDF-ként”
+   lehetőségével letölthető. A levél markupja a kirajzolt LetterDoc (a
+   felhasználói adatokat a React már escape-elte), a stílus a Tailwind CDN. */
+function LEVEL_nyomtat(elem, cim) {
+  if (!elem || typeof window === 'undefined') return false;
+  const w = window.open('', '_blank');
+  if (!w) return false;
+  const tiszta = String(cim || 'Acceptance Letter').replace(/[<>&"]/g, '');
+  w.document.open();
+  // A levél markupja ELŐL áll: a külső stílus-szkript betöltése így nem tartja vissza a tartalmat.
+  w.document.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' + tiszta + '</title>'
+    + '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">'
+    + '<style>body{font-family:Inter,sans-serif;background:#fff;margin:0;padding:24px}@media print{body{padding:0}.shadow-sm{box-shadow:none!important}}</style>'
+    + '</head><body>' + elem.outerHTML
+    + '<script src="https://cdn.tailwindcss.com"><\/script>'
+    + '<script>try{tailwind.config={theme:{extend:{colors:{primary:{DEFAULT:"rgb(208,103,0)"}}}}}}catch(e){}'
+    + 'window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},800);});<\/script>'
+    + '</body></html>');
+  w.document.close();
+  return true;
+}
+/* KIKÜLDÖTT FELVÉTELI LEVELEK NAPLÓJA (63): minden kiküldés rögzített változata —
+   megnyitható és nyomtatható, akkor is, ha a levelet azóta újragenerálták. */
+function ADM_LevelNaplo({ processId, jel }) {
+  const [lista, setLista] = useState(null);
+  const [hianyzik, setHianyzik] = useState(false);
+  const [nyitott, setNyitott] = useState(null);
+  useEffect(() => {
+    let el = true;
+    (async () => {
+      const r = await MSG_rpc('letter_log_list', { p_process_id: processId });
+      if (!el) return;
+      if (r.error) { setHianyzik(!!r.hianyzik); setLista([]); return; }
+      setHianyzik(false); setLista(Array.isArray(r.data) ? r.data : []);
+    })();
+    return () => { el = false; };
+  }, [processId, jel]);
+  if (hianyzik) return <p className="mb-4 text-[11px] text-slate-400" data-level-naplo="hianyzik">A kiküldési napló a 63-as adatbázis-migráció után érhető el.</p>;
+  if (!lista || !lista.length) return null;
+  const LetterDoc = JourneyShared.LetterDoc;
+  const allapot = { sent: ['Kiküldve', 'bg-emerald-50 text-emerald-700'], revoked: ['Visszavonva', 'bg-red-50 text-red-600'], superseded: ['Felülírva', 'bg-slate-100 text-slate-500'] };
+  return (
+    <div className="mb-5 rounded-xl border border-slate-100 p-3" data-level-naplo={lista.length}>
+      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2 flex items-center gap-1.5"><Lucide.History size={12} /> Kiküldési napló</div>
+      <ul className="space-y-1.5">
+        {lista.map(x => {
+          const a = allapot[x.status] || [x.status, 'bg-slate-100 text-slate-500'];
+          return (
+            <li key={x.id} data-level-naplo-sor={x.status} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-3 py-2">
+              <span className="font-mono text-[11px] font-bold text-slate-600">{x.file_number || '—'}</span>
+              <span className={'text-[10px] font-bold px-2 py-0.5 rounded-full ' + a[1]}>{a[0]}</span>
+              <span className="text-[11px] text-slate-500 tabular-nums">{ADM_datum(x.sent_at)}</span>
+              {x.sent_by_name && <span className="text-[11px] text-slate-400">{x.sent_by_name}</span>}
+              {x.closed_at && <span className="text-[11px] text-slate-400">{'· ' + ADM_datum(x.closed_at) + (x.close_reason ? ' · ' + x.close_reason : '')}</span>}
+              <button type="button" onClick={() => setNyitott(x)} data-level-naplo-megnyit={x.id} className="ml-auto px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-slate-200 text-slate-700 hover:border-primary inline-flex items-center gap-1"><Lucide.Eye size={12} /> Megnyitás</button>
+            </li>
+          );
+        })}
+      </ul>
+      {nyitott && LetterDoc && (
+        <UModal open onClose={() => setNyitott(null)} max="max-w-4xl" title={'Kiküldött levél · ' + (nyitott.file_number || '')}
+          subtitle={ADM_datum(nyitott.sent_at) + (nyitott.sent_by_name ? ' · ' + nyitott.sent_by_name : '')} icon={<Lucide.FileCheck size={20} />}>
+          <div className="space-y-4" data-level-naplo-nezet={nyitott.id}>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => LEVEL_nyomtat(document.querySelector('[data-level-naplo-nezet] [data-no-i18n="1"]'), 'Acceptance Letter ' + (nyitott.file_number || ''))} className={U_btnGhost + ' !py-2 text-sm'}>
+                <Lucide.Download size={15} /> Letöltés / nyomtatás (PDF)
+              </button>
+            </div>
+            <LetterDoc proc={{ data: { letter: nyitott.snapshot } }} />
+          </div>
+        </UModal>
+      )}
+    </div>
+  );
+}
 // Interjú időpontja a folyamat data.interview kulcsából (új: start/end; régi: szöveges nap + idő).
 const ADM_ivIdo = (iv) => {
   if (!iv) return '';
@@ -2710,6 +2785,7 @@ const AdmissionsCore = ({ user }) => {
   const [szuro, setSzuro] = useState(ADM_SZURO_URES);
   // Felvételi levél: az ügyintéző nézi meg, szerkeszti, és ő küldi ki.
   const [levelSzerk, setLevelSzerk] = useState(null);   // { id, L } — a szerkesztés alatti példány
+  const [levelNaploJel, setLevelNaploJel] = useState(0); // a kiküldési napló újratöltéséhez
   const [levelUzenet, setLevelUzenet] = useState(null); // { id, tone, text }
   const [levelBusy, setLevelBusy] = useState(false);
   // Felvételi döntés (60_admission_decision_terms.sql): melyik képzésre vettük fel, vagy elutasítás.
@@ -2730,7 +2806,7 @@ const AdmissionsCore = ({ user }) => {
           window.sb.from('programs').select('id,name,code,degree,level,steps,required_docs'),
           typeof PROG_loadDocTypes === 'function' ? PROG_loadDocTypes() : null,
         ]);
-        if (!el && res && Array.isArray(res.data)) { const m = {}; res.data.forEach(x => { m[x.id] = x; }); setProgKat(m); }
+        if (!el && res && Array.isArray(res.data)) { const m = {}; res.data.forEach(x => { m[x.id] = x; }); if (typeof PROG_KAT_CACHE !== 'undefined' && (!PROG_KAT_CACHE || !PROG_KAT_CACHE.length)) PROG_KAT_CACHE = res.data; setProgKat(m); }
       } catch (e) { /* a lista enélkül is működik, csak a program neve hiányzik */ }
     })();
     return () => { el = true; };
@@ -3060,9 +3136,17 @@ const AdmissionsCore = ({ user }) => {
     const levelKuld = async (proc) => {
       const L = (proc.data && proc.data.letter) || {};
       if (typeof window !== 'undefined' && window.confirm && !window.confirm('Kiküldöd a felvételi levelet ' + pName(proc) + ' részére? A hallgató azonnal látja, és a folyamata lezárul.')) return;
-      const ok = await levelMent(proc, { ...L, status: 'sent', sentAt: new Date().toISOString(), sentBy: (user && (user.name || user.email)) || 'Ügyintéző' }, { done: true },
-        'A levelet kiküldtük. A hallgató a Felvételi folyamatban látja, és üzenetet is kapott róla.');
+      const kuldottLevel = { ...L, status: 'sent', sentAt: new Date().toISOString(), sentBy: (user && (user.name || user.email)) || 'Ügyintéző' };
+      const ok = await levelMent(proc, kuldottLevel, { done: true },
+        'A levelet kiküldtük. A hallgató a Felvételi folyamatban látja és letöltheti, és üzenetet is kapott róla.');
       if (!ok) return;
+      /* KIKÜLDÉSI NAPLÓ (63): pontosan az a levél, ami kiment, minden értékével. A szerver
+         a jelentkező beszélgetésébe is üzenetet ír — ilyenkor a kliens nem küld külön. */
+      const napl = await MSG_rpc('letter_log_send', {
+        p_process_id: proc.id, p_file_number: kuldottLevel.fileNumber || null,
+        p_snapshot: JourneyShared.letterSnapshot({ ...proc, data: { ...(proc.data || {}), letter: kuldottLevel } }, kuldottLevel),
+      });
+      if (!napl.error) { MSG_valtozott(); setLevelNaploJel(x => x + 1); return; }
       const owner = proc._owner || 'demo';
       const levelSzoveg = 'A Conditional Acceptance Letter (' + (L.fileNumber || '') + ') elkészült. A Felvételi folyamat → Felvételi levél lépésnél megtekintheted és kinyomtathatod.';
       // A jelentkező a beszélgetésben (62) kapja meg az értesítést; a migráció előtt a régi úton.
@@ -3073,10 +3157,34 @@ const AdmissionsCore = ({ user }) => {
       spSaveMsg(msg);
       setThread(t => [...t, msg]);
     };
+    /* ÚJRAGENERÁLÁS: a levél tartalma az AKTUÁLIS adatokból (felvételi döntés,
+       képzés, személyes adatok) készül újra; a tervezet kézi módosításai
+       elvesznek. Az iktatószám marad. Kiküldött levélnél a kiküldés visszavonódik:
+       a hallgató az új változatot csak az újbóli kiküldés után látja. */
+    const levelUjra = async (proc) => {
+      const L = (proc.data && proc.data.letter) || {};
+      const kiment = JourneyShared.letterSent(proc);
+      const kerdes = kiment
+        ? 'Újragenerálod a felvételi levelet? A kiküldött levelet visszavonjuk — a hallgató addig nem látja, amíg az új változatot ki nem küldöd. A kézi módosítások elvesznek.'
+        : 'Újragenerálod a felvételi levelet az aktuális adatokból? A tervezet kézi módosításai elvesznek.';
+      if (typeof window !== 'undefined' && window.confirm && !window.confirm(kerdes)) return;
+      const uj = JourneyShared.makeLetterDraft(proc);
+      const d = proc.data || {};
+      const felvett = d.decision && d.decision.outcome === 'admitted' ? d.decision.programId : '';
+      const ujLevel = {
+        ...uj, fileNumber: L.fileNumber || uj.fileNumber, programId: felvett || uj.programId || L.programId || '', status: 'draft',
+        regeneratedAt: new Date().toISOString(), regeneratedBy: (user && (user.name || user.email)) || 'Ügyintéző', previousIssuedAt: L.issuedAt || null,
+      };
+      setLevelSzerk(null);
+      const ok = await levelMent(proc, ujLevel, kiment ? { done: false } : null,
+        kiment ? 'A levelet újrageneráltuk, a korábbi kiküldést visszavontuk. Nézd át, és küldd ki újra.' : 'A levéltervezetet újrageneráltuk az aktuális adatokból.');
+      if (ok && kiment) { const r = await MSG_rpc('letter_log_revoke', { p_process_id: proc.id, p_reason: 'Újragenerálva' }); if (!r.error) setLevelNaploJel(x => x + 1); }
+    };
     const levelVissza = async (proc) => {
       const L = (proc.data && proc.data.letter) || {};
       if (typeof window !== 'undefined' && window.confirm && !window.confirm('Visszavonod a kiküldést? A hallgató addig nem látja a levelet, amíg újra ki nem küldöd.')) return;
-      await levelMent(proc, { ...L, status: 'draft', revokedAt: new Date().toISOString() }, { done: false }, 'A kiküldést visszavontuk — a levél újra tervezet, szerkeszthető.');
+      const ok = await levelMent(proc, { ...L, status: 'draft', revokedAt: new Date().toISOString() }, { done: false }, 'A kiküldést visszavontuk — a levél újra tervezet, szerkeszthető.');
+      if (ok) { const r = await MSG_rpc('letter_log_revoke', { p_process_id: proc.id, p_reason: 'Kiküldés visszavonva' }); if (!r.error) setLevelNaploJel(x => x + 1); }
     };
 
     if (detailFull) {
@@ -3262,12 +3370,14 @@ const AdmissionsCore = ({ user }) => {
                         <div className="flex flex-wrap items-center gap-2">
                           {!kiment && <button disabled={levelBusy} onClick={() => { setLevelUzenet(null); setLevelSzerk({ id: p.id, L: { ...L } }); }} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 inline-flex items-center gap-1.5 disabled:opacity-50"><Lucide.Pencil size={13} /> Szerkesztés</button>}
                           {!kiment && <button disabled={levelBusy} onClick={() => levelKuld(p)} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 inline-flex items-center gap-1.5 disabled:opacity-50"><Lucide.Send size={13} /> Kiküldés a hallgatónak</button>}
-                          {kiment && <button onClick={() => window.print()} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 inline-flex items-center gap-1.5"><Lucide.Printer size={13} /> Nyomtatás</button>}
+                          {kiment && <button onClick={() => LEVEL_nyomtat(document.querySelector('[data-level-kartya="1"] [data-no-i18n="1"]'), 'Acceptance Letter ' + (L.fileNumber || ''))} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 inline-flex items-center gap-1.5"><Lucide.Printer size={13} /> Nyomtatás / PDF</button>}
+                          <button disabled={levelBusy} onClick={() => levelUjra(p)} data-level-ujra="1" title="A levél újragenerálása az aktuális adatokból" className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 inline-flex items-center gap-1.5 disabled:opacity-50"><Lucide.RefreshCw size={13} /> Újragenerálás</button>
                           {kiment && <button disabled={levelBusy} onClick={() => levelVissza(p)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 inline-flex items-center gap-1.5 disabled:opacity-50"><Lucide.Undo2 size={13} /> Kiküldés visszavonása</button>}
                         </div>
                       )}
                     </div>
                     {uz && <div role={uz.tone === 'error' ? 'alert' : 'status'} className={'mb-4 rounded-xl px-3 py-2.5 text-[12px] font-semibold border ' + (uz.tone === 'error' ? 'bg-red-50 border-red-100 text-red-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700')}>{uz.text}</div>}
+                    <ADM_LevelNaplo processId={p.id} jel={levelNaploJel} />
                     {!L.fileNumber ? (
                       levelLepes ? (
                         <div className="rounded-xl border border-dashed border-slate-200 p-5 text-center">
@@ -6863,7 +6973,7 @@ interface InterviewSchedulerProps {
    felkészítő, amely korábban a „Vízum és Compliance” alatt lakott. Ott a
    vízuminterjú mellett állt, holott a jelentkezők a FELVÉTELI interjúra
    készülnek vele — a foglalás mellett keresik. */
-type InterviewSubView = 'calendar' | 'booking' | 'availability' | 'prep';
+type InterviewSubView = 'calendar' | 'booking' | 'availability' | 'recordings' | 'prep';
 
 const InterviewScheduler: React.FC<InterviewSchedulerProps> = ({ user }) => {
   const isAgent = user.role === 'AGENT';
@@ -7001,11 +7111,13 @@ const InterviewScheduler: React.FC<InterviewSchedulerProps> = ({ user }) => {
     return () => { el = true; };
   }, [ivCtx && ivCtx.staff, ivFrissit]);
   const ivProgNev = (id) => { const k = ivProgs[id]; if (k) return k.name; const o = ((JourneyShared && JourneyShared.PROGRAMS) || []).find(x => x.id === id); return o ? o.name : id; };
+  // Rövid képzéskód a naptár kártyáihoz (CSE, ME…).
+  const ivProgKod = (id) => { const k = ivProgs[id]; if (k) return k.code || k.degree || k.name; const o = ((JourneyShared && JourneyShared.PROGRAMS) || []).find(x => x.id === id); return o ? (o.code || o.name) : id; };
   const ivElozmeny = (processId) => { const pr = ivProcs.find(x => x.id === processId); return pr ? ADM_elozmenyek(pr, ivProcs, allStudents || []) : []; };
   // Az ügynök és a 28-as migráció nélküli környezet a régi felületet kapja.
   const naptarMod = !!ivCtx && !isAgent;
   const nezet = naptarMod
-    ? (['calendar', 'availability', 'prep'].includes(activeSubView) ? activeSubView : 'calendar')
+    ? (['calendar', 'availability', 'recordings', 'prep'].includes(activeSubView) ? activeSubView : 'calendar')
     : (['booking', 'prep'].includes(activeSubView) ? activeSubView : 'booking');
 
   const availableSlots = slots?.filter(s => s.status === 'Available') || [];
@@ -7034,7 +7146,7 @@ const InterviewScheduler: React.FC<InterviewSchedulerProps> = ({ user }) => {
           a feliratok egymásra csúsztak; így a sáv vízszintesen görgethető marad. */}
       <div className="flex items-center gap-1 p-1 bg-white border border-slate-100 rounded-2xl w-fit shadow-sm overflow-x-auto max-w-full">
         {(naptarMod
-          ? [['calendar', 'Naptár'], ...((ivCtx.admin || ivCtx.interviewer) ? [['availability', 'Elérhetőség']] : []), ['prep', 'Interjú Felkészítő']]
+          ? [['calendar', 'Naptár'], ...((ivCtx.admin || ivCtx.interviewer) ? [['availability', 'Elérhetőség']] : []), ...((ivCtx.admin || ivCtx.can_manage || ivCtx.interviewer) ? [['recordings', 'Felvételek']] : []), ['prep', 'Interjú Felkészítő']]
           : [['booking', 'Időpontfoglalás'], ['prep', 'Interjú Felkészítő']]
         ).map(([k, cim]) => (
           <button key={k} onClick={() => setActiveSubView(k)}
@@ -7047,10 +7159,11 @@ const InterviewScheduler: React.FC<InterviewSchedulerProps> = ({ user }) => {
       {nezet === 'prep' && renderInterviewPrep()}
 
       {nezet === 'calendar' && naptarMod && (
-        <IV_Calendar ctx={ivCtx} processes={ivProcs} programName={ivProgNev} historyFor={ivElozmeny}
+        <IV_Calendar ctx={ivCtx} processes={ivProcs} programName={ivProgNev} programCode={ivProgKod} historyFor={ivElozmeny}
           onChanged={() => { refresh(); setIvFrissit(n => n + 1); }} />
       )}
 
+      {nezet === 'recordings' && naptarMod && <REC_Felvetelek ctx={ivCtx} programName={ivProgNev} />}
       {nezet === 'availability' && naptarMod && (
         <IV_AvailabilityPanel ctx={ivCtx} reloadCtx={ivReload} />
       )}
@@ -7603,8 +7716,13 @@ const AdmissionsHub = (() => {
     const data = (proc && proc.data) || {};
     const ex = data.extracted || {}; const acc = data.account || {};
     L = L || {};
-    const sel = (data.programs || []).map(pid => PROGRAMS.find(x => x.id === pid)).filter(Boolean);
-    const prog = PROGRAMS.find(x => x.id === L.programId) || sel[0] || null;
+    /* A képzés a régi irodai listából VAGY a képzéskatalógusból (kártyáról indított
+       jelentkezés) jön; a naplózott (kiküldött) levél a saját rögzített képzését hozza. */
+    const kat = (typeof PROG_KAT_CACHE !== 'undefined' && Array.isArray(PROG_KAT_CACHE)) ? PROG_KAT_CACHE : [];
+    const katProg = (id) => { const k = id ? kat.find(x => x.id === id) : null; return k ? { id: k.id, code: k.code || k.degree || k.name, name: k.name, tuition: k.tuition, semesters: k.duration_semesters, ects: k.ects } : null; };
+    const pids = (Array.isArray(data.program_ids) && data.program_ids.length) ? data.program_ids : ((proc && (proc.programId || proc.program_id)) ? [proc.programId || proc.program_id] : []);
+    const sel = [...(data.programs || []).map(pid => PROGRAMS.find(x => x.id === pid)), ...pids.map(katProg)].filter(Boolean);
+    const prog = (L.progSnapshot && L.progSnapshot.name ? L.progSnapshot : null) || PROGRAMS.find(x => x.id === L.programId) || katProg(L.programId) || sel[0] || null;
     const num = (v, d) => (v === '' || v == null || isNaN(Number(v))) ? d : Number(v);
     const tuition = num(L.tuition, prog ? prog.tuition : 0);
     const applicationFee = num(L.applicationFee, FEES.application);
@@ -7612,9 +7730,10 @@ const AdmissionsHub = (() => {
     const dormitoryDeposit = num(L.dormitoryDeposit, FEES.dormitoryDeposit);
     return {
       prog, valaszthato: sel.length ? sel : PROGRAMS,
-      name: L.name || ex.name || acc.fullName || '—',
+      // A kártyáról indított jelentkezés a Személyes adatok lépésben (data.personal) tárolja a nevet és az országot.
+      name: L.name || ex.name || acc.fullName || (data.personal && data.personal.name) || '—',
       passport: L.passport || ex.passportNumber || '—',
-      country: L.country || ex.country || acc.country || '—',
+      country: L.country || ex.country || acc.country || (data.personal && data.personal.country) || '—',
       startTerm: L.startTerm || LETTER_DEFAULTS.startTerm,
       deadline: L.deadline || LETTER_DEFAULTS.deadline,
       signerName: L.signerName || LETTER_DEFAULTS.signerName,
@@ -7624,15 +7743,28 @@ const AdmissionsHub = (() => {
       firstTwo: tuition * 2, total: tuition * 2 + applicationFee + dormitoryFee,
     };
   }
+  /* A kiküldött levél RÖGZÍTETT változata a naplóhoz (63): minden érték, a képzés
+     adataival együtt — a LetterDoc ebből később pontosan ugyanazt a levelet rajzolja. */
+  const letterSnapshot = (proc, L) => {
+    const v = letterValues(proc, L);
+    return {
+      ...(L || {}), name: v.name, passport: v.passport, country: v.country, startTerm: v.startTerm, deadline: v.deadline,
+      signerName: v.signerName, signerTitle: v.signerTitle, note: v.note,
+      tuition: v.tuition, applicationFee: v.applicationFee, dormitoryFee: v.dormitoryFee, dormitoryDeposit: v.dormitoryDeposit,
+      programId: v.prog ? v.prog.id : ((L && L.programId) || ''),
+      progSnapshot: v.prog ? { id: v.prog.id, code: v.prog.code, name: v.prog.name, tuition: v.prog.tuition, semesters: v.prog.semesters, ects: v.prog.ects } : null,
+    };
+  };
   // Kiküldött-e: új levélnél az állapot dönt; a régi (állapot nélküli) levél a
   // lezárt folyamatban kiküldöttnek számít — azt a hallgató eddig is látta.
   const letterSent = (proc) => { const L = (proc && proc.data && proc.data.letter) || {}; return L.status === 'sent' || (!L.status && !!(proc && proc.done) && !!L.fileNumber); };
   const makeLetterDraft = (proc) => {
     const data = (proc && proc.data) || {};
     // A felvételi döntésben megjelölt szak az elsődleges; utána az első megjelölt.
-    const dontott = data.decision && data.decision.outcome === 'admitted' ? PROGRAMS.find(x => x.id === data.decision.programId) : null;
-    const first = dontott || (data.programs || []).map(pid => PROGRAMS.find(x => x.id === pid)).find(Boolean);
-    return { fileNumber: makeFileNumber('CAL'), issuedAt: todayStr(), programId: first ? first.id : '', status: 'draft', createdAt: new Date().toISOString() };
+    const dontottId = data.decision && data.decision.outcome === 'admitted' ? data.decision.programId : '';
+    const first = (data.programs || []).map(pid => PROGRAMS.find(x => x.id === pid)).find(Boolean);
+    const katalogusId = Array.isArray(data.program_ids) && data.program_ids.length ? data.program_ids[0] : (proc && proc.programId) || '';
+    return { fileNumber: makeFileNumber('CAL'), issuedAt: todayStr(), programId: dontottId || (first ? first.id : '') || katalogusId, status: 'draft', createdAt: new Date().toISOString() };
   };
   function LetterDoc({ proc }) {
     const L = (proc && proc.data && proc.data.letter) || {};
@@ -8065,8 +8197,10 @@ const AdmissionsHub = (() => {
               <span className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1"><Lucide.CheckCircle2 size={12} />{L.sentAt ? 'Kiküldve · ' + ADM_datum(L.sentAt) : 'Kiküldve'}</span>
               <div className="flex-1"></div>
               <span className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-primary/10 text-primary inline-flex items-center gap-1"><Lucide.Hash size={12} />{L.fileNumber}</span>
+              <button type="button" data-level-letoltes="1" onClick={() => LEVEL_nyomtat(document.querySelector('[data-level-hallgato="1"] [data-no-i18n="1"]'), 'Acceptance Letter ' + (L.fileNumber || ''))}
+                className="px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 inline-flex items-center gap-1.5"><Lucide.Download size={14} /> Letöltés (PDF)</button>
             </div>
-            <LetterDoc proc={process} />
+            <div data-level-hallgato="1"><LetterDoc proc={process} /></div>
           </div>
         );
       }
@@ -8370,7 +8504,7 @@ const AdmissionsHub = (() => {
       </div>
     );
   };
-  JourneyShared = { PROGRAMS, STEP_DEFS, DOC_TYPES, COUNTRIES, seedProcesses, FEES, LetterDoc, letterValues, letterSent, makeLetterDraft };
+  JourneyShared = { PROGRAMS, STEP_DEFS, DOC_TYPES, COUNTRIES, seedProcesses, FEES, LetterDoc, letterValues, letterSent, makeLetterDraft, letterSnapshot };
   return AdmissionsHub;
 })();
 
@@ -8382,7 +8516,7 @@ interface StudentPortalProps {
 
 const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
   // A fejléc csengője (features/messages.jsx) az Üzenetek fülre kér: window.__njeUzenetek.
-  const [activeTab, setActiveTab] = useState<'degrees' | 'dashboard' | 'application' | 'documents' | 'finance' | 'interviews' | 'messages' | 'profile' | 'recommendations' | 'visa' | 'journey'>(() => {
+  const [activeTab, setActiveTab] = useState<'degrees' | 'dashboard' | 'application' | 'documents' | 'finance' | 'interviews' | 'messages' | 'profile' | 'recommendations' | 'visa' | 'journey' | 'calendar'>(() => {
     try { if (window.__njeUzenetek) { window.__njeUzenetek = false; return 'messages'; } } catch (e) {}
     return 'degrees';
   });
@@ -8597,9 +8731,11 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
         <div className="flex items-center gap-1 p-1 bg-white border border-slate-100 rounded-2xl w-fit shadow-sm overflow-x-auto max-w-full">
           {fulGomb('degrees', 'Képzési kínálat')}
           {fulGomb('journey', 'Felvételi folyamat')}
+          {fulGomb('calendar', 'Naptár')}
           {fulGomb('messages', 'Üzenetek', <MSG_Jelveny szam={msgOlvasatlan} />)}
         </div>
         {activeTab === 'journey' ? <AdmissionsHub user={user} onBrowse={() => setActiveTab('degrees')} />
+          : activeTab === 'calendar' ? <NAP_Naptar user={user} onOpenApplications={() => setActiveTab('journey')} />
           : activeTab === 'messages' ? <MSG_Inbox role="applicant" />
           : <ProgramsView user={user} scope="degrees" embedded />}
       </div>
@@ -9496,6 +9632,12 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
         >
           Interjúk
         </button>
+        <button
+          onClick={() => setActiveTab('calendar')}
+          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'calendar' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+        >
+          Naptár
+        </button>
         <button 
           onClick={() => setActiveTab('messages')}
           className={`relative px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'messages' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
@@ -9523,6 +9665,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
         {activeTab === 'finance' && renderFinance()}
         {activeTab === 'interviews' && renderInterviews()}
         {activeTab === 'messages' && <MSG_Inbox role="applicant" />}
+        {activeTab === 'calendar' && <NAP_Naptar user={user} onOpenApplications={() => setActiveTab('journey')} />}
         {activeTab === 'profile' && renderProfile()}
       </div>
     </div>
@@ -12874,6 +13017,56 @@ HU_EN_PHRASES.push(
   [/^A kért időpont túl közel esik egy másik interjúhoz: két interjú között (\d+) perc szünet kell\.$/g, 'The requested time is too close to another interview: a $1-minute break is needed between interviews.'],
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
+);
+// Levélnapló és letöltés, interjúfelvételek (63_letter_log_recordings.sql, features/recordings.jsx).
+Object.entries({
+  'Kiküldési napló': 'Sending log', 'Kiküldve': 'Sent', 'Visszavonva': 'Revoked', 'Felülírva': 'Superseded',
+  'Letöltés / nyomtatás (PDF)': 'Download / print (PDF)', 'Letöltés (PDF)': 'Download (PDF)', 'Nyomtatás / PDF': 'Print / PDF',
+  'A kiküldési napló a 63-as adatbázis-migráció után érhető el.': 'The sending log is available after database migration 63.',
+  'A levelet kiküldtük. A hallgató a Felvételi folyamatban látja és letöltheti, és üzenetet is kapott róla.': 'The letter has been sent. The student can view and download it in the admission process and has been notified.',
+  'Felvételi leveled elkészült': 'Your acceptance letter is ready',
+  'Interjúfelvétel': 'Interview recording', 'Interjúfelvételek': 'Interview recordings', 'Felvételek': 'Recordings',
+  'Felvétel feltöltése': 'Upload recording', 'Lejátszás': 'Play', 'Lejátszás bezárása': 'Close player',
+  'Még nincs feltöltött felvétel.': 'No recording uploaded yet.', 'Nincs a keresésnek megfelelő felvétel.': 'No recording matches the search.',
+  'Az interjúfelvételek a 63-as adatbázis-migráció után érhetők el.': 'Interview recordings are available after database migration 63.',
+  'Csak videó- vagy hangfájl tölthető fel.': 'Only video or audio files can be uploaded.',
+  'A fájl túl nagy — legfeljebb 2 GB lehet.': 'The file is too large — the limit is 2 GB.',
+  'A felvétel feltöltése nem sikerült.': 'Uploading the recording failed.',
+  'Keresés: név, azonosító, fájl…': 'Search: name, ID, file…',
+  'Új felvételt az interjú részleteinél (Naptár) vagy a jelentkező Részletek ablakában tölthetsz fel.': 'Upload new recordings from the interview details (Calendar) or the applicant’s Details window.',
+  'A felvételek csak a felvételi iroda és az interjúztatók számára láthatók.': 'Recordings are visible only to the admissions office and interviewers.',
+  'Feltöltés folyamatban…': 'Uploading…', 'Törlés': 'Delete', 'Letöltés': 'Download',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push([/^Kiküldött levél · /, 'Sent letter · '], [/^(\d+) felvétel$/, '$1 recordings']);
+// Interjúnaptár metaadatai, hallgatói naptár (features/student-calendar.jsx), levél újragenerálása.
+Object.entries({
+  'Hét': 'Week', 'Lista': 'List', 'Részletes': 'Detailed', 'Kompakt': 'Compact', 'Nézet': 'View', 'Kártyák': 'Cards',
+  'Rámutatva a jelentkező teljes adatlapja látszik.': 'Hover to see the applicant’s full details.',
+  'Időpont': 'Time', 'Azonosító': 'ID', 'Származás': 'Origin', 'Képzések': 'Programmes', 'Félév': 'Semester', 'Állapot': 'Status', 'Interjúztató': 'Interviewer',
+  'Nincs interjú.': 'No interviews.', 'Megjelölt képzések': 'Selected programmes', 'Platform': 'Platform', 'Javasolt': 'Proposed',
+  'Újragenerálás': 'Regenerate', 'A levél újragenerálása az aktuális adatokból': 'Regenerate the letter from the current data',
+  'A levéltervezetet újrageneráltuk az aktuális adatokból.': 'The letter draft has been regenerated from the current data.',
+  'A levelet újrageneráltuk, a korábbi kiküldést visszavontuk. Nézd át, és küldd ki újra.': 'The letter has been regenerated and the previous sending revoked. Review it and send it again.',
+  'Naptár': 'Calendar', 'Naptáram': 'My calendar', 'Interjúk, határidők és események egy helyen.': 'Interviews, deadlines and events in one place.',
+  'Hónap': 'Month', 'Előző hónap': 'Previous month', 'Következő hónap': 'Next month', 'Szűrők': 'Filters',
+  'Következő interjúd': 'Your next interview', 'Felvételi interjú': 'Admission interview', 'Javasolt interjú-időpont': 'Proposed interview time',
+  'Fogadd el vagy válassz másikat a felvételi folyamatban.': 'Accept it or choose another one in your admission process.',
+  'Jelentkezési határidő': 'Application deadline', 'A jelentkezésed még nincs beadva.': 'Your application has not been submitted yet.',
+  'Erre a képzésre még nem jelentkeztél.': 'You have not applied for this programme yet.',
+  'Jelentkeztél erre az eseményre.': 'You have registered for this event.', 'Még nem jelentkeztél.': 'You have not registered yet.',
+  'Van belépőd.': 'You have a pass.', 'Még nem igényeltél belépőt — a Hírfolyamban igényelheted.': 'You have not claimed a pass yet — you can claim one in the Feed.',
+  'Interjúk': 'Interviews', 'Határidők': 'Deadlines', 'Javasolt interjú': 'Proposed interview', 'Határidő': 'Deadline',
+  'Esemény — jelentkeztél': 'Event — registered', 'Esemény — nem jelentkeztél': 'Event — not registered',
+  'Események — jelentkeztél': 'Events — registered', 'Események — nem jelentkeztél': 'Events — not registered',
+  'Kínálat határideje': 'Programme deadline', 'Kínálat határidői': 'Programme deadlines', 'Egész nap': 'All day', 'ma': 'today',
+  'Teams-link megnyitása': 'Open Teams link', 'Felvételi folyamat megnyitása': 'Open admission process', 'Jelentkezem': 'Register', 'Lemondom': 'Cancel registration',
+  'Nincs megjeleníthető tétel ebben a nézetben.': 'Nothing to show in this view.', 'Korábbi tételek': 'Past items', 'Ezen a napon nincs tétel.': 'Nothing on this day.',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push(
+  [/^(\d+) interjú$/, '$1 interviews'],
+  [/^még (\d+) nap$/, '$1 days left'],
+  [/^\+(\d+) további$/, '+$1 more'],
+  [/Interjúztató: /g, 'Interviewer: '],
 );
 // Jelentkezés indítása meglévő jelentkezés mellett (features/programs.jsx: PROG_InditasValaszto).
 Object.entries({

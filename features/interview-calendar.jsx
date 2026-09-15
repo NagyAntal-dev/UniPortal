@@ -25,7 +25,8 @@ const IV_nincsFuggveny = (error) => !!error && (
   /function .* does not exist|Could not find the function|Nincs adatbázis-kapcsolat/i.test(String(error.message || ''))
 );
 
-const IV_CAL = { pxPerMin: 1.1, snap: 5, dayStart: 7 * 60, dayEnd: 19 * 60 };
+// pxPerMin: kompakt nézet; pxPerMinReszletes: a részletes kártyákhoz (egy 15 perces interjú is két sort kap).
+const IV_CAL = { pxPerMin: 1.1, pxPerMinReszletes: 2.4, snap: 5, dayStart: 7 * 60, dayEnd: 19 * 60 };
 const IV_pad2 = (n) => String(n).padStart(2, '0');
 const IV_ymd = (d) => d.getFullYear() + '-' + IV_pad2(d.getMonth() + 1) + '-' + IV_pad2(d.getDate());
 const IV_hm = (d) => IV_pad2(d.getHours()) + ':' + IV_pad2(d.getMinutes());
@@ -88,7 +89,7 @@ function IV_outsideReason(cal, start, end) {
 /* ============================================================
    NAPTÁR
    ============================================================ */
-function IV_Calendar({ ctx, processes, programName, historyFor, onChanged }) {
+function IV_Calendar({ ctx, processes, programName, programCode, historyFor, onChanged }) {
   const roster = ((ctx && ctx.interviewers) || []).filter(i => i.active);
   const canManage = !!(ctx && (ctx.can_manage || ctx.admin));
   const [target, setTarget] = useState(null);
@@ -110,6 +111,19 @@ function IV_Calendar({ ctx, processes, programName, historyFor, onChanged }) {
   const [detail, setDetail] = useState(null);
   const [creating, setCreating] = useState(null);
   const colsRef = useRef(null);
+  /* A jelentkező METAADATAI a naptárban: részletes kártya (név, képzéskódok,
+     azonosító, ország, félév), rámutatásra teljes adatlap, és egy heti lista-
+     nézet táblázatban. A választott nézet és sűrűség megmarad. */
+  const [suruseg, setSuruseg] = useState(() => { try { return localStorage.getItem('iv_naptar_suruseg') || 'reszletes'; } catch (e) { return 'reszletes'; } });
+  const [nezet, setNezet] = useState(() => { try { return localStorage.getItem('iv_naptar_nezet') || 'het'; } catch (e) { return 'het'; } });
+  const [hover, setHover] = useState(null);   // { ev, rect }
+  useEffect(() => { try { localStorage.setItem('iv_naptar_suruseg', suruseg); localStorage.setItem('iv_naptar_nezet', nezet); } catch (e) {} }, [suruseg, nezet]);
+  useEffect(() => {
+    if (!hover) return;
+    const f = () => setHover(null);
+    window.addEventListener('scroll', f, true);
+    return () => window.removeEventListener('scroll', f, true);
+  }, [!!hover]);
 
   const nDays = weekend ? 7 : 5;
   const days = Array.from({ length: nDays }, (_, i) => IV_addDays(weekStart, i));
@@ -175,7 +189,7 @@ function IV_Calendar({ ctx, processes, programName, historyFor, onChanged }) {
     rangeEnd = Math.max(rangeEnd, IV_sameDay(s, en) ? Math.ceil(IV_minOfDay(en) / 60) * 60 : 1440);
   });
   rangeStart = Math.max(0, rangeStart); rangeEnd = Math.min(1440, rangeEnd);
-  const PX = IV_CAL.pxPerMin;
+  const PX = suruseg === 'kompakt' ? IV_CAL.pxPerMin : IV_CAL.pxPerMinReszletes;
   const height = (rangeEnd - rangeStart) * PX;
   const yOf = (min) => (min - rangeStart) * PX;
   const clip = (x) => ({ from: Math.max(x.from, rangeStart), to: Math.min(x.to, rangeEnd) });
@@ -254,11 +268,19 @@ function IV_Calendar({ ctx, processes, programName, historyFor, onChanged }) {
     const huzott = drag && drag.moved && drag.id === ev.id;
     const elozmeny = ev.process_id && historyFor ? historyFor(ev.process_id) : [];
     const nev = ev.applicant_name || ev.student_name || '—';
+    const ids = Array.isArray(ev.program_ids) && ev.program_ids.length ? ev.program_ids : (ev.program_id ? [ev.program_id] : []);
+    const kodok = ids.map(id => (programCode ? programCode(id) : id));
+    const felev = ev.term && typeof PROG_termLabel === 'function' ? PROG_termLabel(ev.term, true) : '';
+    const sor2 = [kodok.join(', '), IV_ref(ev.ref_no), ev.country || ''].filter(Boolean).join(' · ');
+    const sor3 = [felev, ev.status === 'Proposed' ? 'Javasolt' : '', ev.decided ? 'Döntés született' : ''].filter(Boolean).join(' · ');
     return (
       <div key={ev.id} role="button" tabIndex={0} data-iv-esemeny={ev.id}
-        aria-label={nev + ', ' + IV_hm(s) + '–' + IV_hm(en)}
-        title={[nev, IV_ref(ev.ref_no), ev.country || ''].filter(Boolean).join(' · ')}
-        onPointerDown={editable ? (e) => startDrag(e, ev, 'move') : undefined}
+        aria-label={[nev, IV_hm(s) + '–' + IV_hm(en), sor2, sor3].filter(Boolean).join(', ')}
+        onMouseEnter={(e) => { if (!dragRef.current) setHover({ ev, rect: e.currentTarget.getBoundingClientRect() }); }}
+        onMouseLeave={() => setHover(x => (x && x.ev.id === ev.id ? null : x))}
+        onFocus={(e) => setHover({ ev, rect: e.currentTarget.getBoundingClientRect() })}
+        onBlur={() => setHover(null)}
+        onPointerDown={editable ? (e) => { setHover(null); startDrag(e, ev, 'move'); } : undefined}
         onPointerMove={editable ? moveDrag : undefined}
         onPointerUp={editable ? () => endDrag(ev) : undefined}
         onPointerCancel={editable ? () => { dragRef.current = null; setDrag(null); } : undefined}
@@ -267,10 +289,12 @@ function IV_Calendar({ ctx, processes, programName, historyFor, onChanged }) {
         className={'absolute left-1 right-1 rounded-xl border px-2 py-1 overflow-hidden shadow-sm select-none focus:outline-none focus:ring-2 focus:ring-primary/40 z-[5] '
           + meta.cls + (editable ? ' cursor-grab active:cursor-grabbing' : ' cursor-pointer') + (huzott ? ' opacity-30' : '')}
         style={{ top, height: h, touchAction: editable ? 'none' : 'auto' }}>
-        <div className="text-[11px] font-black leading-tight truncate tabular-nums">{IV_hm(s) + '–' + IV_hm(en)}</div>
-        <div className="text-[11px] font-bold leading-tight truncate pr-4">{nev}</div>
-        {h > 46 && <div className="text-[10px] leading-tight opacity-80 truncate">{[IV_ref(ev.ref_no), ev.country || ''].filter(Boolean).join(' · ')}</div>}
-        {ev.status === 'Proposed' && h > 60 && <div className="text-[9px] font-black uppercase tracking-wider mt-0.5">Javasolt</div>}
+        <div className="flex items-baseline gap-1.5 min-w-0 pr-4 leading-tight">
+          <span className="text-[11px] font-black tabular-nums flex-none">{IV_hm(s) + (h >= 48 ? '–' + IV_hm(en) : '')}</span>
+          <span className="text-[11px] font-bold truncate" data-iv-nev="1">{nev}</span>
+        </div>
+        {h >= 30 && sor2 && <div className="text-[10px] font-semibold leading-tight truncate opacity-90" data-iv-meta="1">{sor2}</div>}
+        {h >= 44 && sor3 && <div className="text-[10px] leading-tight truncate opacity-80" data-iv-meta2="1">{sor3}</div>}
         {elozmeny.length > 0 && (
           <span title="Korábban elutasított felvételi" className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center">
             <Lucide.AlertTriangle size={10} />
@@ -308,6 +332,20 @@ function IV_Calendar({ ctx, processes, programName, historyFor, onChanged }) {
           {loading && <Lucide.Loader2 size={16} className="animate-spin text-slate-400" />}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex p-0.5 rounded-xl bg-slate-100" role="group" aria-label="Nézet">
+            {[['het', 'Hét'], ['lista', 'Lista']].map(([k, c]) => (
+              <button key={k} type="button" aria-pressed={nezet === k} data-iv-nezet={k} onClick={() => { setHover(null); setNezet(k); }}
+                className={'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ' + (nezet === k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}>{c}</button>
+            ))}
+          </div>
+          {nezet === 'het' && (
+            <div className="inline-flex p-0.5 rounded-xl bg-slate-100" role="group" aria-label="Kártyák">
+              {[['reszletes', 'Részletes'], ['kompakt', 'Kompakt']].map(([k, c]) => (
+                <button key={k} type="button" aria-pressed={suruseg === k} data-iv-suruseg={k} onClick={() => { setHover(null); setSuruseg(k); }}
+                  className={'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ' + (suruseg === k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}>{c}</button>
+              ))}
+            </div>
+          )}
           <UBadge tone="primary">{'Idősáv: ' + ctx.slot_minutes + ' perc'}</UBadge>
           <UBadge>{'Szünet: ' + (ctx.break_minutes != null ? ctx.break_minutes : 0) + ' perc'}</UBadge>
           <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer px-2">
@@ -349,8 +387,12 @@ function IV_Calendar({ ctx, processes, programName, historyFor, onChanged }) {
         <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-100" style={IV_SRAF} /> Szünet / távollét</span>
         {canEdit && <span className="text-slate-400 font-semibold">Húzással áthelyezhető, az alsó szélénél hosszabbítható.</span>}
         {canManage && <span className="text-slate-400 font-semibold">Üres helyre kattintva jelentkezőt rendelhetsz hozzá.</span>}
+        {nezet === 'het' && <span className="text-slate-400 font-semibold">Rámutatva a jelentkező teljes adatlapja látszik.</span>}
       </div>
 
+      {nezet === 'lista' ? (
+        <IV_HetLista days={days} events={events} programName={programName} programCode={programCode} historyFor={historyFor} onOpen={setDetail} />
+      ) : (
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <div style={{ minWidth: 64 + nDays * 150 }}>
@@ -404,6 +446,16 @@ function IV_Calendar({ ctx, processes, programName, historyFor, onChanged }) {
           </div>
         </div>
       </div>
+      )}
+
+      {hover && !drag && nezet === 'het' && (() => {
+        const r = hover.rect, w = 300;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const left = r.right + 8 + w <= vw - 8 ? r.right + 8 : Math.max(8, r.left - w - 8);
+        const top = Math.max(8, Math.min(r.top, vh - 320));
+        return <IV_EsemenyAdatlap ev={hover.ev} programName={programName} programCode={programCode}
+          elozmeny={hover.ev.process_id && historyFor ? historyFor(hover.ev.process_id) : []} style={{ left, top, width: w }} />;
+      })()}
 
       {!loading && !missing && events.length === 0 && (
         <p className="text-sm text-slate-400 font-semibold">Ezen a héten nincs interjú ebben a naptárban.</p>
@@ -432,6 +484,110 @@ function IV_Calendar({ ctx, processes, programName, historyFor, onChanged }) {
           onClose={() => setCreating(null)}
           onDone={(uz) => { setCreating(null); setToast({ ok: uz }); load(); onChanged && onChanged(); }} />
       )}
+    </div>
+  );
+}
+
+/* ---- a jelentkező adatlapja rámutatáskor (a heti rács fölött) ---- */
+function IV_EsemenyAdatlap({ ev, programName, programCode, elozmeny, style }) {
+  const meta = IV_STATUS[ev.status] || { label: ev.status, badge: 'slate' };
+  const ids = Array.isArray(ev.program_ids) && ev.program_ids.length ? ev.program_ids : (ev.program_id ? [ev.program_id] : []);
+  const lbl = 'text-[10px] font-black text-slate-400 uppercase tracking-widest';
+  return (
+    <div role="tooltip" data-iv-adatlap={ev.id} style={style}
+      className="fixed z-[90] pointer-events-none bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 space-y-2.5">
+      <div>
+        <div className="text-sm font-black text-slate-900 leading-snug">{ev.applicant_name || ev.student_name || '—'}</div>
+        {ev.applicant_email && <div className="text-[11px] text-slate-400 break-all">{ev.applicant_email}</div>}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <UBadge tone={meta.badge}>{meta.label}</UBadge>
+        {ev.ref_no && <UBadge>{IV_ref(ev.ref_no)}</UBadge>}
+        {ev.country && <UBadge tone="blue">{ev.country}</UBadge>}
+        {ev.term && typeof PROG_termLabel === 'function' && <UBadge tone="violet">{PROG_termLabel(ev.term, true)}</UBadge>}
+      </div>
+      <div className="text-[12px] font-bold text-slate-700 tabular-nums">{IV_fmtRange(ev.start, ev.end)}</div>
+      {ids.length > 0 && (
+        <div>
+          <div className={lbl}>Megjelölt képzések</div>
+          <ol className="mt-0.5 space-y-0.5">
+            {ids.map((id, i) => {
+              const kod = programCode ? programCode(id) : id;
+              const nev = programName ? programName(id) : '';
+              return <li key={id} className="text-[12px] text-slate-700"><span className="font-black text-slate-500">{(ids.length > 1 ? (i + 1) + '. ' : '') + kod}</span>{nev && nev !== kod ? <span>{' — ' + nev}</span> : null}</li>;
+            })}
+          </ol>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2 text-[12px]">
+        <div className="min-w-0"><div className={lbl}>Interjúztató</div><div className="font-bold text-slate-700 truncate">{ev.interviewer_name || '—'}</div></div>
+        <div><div className={lbl}>Platform</div><div className="font-bold text-slate-700">{ev.teams_url ? 'Microsoft Teams' : '—'}</div></div>
+      </div>
+      {ev.note && <div className="text-[12px] text-slate-500 whitespace-pre-line">{ev.note}</div>}
+      {ev.decided && <div className="text-[11px] font-bold text-emerald-700">Döntés született</div>}
+      {elozmeny && elozmeny.length > 0 && <div className="text-[11px] font-bold text-red-600 flex items-center gap-1"><Lucide.AlertTriangle size={12} /> Korábban elutasított felvételi</div>}
+    </div>
+  );
+}
+
+/* ---- heti lista: minden interjú a jelentkező adataival, táblázatban ---- */
+function IV_HetLista({ days, events, programName, programCode, historyFor, onOpen }) {
+  const th = 'px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400 whitespace-nowrap';
+  return (
+    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden" data-iv-lista="1">
+      {days.map(d => {
+        const napi = events.filter(e => IV_sameDay(new Date(e.start), d)).sort((a, b) => new Date(a.start) - new Date(b.start));
+        return (
+          <div key={IV_ymd(d)} className="border-b border-slate-100 last:border-b-0">
+            <div className="px-5 py-2.5 bg-slate-50/70 flex items-center justify-between gap-3">
+              <span className={'text-[11px] font-black uppercase tracking-wider ' + (IV_sameDay(d, new Date()) ? 'text-primary' : 'text-slate-600')}>{IV_fmtDay(d)}</span>
+              <span className="text-[11px] font-bold text-slate-400">{`${napi.length} interjú`}</span>
+            </div>
+            {napi.length === 0 ? <div className="px-5 py-3 text-sm text-slate-400">Nincs interjú.</div> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm min-w-[900px]">
+                  <thead>
+                    <tr>
+                      <th className={th + ' pl-5'}>Időpont</th><th className={th}>Jelentkező</th><th className={th}>Azonosító</th><th className={th}>Származás</th>
+                      <th className={th}>Képzések</th><th className={th}>Félév</th><th className={th}>Állapot</th><th className={th}>Interjúztató</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {napi.map(ev => {
+                      const meta = IV_STATUS[ev.status] || { label: ev.status, badge: 'slate' };
+                      const ids = Array.isArray(ev.program_ids) && ev.program_ids.length ? ev.program_ids : (ev.program_id ? [ev.program_id] : []);
+                      const hist = ev.process_id && historyFor ? historyFor(ev.process_id) : [];
+                      return (
+                        <tr key={ev.id} data-iv-lista-sor={ev.id} tabIndex={0} onClick={() => onOpen(ev)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(ev); } }}
+                          className="align-top hover:bg-slate-50 cursor-pointer focus:outline-none focus-visible:bg-primary/5">
+                          <td className="pl-5 pr-3 py-3 font-black text-slate-800 tabular-nums whitespace-nowrap">{IV_hm(new Date(ev.start)) + '–' + IV_hm(new Date(ev.end))}</td>
+                          <td className="px-3 py-3">
+                            <div className="font-bold text-slate-800">{ev.applicant_name || ev.student_name || '—'}</div>
+                            {ev.applicant_email && <div className="text-[11px] text-slate-400">{ev.applicant_email}</div>}
+                            {hist.length > 0 && <span className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-600 text-[10px] font-bold"><Lucide.AlertTriangle size={10} /> Korábban elutasítva</span>}
+                          </td>
+                          <td className="px-3 py-3 font-mono text-[11px] font-bold text-slate-500 whitespace-nowrap">{IV_ref(ev.ref_no) || '—'}</td>
+                          <td className="px-3 py-3 text-[12px] font-semibold text-slate-600 whitespace-nowrap">{ev.country || '—'}</td>
+                          <td className="px-3 py-3 text-[12px] text-slate-700">
+                            {ids.length ? ids.map((id, i) => {
+                              const kod = programCode ? programCode(id) : id;
+                              const nev = programName ? programName(id) : '';
+                              return <div key={id}><span className="font-black text-slate-500">{(ids.length > 1 ? (i + 1) + '. ' : '') + kod}</span>{nev && nev !== kod ? <span className="text-slate-500">{' ' + nev}</span> : null}</div>;
+                            }) : '—'}
+                          </td>
+                          <td className="px-3 py-3 text-[12px] font-semibold text-violet-700 whitespace-nowrap">{ev.term && typeof PROG_termLabel === 'function' ? PROG_termLabel(ev.term, true) : '—'}</td>
+                          <td className="px-3 py-3"><UBadge tone={meta.badge}>{meta.label}</UBadge>{ev.decided && <div className="text-[10px] font-bold text-emerald-700 mt-1">Döntés született</div>}</td>
+                          <td className="px-3 py-3 text-[12px] font-semibold text-slate-600 whitespace-nowrap">{ev.interviewer_name || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -508,6 +664,13 @@ function IV_EventModal({ ev, ctx, cal, roster, canManage, canEdit, historyFor, p
           {ev.note && <div className="sm:col-span-2"><dt className={lbl}>Megjegyzés</dt><dd className="text-slate-600 whitespace-pre-line">{ev.note}</dd></div>}
           {ev.teams_url && <div className="sm:col-span-2"><dt className={lbl}>Microsoft Teams</dt><dd><a href={ev.teams_url} target="_blank" rel="noopener noreferrer" className="text-primary font-bold break-all hover:underline">{ev.teams_url}</a></dd></div>}
         </dl>
+
+        {/* A rögzített interjú feltöltése és lejátszása (63). */}
+        {canManage && (
+          <div className="pt-3 border-t border-slate-100">
+            <REC_Lista processId={ev.process_id || null} slotId={ev.process_id ? null : ev.id} canEdit={canManage} />
+          </div>
+        )}
 
         <IV_Err>{err}</IV_Err>
 
@@ -944,6 +1107,11 @@ function IV_AdminProcessInterview({ processId, canEdit, fallback, onChanged }) {
           ) : <p className="text-sm text-slate-500">Még nincs interjú-időpont ehhez a jelentkezéshez.</p>}
           {dec && <p className="text-[12px] text-slate-500"><span className="font-bold">Korábban elutasított foglalás:</span> <span>{IV_fmtRange(dec.start, dec.end)}</span>{dec.note ? <span>{' — ' + dec.note}</span> : null}</p>}
         </>
+      )}
+      {canEdit && loaded && (
+        <div className="pt-3 border-t border-slate-100">
+          <REC_Lista processId={processId} canEdit={canEdit} />
+        </div>
       )}
       <IV_Err>{err}</IV_Err>
       <IV_Ok>{ok}</IV_Ok>

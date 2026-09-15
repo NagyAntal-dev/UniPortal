@@ -423,6 +423,9 @@ function PROG_seed() {
   return list.map(p => ({ ...p, image_url: PROG_IMGS[p.id] || null }));
 }
 
+/* A legutóbb betöltött katalógus — a felvételi levél (app.jsx: letterValues) a
+   kártyáról indított jelentkezés képzését ebből oldja fel. */
+let PROG_KAT_CACHE = [];
 async function PROG_loadPrograms() {
   const list = await dlSelect(PROG_TABLE, PROG_LS, PROG_seed, 'name', true);
   // Add any seed programmes missing from an existing store (e.g. the newer
@@ -443,6 +446,7 @@ async function PROG_loadPrograms() {
   }
   // A 60-as migráció után a sorok hordozzák az intakes mezőt; localStorage-ban bármi tárolható.
   PROG_INTAKE_COL = DL_PROBE[PROG_TABLE] === 'ls' || list.some(x => x && Object.prototype.hasOwnProperty.call(x, 'intakes'));
+  PROG_KAT_CACHE = merged;
   return merged;
 }
 const PROG_loadApps = async () =>
@@ -1052,7 +1056,18 @@ function PROG_IrodaiLepes({ lepes, cur, data, program }) {
         <PROG_Head icon={Lucide.FileCheck} title="Felvételi levél" sub="A felvételi levelet a felvételi iroda állítja ki és küldi el." />
         {elotte}
         {lepes.kihagyva ? <p className="text-sm text-slate-500">A döntés alapján felvételi levél nem készül.</p>
-          : (kiment && LetterDoc) ? <LetterDoc proc={proc} />
+          : (kiment && LetterDoc) ? (
+            <div className="space-y-3" data-level-hallgato="1">
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                <Lucide.CheckCircle2 size={18} className="text-emerald-600 flex-none" />
+                <span className="text-sm font-bold text-emerald-800 flex-1 min-w-0"><span>Felvételi leveled elkészült</span>{data.letter && data.letter.sentAt ? <span className="font-semibold text-emerald-700">{' · ' + DL_date(data.letter.sentAt)}</span> : null}</span>
+                <button type="button" data-level-letoltes="1"
+                  onClick={() => LEVEL_nyomtat(document.querySelector('[data-level-hallgato="1"] [data-no-i18n="1"]'), 'Acceptance Letter ' + ((data.letter && data.letter.fileNumber) || ''))}
+                  className={U_btnPrimary + ' !py-2 text-sm'}><Lucide.Download size={15} /> Letöltés (PDF)</button>
+              </div>
+              <LetterDoc proc={proc} />
+            </div>
+          )
           : (beadva && <p className="text-sm text-slate-500">A levél a felvételi döntés után készül el. Amint kiküldtük, itt olvashatod.</p>)}
       </div>
     );

@@ -49,6 +49,10 @@ const FEATURE_FILES = [
   // Üzenetváltás a felvételi eljárásban (62_admission_chat.sql): beszélgetés,
   // fájlküldés, olvasatlan-értesítés. A data-layer és a programs UTÁN.
   'features/messages.jsx',
+  // Hallgatói naptár (interjú, határidők, események). A programs, a feed és a messages UTÁN.
+  'features/student-calendar.jsx',
+  // Interjúfelvételek feltöltése és lejátszása (63_letter_log_recordings.sql).
+  'features/recordings.jsx',
   // Kollégiumi modul (26_dorm.sql). A SORREND KÖTÖTT: a dorm.jsx viszi a közös
   // réteget (DORM_rpc, DORM_api, DORM_Tabs, DORM_Stat, DORM_Empty, DORM_Hidden)
   // és a Kollégium nézetet, a dorm-views.jsx pedig erre épül.
