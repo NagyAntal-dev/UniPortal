@@ -802,7 +802,8 @@ function PROG_MathStep({ data, setData }) {
         {tasks.map((t, i) => (
           <div key={t.id} className="p-4 rounded-2xl border border-slate-100">
             <div className="flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-black flex items-center justify-center">{i + 1}</span><span className="text-[11px] font-black uppercase tracking-wider text-slate-400">{t.title}</span></div>
-            <p className="text-sm font-bold text-slate-700 mb-3">{t.prompt}</p>
+            {/* TESZT-SEGÍTSÉG: a megoldás a kérdés végén, amíg a felületet teszteljük (ugyanígy az app.jsx matek-lépésében). Élesítés előtt törlendő. */}
+            <p className="text-sm font-bold text-slate-700 mb-3">{t.prompt}<span data-teszt-megoldas className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-bold text-amber-600"><Lucide.FlaskConical size={12} /> TESZT — helyes válasz: {t.fields.map(f => f.label + ' ' + t.answers[f.key]).join(', ')}</span></p>
             <div className="flex flex-wrap gap-3">
               {t.fields.map(f => <label key={f.key} className="flex items-center gap-2 text-sm font-bold text-slate-500">{f.label}<input disabled={!!result} className="w-24 bg-slate-50 border border-slate-100 rounded-lg px-3 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20" value={ans[t.id + '_' + f.key] || ''} onChange={e => setAns(a => ({ ...a, [t.id + '_' + f.key]: e.target.value }))} /></label>)}
             </div>
