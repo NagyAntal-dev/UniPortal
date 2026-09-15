@@ -2647,12 +2647,37 @@ function LEVEL_nyomtat(elem, cim) {
   const w = window.open('', '_blank');
   if (!w) return false;
   const tiszta = String(cim || 'Acceptance Letter').replace(/[<>&"]/g, '');
+  /* A képeket (pl. a levél fejléclogóját) adat-URI-ként ágyazza be: az oldalon már betöltött,
+     azonos eredetű képet vászonra rajzolja, így a nyomtatási ablaknak nem kell hálózatról
+     letöltenie — a mentett PDF-ben akkor is ott a logó, ha az ablak nem tölt be erőforrást. */
+  let markup = elem.outerHTML;
+  try {
+    const eredeti = Array.from(elem.querySelectorAll('img'));
+    if (eredeti.length) {
+      const masolat = elem.cloneNode(true);
+      Array.from(masolat.querySelectorAll('img')).forEach((kep, i) => {
+        const forras = eredeti[i];
+        if (!forras || !forras.complete || !forras.naturalWidth || /^data:/.test(forras.src)) return;
+        try {
+          const vaszon = document.createElement('canvas');
+          vaszon.width = forras.naturalWidth; vaszon.height = forras.naturalHeight;
+          vaszon.getContext('2d').drawImage(forras, 0, 0);
+          kep.setAttribute('src', vaszon.toDataURL(/\.png(\?|$)/i.test(forras.src) ? 'image/png' : 'image/jpeg', 0.92));
+        } catch (e) { kep.setAttribute('src', forras.src); }
+      });
+      markup = masolat.outerHTML;
+    }
+  } catch (e) { markup = elem.outerHTML; }
   w.document.open();
   // A levél markupja ELŐL áll: a külső stílus-szkript betöltése így nem tartja vissza a tartalmat.
-  w.document.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' + tiszta + '</title>'
-    + '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">'
-    + '<style>body{font-family:Inter,sans-serif;background:#fff;margin:0;padding:24px}@media print{body{padding:0}.shadow-sm{box-shadow:none!important}}</style>'
-    + '</head><body>' + elem.outerHTML
+  // <base>: a levél logója relatív útvonalú (assets/…) — az új ablak az alkalmazás címéhez képest oldja fel.
+  const alap = String(window.location.href).replace(/[#?].*$/, '').replace(/[^/]*$/, '').replace(/"/g, '');
+  w.document.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' + tiszta + '</title><base href="' + alap + '">'
+    + '<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">'
+    + '<style>body{font-family:"Source Sans 3",Inter,sans-serif;background:#fff;margin:0;padding:24px}'
+    + '@page{size:A4;margin:14mm 12mm 15mm 22mm}'
+    + '@media print{body{padding:0}.nje-level{border:0!important;box-shadow:none!important;border-radius:0!important;max-width:none!important}}</style>'
+    + '</head><body>' + markup
     + '<script src="https://cdn.tailwindcss.com"><\/script>'
     + '<script>try{tailwind.config={theme:{extend:{colors:{primary:{DEFAULT:"rgb(208,103,0)"}}}}}}catch(e){}'
     + 'window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},800);});<\/script>'
@@ -7628,7 +7653,7 @@ const AdmissionsHub = (() => {
     { id: 'motivation', label: 'Motivációs levél',          hint: 'Min. 1 oldal, angol nyelven',          Icon: Lucide.PenLine,      ocr: false },
     { id: 'internship', label: 'Szakmai gyakorlat',         hint: 'Igazolás (ha releváns)',               Icon: Lucide.Briefcase,    ocr: false, optional: true },
   ];
-  const FEES = { application: 200, dormitorySemester: 1000, dormitoryDeposit: 450, bank: { name: 'MBH Bank Nyrt.', iban: 'HU10103000021327841900014888', swift: 'MKKBHUHB' } };
+  const FEES = { application: 200, dormitorySemester: 1000, dormitoryDeposit: 450, bank: { name: 'MBH Bank Nyrt.', iban: 'HU10103000021327841900014888', swift: 'MKKBHUHB', accountNumber: '10300002-13278419-00014888', holder: 'Neumann János Egyetem', address: 'Hungary 1056 Budapest, Váci street 38.' } };
   const EXISTING = [
     { name: 'Ahmed Hassan', passport: 'A09918273', email: 'ahmed@test.com' },
     { name: 'Chen Wei', passport: 'E88123456', email: 'chen@test.com' },
@@ -7711,7 +7736,20 @@ const AdmissionsHub = (() => {
      (draft = tervezet, sent = kiküldve) és az ügyintéző által felülírt mezők.
      Ami nincs felülírva, az a jelentkezés adataiból és a díjtáblából jön — így
      egy régi, mezők nélküli levél ugyanúgy jelenik meg, mint eddig. */
-  const LETTER_DEFAULTS = { startTerm: 'September 2026', deadline: '15th July 2026', signerName: 'Krix Orsolya', signerTitle: 'International Office · John von Neumann University' };
+  // Az alapértékek a hivatalos Word-minta (CONDITIONAL ACCEPTANCE LETTER.docx) szerint; levelenként szerkeszthetők.
+  const LETTER_DEFAULTS = { startTerm: 'September, 2026', deadline: '15th July 2026', signerName: 'Dr. József Kárpáti PhD', signerTitle: 'Dean · Faculty of Economics and Business · John von Neumann University' };
+  // Dátum a minta alakjában: „16th June 2026”. Nem dátum formájú szöveget változatlanul hagy.
+  const LEVEL_datum = (s) => {
+    if (!s) return '';
+    const m = /^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/.exec(String(s).trim());
+    if (!m) return String(s);
+    const nap = Number(m[3]), ho = Number(m[2]);
+    const utotag = (nap % 100 >= 11 && nap % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[nap % 10] || 'th');
+    const honapok = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return nap + utotag + ' ' + (honapok[ho - 1] || '') + ' ' + m[1];
+  };
+  // Összeg a minta alakjában („EUR 7200”): egész számnál tizedes nélkül, egyébként két tizedessel.
+  const LEVEL_osszeg = (n) => { const x = Math.round((Number(n) || 0) * 100) / 100; return Number.isInteger(x) ? String(x) : x.toFixed(2); };
   function letterValues(proc, L) {
     const data = (proc && proc.data) || {};
     const ex = data.extracted || {}; const acc = data.account || {};
@@ -7719,11 +7757,14 @@ const AdmissionsHub = (() => {
     /* A képzés a régi irodai listából VAGY a képzéskatalógusból (kártyáról indított
        jelentkezés) jön; a naplózott (kiküldött) levél a saját rögzített képzését hozza. */
     const kat = (typeof PROG_KAT_CACHE !== 'undefined' && Array.isArray(PROG_KAT_CACHE)) ? PROG_KAT_CACHE : [];
-    const katProg = (id) => { const k = id ? kat.find(x => x.id === id) : null; return k ? { id: k.id, code: k.code || k.degree || k.name, name: k.name, tuition: k.tuition, semesters: k.duration_semesters, ects: k.ects } : null; };
+    const katProg = (id) => { const k = id ? kat.find(x => x.id === id) : null; return k ? { id: k.id, code: k.code || k.degree || k.name, degree: k.degree || '', name: k.name, tuition: k.tuition, semesters: k.duration_semesters, ects: k.ects } : null; };
     const pids = (Array.isArray(data.program_ids) && data.program_ids.length) ? data.program_ids : ((proc && (proc.programId || proc.program_id)) ? [proc.programId || proc.program_id] : []);
     const sel = [...(data.programs || []).map(pid => PROGRAMS.find(x => x.id === pid)), ...pids.map(katProg)].filter(Boolean);
     const prog = (L.progSnapshot && L.progSnapshot.name ? L.progSnapshot : null) || PROGRAMS.find(x => x.id === L.programId) || katProg(L.programId) || sel[0] || null;
-    const num = (v, d) => (v === '' || v == null || isNaN(Number(v))) ? d : Number(v);
+    /* Szám a levél mezőiből: a szóközös / vesszős alak („3 000”, „1200,50”) is érvényes;
+       ha nincs érvényes érték, az alapérték, ha az sincs, 0 — így az összesen soha nem NaN. */
+    const szam = (v) => { if (v === '' || v == null) return NaN; return typeof v === 'number' ? v : Number(String(v).replace(/\s/g, '').replace(',', '.')); };
+    const num = (v, d) => { const x = szam(v); if (isFinite(x)) return x; const y = szam(d); return isFinite(y) ? y : 0; };
     const tuition = num(L.tuition, prog ? prog.tuition : 0);
     const applicationFee = num(L.applicationFee, FEES.application);
     const dormitoryFee = num(L.dormitoryFee, FEES.dormitorySemester);
@@ -7740,7 +7781,10 @@ const AdmissionsHub = (() => {
       signerTitle: L.signerTitle || LETTER_DEFAULTS.signerTitle,
       note: L.note || '',
       tuition, applicationFee, dormitoryFee, dormitoryDeposit,
-      firstTwo: tuition * 2, total: tuition * 2 + applicationFee + dormitoryFee,
+      // Altogether = jelentkezési díj + az első két félév tandíja + egy félév kollégiumi díja (a Word-minta szerint).
+      firstTwo: Math.round(tuition * 2 * 100) / 100,
+      total: Math.round((applicationFee + tuition * 2 + dormitoryFee) * 100) / 100,
+      kelt: LEVEL_datum(L.issuedAt),
     };
   }
   /* A kiküldött levél RÖGZÍTETT változata a naplóhoz (63): minden érték, a képzés
@@ -7752,7 +7796,7 @@ const AdmissionsHub = (() => {
       signerName: v.signerName, signerTitle: v.signerTitle, note: v.note,
       tuition: v.tuition, applicationFee: v.applicationFee, dormitoryFee: v.dormitoryFee, dormitoryDeposit: v.dormitoryDeposit,
       programId: v.prog ? v.prog.id : ((L && L.programId) || ''),
-      progSnapshot: v.prog ? { id: v.prog.id, code: v.prog.code, name: v.prog.name, tuition: v.prog.tuition, semesters: v.prog.semesters, ects: v.prog.ects } : null,
+      progSnapshot: v.prog ? { id: v.prog.id, code: v.prog.code, degree: v.prog.degree || '', name: v.prog.name, tuition: v.prog.tuition, semesters: v.prog.semesters, ects: v.prog.ects } : null,
     };
   };
   // Kiküldött-e: új levélnél az állapot dönt; a régi (állapot nélküli) levél a
@@ -7766,38 +7810,95 @@ const AdmissionsHub = (() => {
     const katalogusId = Array.isArray(data.program_ids) && data.program_ids.length ? data.program_ids[0] : (proc && proc.programId) || '';
     return { fileNumber: makeFileNumber('CAL'), issuedAt: todayStr(), programId: dontottId || (first ? first.id : '') || katalogusId, status: 'draft', createdAt: new Date().toISOString() };
   };
+  /* A FELTÉTELES FELVÉTELI LEVÉL — a hivatalos Word-minta (CONDITIONAL ACCEPTANCE
+     LETTER.docx) szerkezete és szövege: fejlécben az NJE logó, Source Sans Pro,
+     számozott teendők, banki adatok, visszatérítési szabályzat, dékáni aláírás.
+     A változó értékek a letterValues-ból jönnek; az „Altogether” a kiírt tételek
+     összege (jelentkezési díj + két félév tandíj + egy félév kollégiumi díj). */
   function LetterDoc({ proc }) {
     const L = (proc && proc.data && proc.data.letter) || {};
     const v = letterValues(proc, L);
     if (!v.prog) return <div className="text-slate-400 text-sm">Nincs kiválasztott szak — a levél nem állítható össze.</div>;
-    const eur = (n) => 'EUR ' + Number(n || 0).toLocaleString('en-US');
+    const eur = (n) => 'EUR ' + LEVEL_osszeg(n);
+    const b = FEES.bank;
+    const alairo = String(v.signerTitle || '').split(/\n|·/).map(x => x.trim()).filter(Boolean);
+    const alcim = 'pl-6 font-bold';
     return (
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm mx-auto max-w-3xl" data-no-i18n="1">
-        <div className="p-6 sm:p-10 text-slate-800" style={{ fontFamily: 'Georgia, serif' }}>
-          <div className="flex items-start justify-between pb-5 border-b-2 border-slate-900">
-            <div><div className="font-black text-slate-900">John von Neumann University</div><div className="text-xs text-slate-500">Neumann János Egyetem · Kecskemét, Hungary</div></div>
-            <div className="text-right text-xs text-slate-500"><div className="font-bold text-slate-700">File number</div><div className="font-mono">{L.fileNumber}</div></div>
+      <div className="nje-level bg-white border border-slate-200 rounded-2xl shadow-sm mx-auto max-w-3xl" data-no-i18n="1" data-level-dok="1">
+        <div className="px-6 sm:px-12 pt-6 sm:pt-8 pb-10 text-[14.5px] leading-[1.55] text-slate-900" style={{ fontFamily: "'Source Sans Pro', 'Source Sans 3', Inter, Arial, sans-serif" }}>
+          <div className="relative min-h-[64px] mb-6" data-level-fejlec="1">
+            <img src="assets/nje-letter-logo.jpg" alt="John von Neumann University" data-level-logo="1" className="block h-auto" style={{ width: '28%', minWidth: 140, marginLeft: '18.6%' }} />
+            {L.fileNumber && <div className="absolute right-0 top-0 text-right text-[10px] leading-tight text-slate-400"><div>File number</div><div className="font-mono text-slate-500">{L.fileNumber}</div></div>}
           </div>
-          <h3 className="text-center text-xl font-bold tracking-[0.18em] uppercase mt-8 mb-7" style={{ fontFamily: 'Inter, sans-serif' }}>Conditional Acceptance Letter</h3>
-          <div className="space-y-1.5 text-[15px]"><p><strong>Date:</strong> {L.issuedAt}</p><p><strong>Name:</strong> {v.name}</p><p><strong>Passport number:</strong> {v.passport}</p><p><strong>Country:</strong> {v.country}</p></div>
-          <p className="mt-6 text-[15px]">Dear {v.name},</p>
-          <p className="mt-3 text-[15px]">Your application for admission to John von Neumann University has been reviewed. Your status is as follows:</p>
-          <div className="my-4 pl-4 border-l-2 border-primary text-[15px] space-y-1"><p><strong>Academic program:</strong> [{v.prog.code}] {v.prog.name}</p><p><strong>Tuition fee:</strong> {eur(v.tuition)} / semester</p><p><strong>Length:</strong> {v.prog.semesters} semesters ({v.prog.ects} ECTS)</p></div>
-          <p className="text-[15px]">You have submitted all necessary documents and met all stated requirements. We confirm that you are <strong>CONDITIONALLY ADMITTED</strong> to the program starting in {v.startTerm}. The Final Letter of Admission will be issued once your documents meet the legal requirements.</p>
-          {v.note && <p className="mt-4 text-[15px] whitespace-pre-line">{v.note}</p>}
-          <p className="mt-4 font-bold text-[15px]">To receive the Final Letter of Admission, please transfer the following fees:</p>
-          <div className="overflow-x-auto"><table className="w-full text-[15px] my-3" style={{ fontFamily: 'Inter, sans-serif' }}><tbody>
-            <tr className="border-b border-slate-100"><td className="py-1.5">Application fee</td><td className="py-1.5 text-right font-semibold tabular-nums">{eur(v.applicationFee)}</td></tr>
-            <tr className="border-b border-slate-100"><td className="py-1.5">Tuition fee — first two semesters</td><td className="py-1.5 text-right font-semibold tabular-nums">{eur(v.firstTwo)}</td></tr>
-            <tr className="border-b border-slate-100"><td className="py-1.5">Dormitory fee — one semester</td><td className="py-1.5 text-right font-semibold tabular-nums">{eur(v.dormitoryFee)}</td></tr>
-            <tr><td className="py-2 font-black">Altogether</td><td className="py-2 text-right font-black text-primary tabular-nums">{eur(v.total)}</td></tr>
-          </tbody></table></div>
-          <p className="text-[15px]">Final payment deadline: <strong>{v.deadline}</strong>. A dormitory deposit of {eur(v.dormitoryDeposit)} is payable after arrival.</p>
-          <div className="mt-4 rounded-xl bg-slate-50 p-4 text-[13px]" style={{ fontFamily: 'Inter, sans-serif' }}><div className="font-bold text-slate-700 mb-1">Bank details</div><div>Bank: {FEES.bank.name} · 1056 Budapest, Váci street 38., Hungary</div><div>Account holder: Neumann János Egyetem</div><div>IBAN: <span className="font-mono">{FEES.bank.iban}</span> · SWIFT: <span className="font-mono">{FEES.bank.swift}</span></div></div>
-          <p className="mt-5 text-[15px]">Yours sincerely,</p>
-          <div className="mt-8 flex items-end justify-between gap-4 flex-wrap">
-            <div><div className="w-56 border-b border-slate-400 pb-1 mb-1 flex items-end h-12"><span className="text-primary italic text-lg" style={{ fontFamily: 'Georgia, serif' }}>{v.signerName}</span></div><div className="text-sm font-bold text-slate-900" style={{ fontFamily: 'Inter, sans-serif' }}>{v.signerName}</div><div className="text-xs text-slate-500" style={{ fontFamily: 'Inter, sans-serif' }}>{v.signerTitle}</div></div>
-            <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 border border-dashed border-slate-300 rounded-lg px-2.5 py-1.5" style={{ fontFamily: 'Inter, sans-serif' }}><Lucide.PenTool size={13} /> Flintsign aláírás — később</div>
+          <h3 className="text-center text-[17px] font-bold tracking-wide mb-5">CONDITIONAL ACCEPTANCE LETTER</h3>
+          <div>
+            <p><strong>Date:</strong> {v.kelt}</p>
+            <p><strong>Name:</strong> {v.name}</p>
+            <p><strong>Passport number:</strong> {v.passport}</p>
+            <p><strong>Country:</strong> {v.country}</p>
+          </div>
+          <p className="mt-5">Dear {v.name},</p>
+          <p className="mt-3">Your application for admission to John von Neumann University has been reviewed.</p>
+          <p>Your status is as follows:</p>
+          <div className="mt-2">
+            <p><strong>Academic program</strong>: [{v.prog.degree || v.prog.code}] {v.prog.name}</p>
+            <p><strong>Tuition fee: </strong>{eur(v.tuition)} / semester</p>
+            <p><strong>Length of the program: </strong>{v.prog.semesters} semesters ({v.prog.ects} ECTS credit points)</p>
+          </div>
+          <p className="mt-4 text-justify">You have submitted all necessary documents and met all stated requirements. We confirm that you are <strong>CONDITIONALLY ADMITTED</strong> to the program starting in {v.startTerm}. Please note that the University reserves the right to check the validity of your documents (e.g. secondary school certificate/diploma/degree/transcripts) and the FINAL LETTER OF ADMISSION will be issued if your documents meet the legal requirements.</p>
+          {v.note && <p className="mt-3 whitespace-pre-line">{v.note}</p>}
+          <p className="mt-3">In order to receive the FINAL LETTER OF ADMISSION you need to take the following steps:</p>
+          <ol className="mt-1 list-decimal pl-8">
+            <li>
+              <strong>Transfer the following fees:</strong>
+              <ul className="list-disc pl-6">
+                <li data-level-dij="application">application fee: <strong>{eur(v.applicationFee)}</strong></li>
+                <li data-level-dij="tuition">tuition fee of the first two semesters: <strong>{eur(v.firstTwo)}</strong></li>
+                <li data-level-dij="dormitory">dormitory fee for one semester<strong> (5 months) {eur(v.dormitoryFee)}</strong></li>
+              </ul>
+            </li>
+          </ol>
+          <p className="mt-2 font-bold">Please note that the final deadline to make all the payments is {v.deadline}.</p>
+          <p className="mt-4">Bank account details for transferring the tuition fee, application fee and dormitory fee.</p>
+          <p className="mt-1" data-level-osszesen={v.total}>Altogether <strong>{eur(v.total)}</strong></p>
+          <div className="mt-2 grid grid-cols-[minmax(0,11rem),minmax(0,1fr)] gap-x-4">
+            <span>Bank:</span><strong>{b.name}</strong>
+            <span>Address:</span><span>{b.address}</span>
+            <span>Bank account holder:</span><span>{b.holder}</span>
+            <span>IBAN:</span><span className="break-all">{b.iban}</span>
+            <span>Bank account number:</span><span>{b.accountNumber}</span>
+            <span>SWIFT code:</span><span>{b.swift}</span>
+          </div>
+          <p className="mt-3">In the ‘Information for beneficiary’ section please <u>indicate your name</u> and <u>passport number</u>. Sender bears all transaction fees.</p>
+          <ol className="mt-3 list-decimal pl-8">
+            <li>Upon receipt of payment, we will issue the FINAL LETTER OF ADMISSION.</li>
+            <li>You may then apply for the residence permit for study purposes at the Hungarian Embassy or Consulate.</li>
+            <li>Applicants must pay a dormitory deposit of {eur(v.dormitoryDeposit)} after arrival, which is equivalent to three months' dormitory fees.</li>
+          </ol>
+          <p className="mt-4 font-bold">Please, read our Refund Policy below:</p>
+          <ol className="mt-1 list-decimal pl-8 space-y-1 text-justify">
+            <li>The application fee is <strong>non refundable</strong>.</li>
+            <li>
+              A tuition fee refund (100%) may be requested if the applicant officially notifies (via email to the International Office, attaching credible evidence) that they cannot start the semester due to the rejection of their visa application, and this is supported by the decision rejecting the visa application, while observing the following preclusive deadline:
+              <div className={alcim}>− For the autumn semester: up to October 15</div>
+              <div className={alcim}>− For the spring semester: up to March 15</div>
+            </li>
+            <li>
+              A full (100%) dormitory fee refund may be requested if the applicant notifies the University that they cannot start the semester due to visa denial:
+              <div className={alcim}>− by 31 August for the Fall semester, or</div>
+              <div className={alcim}>− by 31 January for the Spring semester.</div>
+            </li>
+            <li>If the applicant enrolls and begins the semester, tuition and dormitory fees are non-refundable.</li>
+            <li>If the applicant’s visa has not been denied, or was denied but the process is reinitiated, the applicant may request that the paid tuition be deferred to the semester they indicate. In this case, the tuition amount remains unchanged. If the deferral was requested due to visa processing and the visa is ultimately denied, §5 (1) applies.</li>
+            <li>Refunds are initiated by the University within 30 working days after the complete submission of the required information for the transfer (§5 (6)). The credited amount to the applicant’s account may vary depending on the bank’s processing time</li>
+            <li>Please note that by completing the Conditional Acceptance Letter payment, you automatically accept our refund policy.</li>
+          </ol>
+          <p className="mt-4">Should you have any questions, please contact us at admission@nje.hu</p>
+          <p className="mt-4">Yours sincerely,</p>
+          <div className="mt-10 text-center" data-level-alairas="1">
+            <div className="text-slate-500">--------------------------------------</div>
+            <div className="font-bold">{v.signerName}</div>
+            {alairo.map((x, i) => <div key={i}>{x}</div>)}
           </div>
         </div>
       </div>
