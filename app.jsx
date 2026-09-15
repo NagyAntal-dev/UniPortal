@@ -2487,6 +2487,114 @@ const ADM_datum = (s) => {
    A migráció előtt, vagy a csak böngészőben élő sornál a belső azonosító rövidítve. */
 const ADM_azon = (p) => (p && p.refNo) ? 'FV-' + String(p.refNo).padStart(5, '0')
   : (p && p.id ? (String(p.id).length > 14 ? String(p.id).slice(0, 13) + '…' : String(p.id)) : '—');
+/* UTALÁSI KÖZLEMÉNY — a banki átutalás azonosítója, pl. „NJE-FV-00037-84”.
+   A szerver által kiosztott, egyedi és változatlan folyamatszámból (ref_no, 60) képezzük,
+   így nem kell hozzá tárolt mező, és a hallgató, az iroda, a levél és a pénzügy
+   mindenhol ugyanazt látja. A végén ISO 7064 MOD 97-10 ellenőrzőszám áll: a
+   bankszámlakivonatról bemásolt, elírt közleményt a rendszer érvénytelennek jelzi,
+   ahelyett hogy egy másik jelentkezőhöz rendelné. */
+const FIZ_ellenorzo = (n) => String(98 - ((Number(n) * 100) % 97)).padStart(2, '0');
+const FIZ_kozlemeny = (refNo) => {
+  const n = Number(refNo);
+  if (!Number.isInteger(n) || n <= 0) return '';
+  return 'NJE-FV-' + String(n).padStart(5, '0') + '-' + FIZ_ellenorzo(n);
+};
+/* Bármilyen szövegből (bankkivonat közlemény rovata) kiolvassa az azonosítót; a szóköz,
+   kötőjel és a kisbetű nem számít. null, ha nincs benne azonosító-szerű rész. */
+const FIZ_felismer = (szoveg) => {
+  const m = String(szoveg || '').toUpperCase().match(/NJE[\s\-_.\/]*FV[\s\-_.\/]*(\d{5,})[\s\-_.\/]*(\d{2})(?!\d)/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return { refNo: n, ervenyes: n > 0 && FIZ_ellenorzo(n) === m[2], kozlemeny: FIZ_kozlemeny(n) };
+};
+const FIZ_masol = async (szoveg) => {
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(szoveg); return true; } } catch (e) {}
+  try {
+    const t = document.createElement('textarea'); t.value = szoveg; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t); t.select(); const ok = document.execCommand('copy'); t.remove(); return ok;
+  } catch (e) { return false; }
+};
+/* A közlemény megjelenítése egy kattintásos másolással. kompakt = kis címke az irodai fejlécekben. */
+function FIZ_KozlemenyDoboz({ refNo, magyarazat, kompakt }) {
+  const [masolva, setMasolva] = useState(false);
+  const k = FIZ_kozlemeny(refNo);
+  if (!k) return null;
+  const masol = async () => { if (await FIZ_masol(k)) { setMasolva(true); setTimeout(() => setMasolva(false), 1800); } };
+  if (kompakt) return (
+    <button type="button" onClick={masol} title="Utalási közlemény — kattintásra másolás" data-fiz-kozlemeny={k}
+      className="px-2 py-0.5 bg-amber-50 text-amber-800 rounded text-[10px] font-bold font-mono inline-flex items-center gap-1 hover:bg-amber-100 transition-colors">
+      <ICONS.Landmark size={11} />{k}{masolva ? <ICONS.Check size={11} /> : null}
+    </button>
+  );
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4" data-fiz-kozlemeny={k}>
+      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-1.5">Utalási közlemény</p>
+      <div className="flex items-center gap-2">
+        <span className="flex-1 min-w-0 font-mono text-lg font-black text-slate-900 tracking-wider select-all break-all">{k}</span>
+        <button type="button" onClick={masol} className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors">
+          {masolva ? <><ICONS.Check size={14} /> Másolva</> : <><ICONS.Copy size={14} /> Másolás</>}
+        </button>
+      </div>
+      <p className="text-[11px] text-amber-800 mt-2 leading-relaxed">{magyarazat || 'Banki átutalásnál ezt írd a közlemény rovatba — enélkül nem tudjuk a befizetést a jelentkezésedhez rendelni.'}</p>
+    </div>
+  );
+}
+/* Pénzügyek → Tranzakciók: a bankszámlakivonat közleményéből kikeresi a jelentkezést.
+   Csak olvas (admission_process_list, a hívó jogán). */
+function FIZ_Azonosito() {
+  const [q, setQ] = useState('');
+  const [ered, setEred] = useState(null);
+  const [tolt, setTolt] = useState(false);
+  const keres = async (e) => {
+    if (e) e.preventDefault();
+    const f = FIZ_felismer(q);
+    if (!f) { setEred({ hiba: 'nincs' }); return; }
+    if (!f.ervenyes) { setEred({ hiba: 'ellenorzo', f }); return; }
+    if (!window.sb) { setEred({ hiba: 'kapcsolat', f }); return; }
+    setTolt(true);
+    try {
+      const { data, error } = await window.sb.from('admission_process_list')
+        .select('id,ref_no,owner_email,applicant_name,program_id,step,max_reached,done,created_at,updated_at,stage,student_step,submitted_at,data')
+        .eq('ref_no', f.refNo).maybeSingle();
+      if (error) setEred({ hiba: 'kapcsolat', f });
+      else if (!data) setEred({ hiba: 'nincsilyen', f });
+      else setEred({ f, p: spRow(data) });
+    } catch (x) { setEred({ hiba: 'kapcsolat', f }); }
+    setTolt(false);
+  };
+  let tartalom = null;
+  if (ered && ered.hiba === 'nincs') tartalom = <p className="text-sm text-slate-500">Nem található utalási közlemény a szövegben.</p>;
+  else if (ered && ered.hiba === 'ellenorzo') tartalom = <p className="text-sm font-semibold text-red-600" data-fiz-hiba="ellenorzo">Az ellenőrzőszám nem egyezik — valószínűleg elírás. A helyes közleményt a hallgató a felvételi folyamatában látja.</p>;
+  else if (ered && ered.hiba === 'nincsilyen') tartalom = <p className="text-sm text-slate-500"><span>Érvényes közlemény, de nincs hozzá jelentkezés:</span> <span className="font-mono font-bold">{ered.f.kozlemeny}</span></p>;
+  else if (ered && ered.hiba === 'kapcsolat') tartalom = <p className="text-sm text-red-600">A keresés nem sikerült. Próbáld újra.</p>;
+  else if (ered && ered.p) {
+    const p = ered.p; const d = p.data || {}; const L = d.letter || null;
+    const kiment = !!(L && JourneyShared.letterSent && JourneyShared.letterSent(p));
+    const v = (L && JourneyShared.letterValues) ? JourneyShared.letterValues(p, L) : null;
+    const nev = p.applicantName || (d.personal && d.personal.name) || (v && v.name !== '—' ? v.name : '') || '—';
+    const sor = (cim, ertek) => <div className="flex justify-between gap-4 py-1.5 border-b border-slate-100 last:border-0"><span className="text-slate-400">{cim}</span><span className="font-bold text-slate-800 text-right">{ertek}</span></div>;
+    tartalom = (
+      <div className="grid md:grid-cols-2 gap-x-8 text-sm" data-fiz-talalat={p.id}>
+        <div>{sor('Jelentkező', nev)}{sor('E-mail', p._owner || '—')}{sor('Folyamat', ADM_azon(p))}</div>
+        <div>{sor('Felvételi levél', kiment ? (L.fileNumber || '—') : 'nincs kiküldve')}{sor('Várt összeg a levél szerint', (v && kiment) ? 'EUR ' + Number(v.total || 0).toLocaleString('hu-HU') : '—')}{sor('Jelentkezési díj', (d.fee && d.fee.paid) ? 'Fizetve' : 'nincs rögzítve')}</div>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-6 space-y-4" data-fiz-azonosito="1">
+      <div>
+        <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><ICONS.Landmark size={18} className="text-amber-600" /> Utalás azonosítása közlemény alapján</h3>
+        <p className="text-xs text-slate-500 mt-1 max-w-[75ch]">Másold be a bankszámlakivonat közlemény rovatát. A rendszer kikeresi a hozzá tartozó jelentkezést; elírás esetén az ellenőrzőszám jelzi, hogy a közlemény nem érvényes.</p>
+      </div>
+      <form onSubmit={keres} className="flex flex-wrap gap-2">
+        <input value={q} onChange={e => { setQ(e.target.value); setEred(null); }} placeholder="pl. NJE-FV-00037-84" aria-label="Közlemény szövege"
+          className="flex-1 min-w-[12rem] px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none" />
+        <button type="submit" disabled={tolt || !q.trim()} className="px-5 py-2.5 rounded-xl text-sm font-bold bg-slate-900 text-white disabled:opacity-40">{tolt ? 'Keresés…' : 'Keresés'}</button>
+      </form>
+      {tartalom}
+    </div>
+  );
+}
 // Származási ország: útlevél (kinyert adat) → jelentkezési űrlap → fiókadatok → levél.
 const ADM_orszag = (p) => { const d = (p && p.data) || {}; return (d.extracted && d.extracted.country) || (d.personal && d.personal.country) || (d.account && d.account.country) || (d.letter && d.letter.country) || ''; };
 const ADM_email = (p) => String((p && (p._owner || (p.data && p.data.account && p.data.account.email) || (p.data && p.data.personal && p.data.personal.email))) || '').toLowerCase();
@@ -3166,12 +3274,14 @@ const AdmissionsCore = ({ user }) => {
       const elozmeny = ADM_elozmenyek(p, journeyProcs, students);
       return { p, fa, nev, email, azon, orszag, felev, elozmeny, dontes: dontesAdat, progs, missing, pct, stLabel, lepesSzoveg, allapot, allapotRend, cancelled, hallgatonal,
         frissitve: p.updatedAt || p.createdAt || '',
-        kereso: ADM_norm([nev, email, p.id, azon, orszag, felev, (felev && typeof PROG_termLabel === 'function') ? PROG_termLabel(felev) : '', stLabel, ...progs.map(x => x.name + ' ' + x.code)].join(' ')) };
+        kereso: ADM_norm([nev, email, p.id, azon, FIZ_kozlemeny(p.refNo), FIZ_kozlemeny(p.refNo).replace(/-/g, ''), orszag, felev, (felev && typeof PROG_termLabel === 'function') ? PROG_termLabel(felev) : '', stLabel, ...progs.map(x => x.name + ' ' + x.code)].join(' ')) };
     };
     const qN = ADM_norm(szuro.q);
+    // Bankkivonatról bemásolt közlemény („NJE-FV-00037-84 Kovács…”) is megtalálja a jelentkezést.
+    const qRef = FIZ_felismer(szuro.q);
     const procAll = journeyProcs.map(procInfo);
     const procLista = ADM_rendez(procAll.filter(x =>
-      (!qN || x.kereso.includes(qN)) &&
+      (!qN || x.kereso.includes(qN) || !!(qRef && qRef.ervenyes && x.p.refNo === qRef.refNo)) &&
       (!szuro.program || x.progs.some(pr => pr.kulcs === szuro.program)) &&
       (!szuro.allapot || x.allapot === szuro.allapot) &&
       (!szuro.dok || (szuro.dok === 'hianyos' ? x.missing.length > 0 : x.missing.length === 0)) &&
@@ -3413,6 +3523,7 @@ const AdmissionsCore = ({ user }) => {
               <p className="text-sm text-slate-400">{(p.data && p.data.account && p.data.account.email) || p._owner || ''}</p>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold font-mono" data-azonosito="1">{ADM_azon(p)}</span>
+                {p.refNo ? <FIZ_KozlemenyDoboz refNo={p.refNo} kompakt /> : null}
                 {ADM_orszag(p) && <span className="px-2 py-0.5 bg-sky-50 text-sky-700 rounded text-[10px] font-bold">{ADM_orszag(p)}</span>}
                 {p.data && p.data.term && <span className="px-2 py-0.5 bg-violet-50 text-violet-700 rounded text-[10px] font-bold">{typeof PROG_termLabel === 'function' ? PROG_termLabel(p.data.term, true) : p.data.term}</span>}
                 {progs.map(pr => <span key={pr.id} className="px-2 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-bold">{pr.code} {pr.name}</span>)}
@@ -3851,7 +3962,7 @@ const AdmissionsCore = ({ user }) => {
               <div className="p-6 border-b border-slate-100 flex items-start justify-between sticky top-0 bg-white z-10">
                 <div className="flex items-center gap-3">
                   <Face p={p} size={48} />
-                  <div><h3 className="text-lg font-black text-slate-800">{nm}</h3><p className="text-xs text-slate-400">{(p.data && p.data.account && p.data.account.email) || p._owner || ''}</p><p className="text-[11px] font-bold text-slate-500 mt-0.5 flex flex-wrap gap-x-2"><span className="font-mono">{ADM_azon(p)}</span>{ADM_orszag(p) && <span>{ADM_orszag(p)}</span>}</p></div>
+                  <div><h3 className="text-lg font-black text-slate-800">{nm}</h3><p className="text-xs text-slate-400">{(p.data && p.data.account && p.data.account.email) || p._owner || ''}</p><p className="text-[11px] font-bold text-slate-500 mt-0.5 flex flex-wrap gap-x-2"><span className="font-mono">{ADM_azon(p)}</span>{p.refNo ? <span className="font-mono text-amber-700" title="Utalási közlemény">{FIZ_kozlemeny(p.refNo)}</span> : null}{ADM_orszag(p) && <span>{ADM_orszag(p)}</span>}</p></div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => { setDetailFull(p); setDetailProc(null); setMsgSent(false); spFetchProc(p.id).then(full => { if (full) setDetailFull(cur => (cur && cur.id === p.id) ? { ...cur, ...full } : cur); }); }} className="bg-primary text-white px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-primary/90 inline-flex items-center gap-1.5"><Lucide.Maximize2 size={13} /> Részletes nézet</button>
@@ -5286,6 +5397,19 @@ const Finance: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<Record<string, 'card' | 'transfer'>>({});
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
+  // Utalási közlemény a fizetési portál szimulációjához: e-mail → folyamatszám (ref_no).
+  const [fizRefek, setFizRefek] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let el = true;
+    (async () => {
+      if (!window.sb) return;
+      try {
+        const { data } = await window.sb.from('admission_process_list').select('ref_no,owner_email').not('ref_no', 'is', null).order('ref_no', { ascending: false });
+        if (el && Array.isArray(data)) { const m = {}; data.forEach(r => { const e = String(r.owner_email || '').toLowerCase(); if (e && !m[e]) m[e] = r.ref_no; }); setFizRefek(m); }
+      } catch (e) {}
+    })();
+    return () => { el = false; };
+  }, []);
 
   // New Payment Modal State
   const [showRecordModal, setShowRecordModal] = useState(false);
@@ -5419,6 +5543,7 @@ const Finance: React.FC = () => {
 
   const renderPayments = () => (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <FIZ_Azonosito />
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-50 flex justify-between items-center">
           <h3 className="font-bold text-slate-800 text-lg">Tranzakciók (Jelentkezési díjak & Tandíjak)</h3>
@@ -5835,7 +5960,7 @@ const Finance: React.FC = () => {
                               <p className="flex justify-between"><span className="text-slate-400">Kedvezményezett:</span> <span className="font-bold text-slate-800">University of Pro</span></p>
                               <p className="flex justify-between"><span className="text-slate-400">IBAN:</span> <span className="font-bold text-slate-800">HU12 3456 7890 1234 5678</span></p>
                               <p className="flex justify-between"><span className="text-slate-400">SWIFT/BIC:</span> <span className="font-bold text-slate-800">UNIPROHU2X</span></p>
-                              <p className="flex justify-between"><span className="text-slate-400">Közlemény:</span> <span className="font-bold text-indigo-600">{student.id} - {student.name}</span></p>
+                              <p className="flex justify-between"><span className="text-slate-400">Közlemény:</span> {fizRefek[String(student.email || '').toLowerCase()] ? <span className="font-bold font-mono text-indigo-600">{FIZ_kozlemeny(fizRefek[String(student.email || '').toLowerCase()])}</span> : <span className="font-bold text-indigo-600">{student.id} - {student.name}</span>}</p>
                             </div>
                           </div>
                           <div className="flex flex-col justify-center items-center border-2 border-dashed border-slate-200 rounded-2xl p-6 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer group" onClick={() => handleUploadProof(student.id, student.tuitionFee)}>
@@ -7961,6 +8086,8 @@ const AdmissionsHub = (() => {
       firstTwo: Math.round(tuition * 2 * 100) / 100,
       total: Math.round((applicationFee + tuition * 2 + dormitoryFee) * 100) / 100,
       kelt: LEVEL_datum(L.issuedAt),
+      // Utalási közlemény: a kiküldött levél a sajátját hozza, a tervezet a folyamatszámból képzi.
+      paymentRef: L.paymentRef || FIZ_kozlemeny(proc && (proc.refNo || proc.ref_no)),
     };
   }
   /* A kiküldött levél RÖGZÍTETT változata a naplóhoz (63): minden érték, a képzés
@@ -7969,7 +8096,7 @@ const AdmissionsHub = (() => {
     const v = letterValues(proc, L);
     return {
       ...(L || {}), name: v.name, passport: v.passport, country: v.country, startTerm: v.startTerm, deadline: v.deadline,
-      signerName: v.signerName, signerTitle: v.signerTitle, note: v.note,
+      signerName: v.signerName, signerTitle: v.signerTitle, note: v.note, paymentRef: v.paymentRef || '',
       tuition: v.tuition, applicationFee: v.applicationFee, dormitoryFee: v.dormitoryFee, dormitoryDeposit: v.dormitoryDeposit,
       programId: v.prog ? v.prog.id : ((L && L.programId) || ''),
       progSnapshot: v.prog ? { id: v.prog.id, code: v.prog.code, degree: v.prog.degree || '', name: v.prog.name, tuition: v.prog.tuition, semesters: v.prog.semesters, ects: v.prog.ects } : null,
@@ -8044,8 +8171,11 @@ const AdmissionsHub = (() => {
             <span>IBAN:</span><span className="break-all">{b.iban}</span>
             <span>Bank account number:</span><span>{b.accountNumber}</span>
             <span>SWIFT code:</span><span>{b.swift}</span>
+            {v.paymentRef ? <><span>Payment reference:</span><strong className="font-mono" data-level-kozlemeny="1">{v.paymentRef}</strong></> : null}
           </div>
-          <p className="mt-3">In the ‘Information for beneficiary’ section please <u>indicate your name</u> and <u>passport number</u>. Sender bears all transaction fees.</p>
+          {v.paymentRef
+            ? <p className="mt-3">In the ‘Information for beneficiary’ section please <u>indicate your payment reference</u> <strong className="font-mono whitespace-nowrap">{v.paymentRef}</strong> and <u>your name</u>. Payments without the reference cannot be matched to your application. Sender bears all transaction fees.</p>
+            : <p className="mt-3">In the ‘Information for beneficiary’ section please <u>indicate your name</u> and <u>passport number</u>. Sender bears all transaction fees.</p>}
           <ol className="mt-3 list-decimal pl-8">
             <li>Upon receipt of payment, we will issue the FINAL LETTER OF ADMISSION.</li>
             <li>You may then apply for the residence permit for study purposes at the Hungarian Embassy or Consulate.</li>
@@ -9482,6 +9612,9 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
 
   const renderFinance = () => {
     const pendingInvoices = invoices.filter(i => i.studentName === student.name && i.status !== 'Paid');
+    // Utalási közlemény: a hallgató legutóbb frissített, szerveren azonosított felvételi folyamatáé.
+    const fizProc = (journeyProcs || []).filter(p => p && p.refNo).sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))[0];
+    const fizRef = fizProc ? fizProc.refNo : null;
     // C1: a 'Paid' megszűnt fő státuszként, a fizetés ténye a payments/invoices
     // adatból derül ki. Befizetettnek akkor tekintjük a tandíjat, ha van
     // jóváírt tandíj-tranzakció, és nincs kiegyenlítetlen számla.
@@ -9596,6 +9729,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
             {/* A jelentkezési azonosító a banki közlemény rovat legfontosabb
                 eleme — ezért kiemelten, monospace betűvel és egy kattintással
                 vágólapra másolhatóan jelenik meg, nem a felsorolásba rejtve. */}
+            {fizRef ? <div className="mb-4"><FIZ_KozlemenyDoboz refNo={fizRef} /></div> : (
             <div className="bg-white rounded-2xl border border-amber-200 p-4 mb-4">
               <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-1.5">Jelentkezési azonosító</p>
               <div className="flex items-center gap-2">
@@ -9610,10 +9744,10 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
                 </button>
               </div>
               <p className="text-[11px] text-amber-700 mt-2 leading-relaxed">Ezt írd az átutalás közlemény rovatába.</p>
-            </div>
+            </div>)}
             <ul className="space-y-3 text-xs text-amber-800 leading-relaxed">
               <li>• A jelentkezési díj nem visszatérítendő.</li>
-              <li>• Átutalás esetén kérjük, tüntesd fel a jelentkezési azonosítódat, az útlevélszámodat és a neved.</li>
+              <li>{fizRef ? '• Átutalásnál a közlemény rovatba az utalási közleményt és a nevedet írd.' : '• Átutalás esetén kérjük, tüntesd fel a jelentkezési azonosítódat, az útlevélszámodat és a neved.'}</li>
               <li>• A tandíj befizetése után állítjuk ki a végleges befogadó nyilatkozatot a vízumhoz.</li>
             </ul>
           </div>
@@ -13341,6 +13475,31 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// Utalási közlemény (hallgató, iroda, Pénzügyek).
+Object.entries({
+  'Utalási közlemény': 'Payment reference', 'Másolás': 'Copy', 'Másolva': 'Copied',
+  'Utalási közlemény — kattintásra másolás': 'Payment reference — click to copy',
+  'Banki átutalásnál ezt írd a közlemény rovatba — enélkül nem tudjuk a befizetést a jelentkezésedhez rendelni.':
+    'For bank transfers, enter this in the payment reference field — without it we cannot match the payment to your application.',
+  'A díj banki átutalásakor ezt írd a közlemény rovatba — enélkül nem tudjuk a befizetést a jelentkezésedhez rendelni.':
+    'When paying the fee by bank transfer, enter this in the payment reference field — without it we cannot match the payment to your application.',
+  'A levélben szereplő díjak átutalásakor ezt írd a közlemény rovatba — enélkül nem tudjuk a befizetést a jelentkezésedhez rendelni.':
+    'When transferring the fees listed in the letter, enter this in the payment reference field — without it we cannot match the payment to your application.',
+  'Az utalási közlemény a jelentkezés mentése után jelenik meg.': 'The payment reference appears once the application has been saved.',
+  '• Átutalásnál a közlemény rovatba az utalási közleményt és a nevedet írd.': '• For bank transfers, enter the payment reference and your name in the reference field.',
+  'Utalás azonosítása közlemény alapján': 'Identify a transfer by its payment reference',
+  'Másold be a bankszámlakivonat közlemény rovatát. A rendszer kikeresi a hozzá tartozó jelentkezést; elírás esetén az ellenőrzőszám jelzi, hogy a közlemény nem érvényes.':
+    'Paste the reference field from the bank statement. The system finds the matching application; if there is a typo, the check digits show that the reference is invalid.',
+  'pl. NJE-FV-00037-84': 'e.g. NJE-FV-00037-84', 'Közlemény szövege': 'Reference text',
+  'Nem található utalási közlemény a szövegben.': 'No payment reference found in the text.',
+  'Az ellenőrzőszám nem egyezik — valószínűleg elírás. A helyes közleményt a hallgató a felvételi folyamatában látja.':
+    'The check digits do not match — probably a typo. The student can see the correct reference in their admission process.',
+  'Érvényes közlemény, de nincs hozzá jelentkezés:': 'Valid reference, but no application belongs to it:',
+  'A keresés nem sikerült. Próbáld újra.': 'The search failed. Please try again.',
+  'Várt összeg a levél szerint': 'Expected amount per letter', 'nincs kiküldve': 'not sent', 'nincs rögzítve': 'not recorded',
+  'Jelentkező': 'Applicant', 'Folyamat': 'Process', 'Felvételi levél': 'Admission letter', 'Jelentkezési díj': 'Application fee',
+  'Keresés': 'Search', 'Keresés…': 'Searching…', 'Fizetve': 'Paid',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
 // Riportnevek és státuszfeliratok (magyar felirat → angol).
 Object.entries({
   'Regisztrációk naponta': 'Registrations per day',

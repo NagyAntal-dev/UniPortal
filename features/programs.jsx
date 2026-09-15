@@ -942,12 +942,17 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
         {amount === 0 ? (
           <div className="flex items-center gap-2 text-emerald-600 font-black p-4 rounded-2xl bg-emerald-50 border border-emerald-100"><Lucide.CheckCircle2 size={18} /> Nincs fizetendő díj — minden rendben.</div>
         ) : fee.paid ? (
-          <div className="flex items-center gap-2 text-emerald-600 font-black p-4 rounded-2xl bg-emerald-50 border border-emerald-100"><Lucide.CheckCircle2 size={18} /> Fizetve: {fee.method} · {fee.date}</div>
+          <div className="flex flex-wrap items-center gap-2 text-emerald-600 font-black p-4 rounded-2xl bg-emerald-50 border border-emerald-100"><Lucide.CheckCircle2 size={18} /> Fizetve: {fee.method} · {fee.date}{fee.reference ? <span className="font-mono text-[12px] text-emerald-800">{' · ' + fee.reference}</span> : null}</div>
         ) : (
-          <div className="flex flex-wrap gap-3">
-            <button className={U_btnPrimary} onClick={() => setData({ fee: { paid: true, method: 'Kártya', date: todayStr() } })}><Lucide.CreditCard size={16} /> Fizetés kártyával</button>
-            <button className={U_btnGhost} onClick={() => setData({ fee: { paid: true, method: 'Banki átutalás', date: todayStr() } })}><Lucide.Landmark size={16} /> Banki átutalás rögzítése</button>
-          </div>
+          <>
+            {/* Az utalási közlemény a folyamatszámból (ref_no) képződik — ugyanazt látja az iroda és a pénzügy. */}
+            {cur.ref_no ? <FIZ_KozlemenyDoboz refNo={cur.ref_no} magyarazat="A díj banki átutalásakor ezt írd a közlemény rovatba — enélkül nem tudjuk a befizetést a jelentkezésedhez rendelni." />
+              : <p className="text-[12px] text-slate-500">Az utalási közlemény a jelentkezés mentése után jelenik meg.</p>}
+            <div className="flex flex-wrap gap-3">
+              <button className={U_btnPrimary} onClick={() => setData({ fee: { paid: true, method: 'Kártya', date: todayStr() } })}><Lucide.CreditCard size={16} /> Fizetés kártyával</button>
+              <button className={U_btnGhost} onClick={() => setData({ fee: { paid: true, method: 'Banki átutalás', date: todayStr(), reference: FIZ_kozlemeny(cur.ref_no) || null } })}><Lucide.Landmark size={16} /> Banki átutalás rögzítése</button>
+            </div>
+          </>
         )}
         <p className="text-[11px] text-slate-400">Teszt üzemmód — valódi terhelés nem történik.</p>
       </div>
@@ -1074,6 +1079,7 @@ function PROG_IrodaiLepes({ lepes, cur, data, program }) {
                 <LEVEL_LetoltesGomb processId={cur.id} fileNumber={data.letter && data.letter.fileNumber}
                   forras='[data-level-hallgato="1"] [data-no-i18n="1"]' className={U_btnPrimary + ' !py-2 text-sm'} />
               </div>
+              {cur.ref_no ? <FIZ_KozlemenyDoboz refNo={cur.ref_no} magyarazat="A levélben szereplő díjak átutalásakor ezt írd a közlemény rovatba — enélkül nem tudjuk a befizetést a jelentkezésedhez rendelni." /> : null}
               <LetterDoc proc={proc} />
             </div>
           )
