@@ -579,6 +579,10 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
   const lepes = Math.max(0, Math.min(idx, rail.length - 1));
   const hallgatoiNezet = lepes < steps.length;
   const [saving, setSaving] = useState(false);
+  // Üzenetváltás a felvételi irodával (features/messages.jsx, 62) — a jelentkezés nézetéből is.
+  const [uzenetNyitva, setUzenetNyitva] = useState(false);
+  const msgTerkep = MSG_useInboxTerkep();
+  const msgOlvasatlan = (msgTerkep[cur.id] && msgTerkep[cur.id].unread) || 0;
 
   const persist = async (extra = {}) => {
     setSaving(true);
@@ -604,6 +608,10 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
           {isDeg && data.term && <p className="text-sm font-bold text-slate-400 mt-1">{PROG_termLabel(data.term)}</p>}
         </div>
         <div className="flex items-center gap-2 flex-none">
+          <button type="button" onClick={() => setUzenetNyitva(v => !v)} aria-expanded={uzenetNyitva} data-msg-eljaras-gomb="1"
+            className={U_btnGhost + ' !py-2 !px-3 text-[13px]' + (uzenetNyitva ? ' !bg-primary/10 !text-primary' : '')}>
+            <Lucide.MessageSquare size={15} /> Üzenetek <MSG_Jelveny szam={msgOlvasatlan} />
+          </button>
           {cur.ref_no && <UBadge>{'FV-' + String(cur.ref_no).padStart(5, '0')}</UBadge>}
           <UBadge tone={statusz ? statusz.tone : 'slate'}>{statusz ? statusz.label : cur.status}</UBadge>
         </div>
@@ -614,6 +622,15 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
         </div>
       )}
 
+      {uzenetNyitva && (
+        <div className="mb-6 bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6" data-msg-eljaras-panel="1">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2"><Lucide.MessageSquare size={16} className="text-primary" /><span className="text-sm font-black text-slate-800">Üzenetváltás a felvételi irodával</span></div>
+            <button type="button" onClick={() => setUzenetNyitva(false)} aria-label="Bezárás" title="Bezárás" className="text-slate-400 hover:text-slate-700"><Lucide.X size={18} /></button>
+          </div>
+          <MSG_Thread processId={cur.id} role="applicant" docs={data.docs || {}} magassag="max-h-[360px]" />
+        </div>
+      )}
       <div className="grid lg:grid-cols-[240px,1fr] gap-6">
         {/* step rail */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-3 h-fit">

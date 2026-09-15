@@ -46,6 +46,9 @@ const FEATURE_FILES = [
   // Interjúnaptár és a jelentkezői interjú-lépés (61_interview_calendar.sql).
   // Az interview.jsx UTÁN: annak IV_rpc / IV_SlotPicker elemeire épül.
   'features/interview-calendar.jsx',
+  // Üzenetváltás a felvételi eljárásban (62_admission_chat.sql): beszélgetés,
+  // fájlküldés, olvasatlan-értesítés. A data-layer és a programs UTÁN.
+  'features/messages.jsx',
   // Kollégiumi modul (26_dorm.sql). A SORREND KÖTÖTT: a dorm.jsx viszi a közös
   // réteget (DORM_rpc, DORM_api, DORM_Tabs, DORM_Stat, DORM_Empty, DORM_Hidden)
   // és a Kollégium nézetet, a dorm-views.jsx pedig erre épül.

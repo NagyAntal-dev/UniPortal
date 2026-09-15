@@ -1496,6 +1496,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {item.icon}
               </span>
               {!collapsed && <span className="font-bold text-xs uppercase tracking-tight text-left">{item.label}</span>}
+              {!collapsed && MSG_menuJelvenyKell(currentUser, item.id) && <MSG_OlvasatlanJelveny menu />}
             </button>
           );
           // Csoportosítás csak a hosszú (ügyintézői) menüben; a hallgató lapos listát kap.
@@ -2686,6 +2687,8 @@ const AdmissionsCore = ({ user }) => {
   const [detailProc, setDetailProc] = useState(null);
   const [detailFull, setDetailFull] = useState(null);
   const [thread, setThread] = useState([]);
+  // Eljárásonként az olvasatlan jelentkezői üzenetek (a lista jelvényéhez).
+  const msgTerkep = MSG_useInboxTerkep();
   useEffect(() => {
     if (!detailFull) { setThread([]); return; }
     const owner = detailFull._owner || 'demo';
@@ -3061,7 +3064,11 @@ const AdmissionsCore = ({ user }) => {
         'A levelet kiküldtük. A hallgató a Felvételi folyamatban látja, és üzenetet is kapott róla.');
       if (!ok) return;
       const owner = proc._owner || 'demo';
-      const msg = { id: 'msg-staff-' + Date.now().toString(36), processId: proc.id, owner, applicant: pName(proc), sender: (user && user.name) || 'Ügyintéző', subject: 'Feltételes felvételi levél kiállítva', preview: 'A Conditional Acceptance Letter (' + (L.fileNumber || '') + ') elkészült. A Felvételi folyamat → Felvételi levél lépésnél megtekintheted és kinyomtathatod.', attachments: [], date: todayStr(), read: false, tone: 'success' };
+      const levelSzoveg = 'A Conditional Acceptance Letter (' + (L.fileNumber || '') + ') elkészült. A Felvételi folyamat → Felvételi levél lépésnél megtekintheted és kinyomtathatod.';
+      // A jelentkező a beszélgetésben (62) kapja meg az értesítést; a migráció előtt a régi úton.
+      const r = await MSG_rpc('msg_send', { p_process_id: proc.id, p_body: levelSzoveg, p_subject: 'Feltételes felvételi levél kiállítva', p_files: [], p_tone: 'success' });
+      if (!r.error) { MSG_valtozott(); return; }
+      const msg = { id: 'msg-staff-' + Date.now().toString(36), processId: proc.id, owner, applicant: pName(proc), sender: (user && user.name) || 'Ügyintéző', subject: 'Feltételes felvételi levél kiállítva', preview: levelSzoveg, attachments: [], date: todayStr(), read: false, tone: 'success' };
       try { const k = 'nje_messages_' + owner; const arr = JSON.parse(localStorage.getItem(k) || '[]'); localStorage.setItem(k, JSON.stringify([msg, ...(Array.isArray(arr) ? arr : [])])); } catch (e) {}
       spSaveMsg(msg);
       setThread(t => [...t, msg]);
@@ -3340,28 +3347,10 @@ const AdmissionsCore = ({ user }) => {
                 );
               })()}
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-                <div className="flex items-center justify-between mb-3"><div className="text-xs font-bold text-slate-400 uppercase tracking-wide">Beszélgetés a jelentkezővel</div><span className="text-[10px] font-bold text-slate-400">{thread.length} üzenet</span></div>
-                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1 mb-4">
-                  {thread.length === 0 ? <div className="text-center py-10 text-slate-400 text-sm">Még nincs üzenet ezzel a jelentkezővel.</div> : thread.map(m => {
-                    const officer = m.sender && m.sender !== pName(p) && m.sender !== (m.applicant || '');
-                    return (
-                      <div key={m.id} className={'flex ' + (officer ? 'justify-end' : 'justify-start')}>
-                        <div className={'max-w-[88%] rounded-2xl px-4 py-2.5 ' + (officer ? 'bg-primary text-white' : 'bg-slate-100 text-slate-800')}>
-                          <div className={'text-[10px] font-bold mb-0.5 ' + (officer ? 'text-white/70' : 'text-slate-500')}>{officer ? (m.sender + ' · Külügyi Iroda') : (m.applicant || 'Jelentkező')}{m.date ? ' · ' + m.date : ''}</div>
-                          {m.subject && <div className="text-sm font-bold">{m.subject}</div>}
-                          <div className="text-sm whitespace-pre-wrap">{m.preview}</div>
-                          {m.attachments && m.attachments.length > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{m.attachments.map(a => <span key={a.id} className={'text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ' + (officer ? 'bg-white/20' : 'bg-white')}><Lucide.Paperclip size={9} /> {a.label}</span>)}</div>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="space-y-2 border-t border-slate-100 pt-3">
-                  <input value={msgDraft.subject} onChange={e => setMsgDraft({ ...msgDraft, subject: e.target.value })} placeholder="Tárgy (opcionális)" className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none" />
-                  <textarea value={msgDraft.body} onChange={e => setMsgDraft({ ...msgDraft, body: e.target.value })} rows={2} placeholder="Írj üzenetet a jelentkezőnek…" className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none resize-none"></textarea>
-                  {(msgDraft.attachments || []).length > 0 && (<div className="flex flex-wrap gap-1.5">{msgDraft.attachments.map(a => <span key={a.id} className="text-[10px] font-bold px-2 py-1 rounded-full bg-primary/10 text-primary inline-flex items-center gap-1"><Lucide.Paperclip size={10} /> {a.label}<button onClick={() => toggleAttach({ id: a.id, label: a.label }, a.fileName)} className="ml-0.5 hover:text-primary/70"><Lucide.X size={10} /></button></span>)}</div>)}
-                  <button onClick={() => sendMessage(p)} disabled={!msgDraft.body.trim()} className="w-full bg-primary text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"><Lucide.Send size={15} /> Küldés</button>
-                </div>
+                <div className="flex items-center justify-between mb-3"><div className="text-xs font-bold text-slate-400 uppercase tracking-wide">Beszélgetés a jelentkezővel</div></div>
+                {/* Valódi kétirányú beszélgetés (62): a jelentkező az Üzenetek fülön és a jelentkezésében látja, válaszolhat, fájlt küldhet.
+                    A bal oldali dokumentumlista „Hivatkozás” gombja továbbra is csatol dokumentum-hivatkozást. */}
+                <MSG_Thread processId={p.id} role="staff" docs={docs} hivatkozasok={msgDraft.attachments || []} onHivatkozasTorles={() => setMsgDraft(d => ({ ...d, attachments: [] }))} />
               </div>
               {(iv.booked || iv.proposed || letter.fileNumber) && (
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-3">
@@ -3518,7 +3507,7 @@ const AdmissionsCore = ({ user }) => {
                 return (
                   <tr key={p.id || idx} className={'hover:bg-slate-50 transition-colors align-top' + (cancelled ? ' opacity-70' : '')}>
                     <td className="px-6 py-4 whitespace-nowrap"><span className="font-mono text-[11px] font-bold text-slate-500 tabular-nums" title={p.id}>{x.azon}</span></td>
-                    <td className="px-6 py-4"><div className="flex items-center gap-3"><Face p={p} size={36} /><div className="min-w-0"><p className="font-semibold text-slate-800 truncate">{x.nev}</p><p className="text-xs text-slate-400 truncate">{x.email}</p>{x.elozmeny.length > 0 && <span className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-600 text-[10px] font-bold" data-elozmeny="1" title={x.elozmeny.map(h => h.azon + (h.leiras ? ' · ' + h.leiras : '')).join('\n')}><ICONS.AlertTriangle size={11} /> Korábban elutasítva</span>}</div></div></td>
+                    <td className="px-6 py-4"><div className="flex items-center gap-3"><Face p={p} size={36} /><div className="min-w-0"><p className="font-semibold text-slate-800 truncate">{x.nev}</p><p className="text-xs text-slate-400 truncate">{x.email}</p>{msgTerkep[p.id] && msgTerkep[p.id].unread > 0 && <span className="mt-1 mr-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold" data-msg-sor={p.id}><Lucide.MessageSquare size={11} /> {`${msgTerkep[p.id].unread} új üzenet`}</span>}{x.elozmeny.length > 0 && <span className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-600 text-[10px] font-bold" data-elozmeny="1" title={x.elozmeny.map(h => h.azon + (h.leiras ? ' · ' + h.leiras : '')).join('\n')}><ICONS.AlertTriangle size={11} /> Korábban elutasítva</span>}</div></div></td>
                     <td className="px-6 py-4 text-[12px] font-semibold text-slate-600 whitespace-nowrap">{x.orszag || <span className="text-slate-300">—</span>}</td>
                     <td className="px-6 py-4"><div className="flex flex-wrap gap-1">{x.progs.length ? x.progs.map((pr, i) => { const felvett = !!(x.dontes && x.dontes.outcome === 'admitted' && x.dontes.programId === pr.id); return <span key={i} title={pr.name} className={'px-2 py-0.5 rounded text-[10px] font-bold ' + (felvett ? 'bg-emerald-500 text-white' : 'bg-primary/10 text-primary')}>{(x.progs.length > 1 && Array.isArray(p.data && p.data.program_ids) ? (i + 1) + '. ' : '') + pr.code}</span>; }) : <span className="text-[10px] text-slate-400">—</span>}</div>{x.felev && <div className="text-[10px] font-bold text-violet-600 mt-1 whitespace-nowrap">{typeof PROG_termLabel === 'function' ? PROG_termLabel(x.felev, true) : x.felev}</div>}</td>
                     <td className="px-6 py-4"><div className="w-32"><div className="flex items-center justify-between text-[10px] font-bold mb-1"><span className={felirat}>{cancelled ? 'Megszakítva' : x.stLabel}</span><span className="text-slate-400">{x.lepesSzoveg}</span></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={csik + ' h-full rounded-full'} style={{ width: x.pct + '%' }}></div></div></div></td>
@@ -3585,16 +3574,8 @@ const AdmissionsCore = ({ user }) => {
                   fallback={(iv.booked || iv.proposed) ? <div className="rounded-xl bg-slate-50 p-3"><div className="text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Lucide.Video size={13} /> {iv.proposed ? 'Interjú — javasolt időpont' : 'Interjú'}</div><div className="text-sm font-bold text-slate-700">{ADM_ivIdo(iv)}</div><div className="text-xs text-slate-400">{iv.interviewerName || (iv.slot && iv.slot.who) || ''}</div></div> : null} />
                 {letter.fileNumber && <div className="rounded-xl bg-emerald-50 p-3"><div className="text-xs font-bold text-emerald-700 mb-1 flex items-center gap-1"><Lucide.FileCheck size={13} /> Felvételi levél</div><div className="text-sm font-bold text-emerald-800 font-mono">{letter.fileNumber}</div></div>}
                 <div className="border-t border-slate-100 pt-5">
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Üzenet írása a jelentkezőnek</div>
-                  {msgSent ? (
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 flex items-center gap-3"><Lucide.CheckCircle2 size={20} className="text-emerald-600" /><div><div className="font-bold text-emerald-800 text-sm">Üzenet elküldve</div><div className="text-xs text-emerald-600">A jelentkező az Üzenetek között látja.</div></div></div>
-                  ) : (
-                    <div className="space-y-3">
-                      <input value={msgDraft.subject} onChange={e => setMsgDraft({ ...msgDraft, subject: e.target.value })} placeholder="Tárgy" className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none" />
-                      <textarea value={msgDraft.body} onChange={e => setMsgDraft({ ...msgDraft, body: e.target.value })} rows={3} placeholder="Írd meg az üzenetet…" className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none resize-none"></textarea>
-                      <div className="flex justify-end"><button onClick={() => sendMessage(p)} disabled={!msgDraft.body.trim()} className="bg-primary text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2"><Lucide.Send size={15} /> Üzenet küldése</button></div>
-                    </div>
-                  )}
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Beszélgetés a jelentkezővel</div>
+                  <MSG_Thread processId={p.id} role="staff" docs={docs} magassag="max-h-[320px]" />
                 </div>
               </div>
             </div>
@@ -3982,7 +3963,7 @@ return AdmissionsCore;
 
 /* ===== EngagementCRM ===== */
 const EngagementCRM = (() => {
-type CRMSubView = 'inbox' | 'whatsapp' | 'campaigns' | 'nudges' | 'video' | 'bulk_send' | 'workflows';
+type CRMSubView = 'uzenetek' | 'inbox' | 'whatsapp' | 'campaigns' | 'nudges' | 'video' | 'bulk_send' | 'workflows';
 
 interface WorkflowStep {
   id: string;
@@ -4043,7 +4024,13 @@ const mockMessages: Message[] = [
 ];
 
 const EngagementCRM: React.FC = ({ user }) => {
-  const [activeSubView, setActiveSubView] = useState<CRMSubView>('inbox');
+  // Nyitó fül: a jelentkezőkkel folytatott valódi beszélgetések (62). A fejléc csengője is ide visz.
+  const [activeSubView, setActiveSubView] = useState<CRMSubView>(() => { try { window.__njeUzenetek = false; } catch (e) {} return 'uzenetek'; });
+  useEffect(() => {
+    const f = () => { try { window.__njeUzenetek = false; } catch (e) {} setActiveSubView('uzenetek'); };
+    window.addEventListener('nje:uzenetek', f);
+    return () => window.removeEventListener('nje:uzenetek', f);
+  }, []);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [isVideoRecording, setIsVideoRecording] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -4911,6 +4898,13 @@ const EngagementCRM: React.FC = ({ user }) => {
 
       {/* Local Tabs */}
       <div className="flex items-center gap-1 p-1 bg-white border border-slate-100 rounded-2xl w-fit shadow-sm overflow-x-auto max-w-full">
+        <button
+          onClick={() => setActiveSubView('uzenetek')}
+          data-crm-uzenetek="1"
+          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap inline-flex items-center ${activeSubView === 'uzenetek' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+        >
+          Jelentkezői üzenetek <MSG_OlvasatlanJelveny />
+        </button>
         <button 
           onClick={() => setActiveSubView('inbox')}
           className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeSubView === 'inbox' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
@@ -4951,6 +4945,7 @@ const EngagementCRM: React.FC = ({ user }) => {
 
       {/* Dynamic Content */}
       <div className="mt-8">
+        {activeSubView === 'uzenetek' && <MSG_Inbox role="staff" />}
         {activeSubView === 'inbox' && renderInbox()}
         {activeSubView === 'whatsapp' && renderWhatsApp()}
         {activeSubView === 'campaigns' && renderCampaigns()}
@@ -8281,6 +8276,7 @@ const AdmissionsHub = (() => {
        A képzéskatalógus a képzésnevekhez és a valós állapothoz kell
        (PROG_folyamatAllapot): a kártya ugyanazt mutatja, mint a Képzési kínálat. */
     const [kat, setKat] = useState([]);
+    const msgTerkep = MSG_useInboxTerkep();
     useEffect(() => {
       let el = true;
       Promise.all([PROG_loadPrograms(), PROG_loadDocTypes()]).then(([p]) => { if (el) setKat(p || []); }).catch(() => {});
@@ -8341,6 +8337,7 @@ const AdmissionsHub = (() => {
                   <div className="flex flex-wrap items-center gap-1.5">
                     {p.refNo && <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">{'FV-' + String(p.refNo).padStart(5, '0')}</span>}
                     {d.term && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-violet-50 text-violet-700">{PROG_termLabel(d.term, true)}</span>}
+                    {msgTerkep[p.id] && msgTerkep[p.id].unread > 0 && <span data-hub-uzenet={p.id} className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary text-white inline-flex items-center gap-1"><Lucide.MessageSquare size={11} /> {`${msgTerkep[p.id].unread} új üzenet`}</span>}
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); delProcess(p.id); }} aria-label="Jelentkezés megszakítása" title="Jelentkezés megszakítása" className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all"><Lucide.Trash2 size={16} /></button>
                 </div>
@@ -8384,7 +8381,11 @@ interface StudentPortalProps {
 }
 
 const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'degrees' | 'dashboard' | 'application' | 'documents' | 'finance' | 'interviews' | 'messages' | 'profile' | 'recommendations' | 'visa' | 'journey'>('degrees');
+  // A fejléc csengője (features/messages.jsx) az Üzenetek fülre kér: window.__njeUzenetek.
+  const [activeTab, setActiveTab] = useState<'degrees' | 'dashboard' | 'application' | 'documents' | 'finance' | 'interviews' | 'messages' | 'profile' | 'recommendations' | 'visa' | 'journey'>(() => {
+    try { if (window.__njeUzenetek) { window.__njeUzenetek = false; return 'messages'; } } catch (e) {}
+    return 'degrees';
+  });
   const [showJourney, setShowJourney] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -8393,6 +8394,13 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
   /* II/2 — a 28-as migráció felülete. Ha az RPC nincs meg, `ivCtx` null marad,
      és a jelentkező a régi, magvetett sávlistát látja (lásd lentebb). */
   const { ctx: ivCtx } = IV_useContext();
+  // Üzenetek (62): olvasatlan szám, és a csengőre kattintva az Üzenetek fül.
+  const msgOlvasatlan = MSG_useOlvasatlan().szam;
+  useEffect(() => {
+    const f = () => { try { window.__njeUzenetek = false; } catch (e) {} setActiveTab('messages'); };
+    window.addEventListener('nje:uzenetek', f);
+    return () => window.removeEventListener('nje:uzenetek', f);
+  }, []);
   const [isLoading, setIsLoading] = useState(true);
   const [showVideoInterview, setShowVideoInterview] = useState(false);
   // Az interjú-foglalás visszajelzései. A szerver kapuja (27_interview_gate.sql)
@@ -8576,9 +8584,9 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
      látszott. Most elöl a képzési kínálat (az admin „Képzések” menüpontjában
      felvett féléves képzések), mellette a felvételi folyamat. */
   if (!student) {
-    const fulGomb = (id, cimke) => (
+    const fulGomb = (id, cimke, extra) => (
       <button onClick={() => setActiveTab(id)}
-        className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === id ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>{cimke}</button>
+        className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === id ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>{cimke}{extra}</button>
     );
     return (
       <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1720px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -8589,8 +8597,11 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
         <div className="flex items-center gap-1 p-1 bg-white border border-slate-100 rounded-2xl w-fit shadow-sm overflow-x-auto max-w-full">
           {fulGomb('degrees', 'Képzési kínálat')}
           {fulGomb('journey', 'Felvételi folyamat')}
+          {fulGomb('messages', 'Üzenetek', <MSG_Jelveny szam={msgOlvasatlan} />)}
         </div>
-        {activeTab === 'journey' ? <AdmissionsHub user={user} onBrowse={() => setActiveTab('degrees')} /> : <ProgramsView user={user} scope="degrees" embedded />}
+        {activeTab === 'journey' ? <AdmissionsHub user={user} onBrowse={() => setActiveTab('degrees')} />
+          : activeTab === 'messages' ? <MSG_Inbox role="applicant" />
+          : <ProgramsView user={user} scope="degrees" embedded />}
       </div>
     );
   }
@@ -8607,7 +8618,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
       { label: 'Folyamatban', val: inProgress, Icon: Lucide.Loader, tone: 'text-primary bg-primary/10' },
       { label: 'Interjú foglalva', val: interviewing, Icon: Lucide.Video, tone: 'text-sky-600 bg-sky-50' },
       { label: 'Felvéve', val: accepted, Icon: Lucide.CheckCircle2, tone: 'text-emerald-600 bg-emerald-50' },
-      { label: 'Olvasatlan üzenet', val: unreadCount, Icon: Lucide.Mail, tone: 'text-amber-600 bg-amber-50' },
+      { label: 'Olvasatlan üzenet', val: msgOlvasatlan, Icon: Lucide.Mail, tone: 'text-amber-600 bg-amber-50' },
     ];
     return (
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -9490,7 +9501,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
           className={`relative px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'messages' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
         >
           Üzenetek
-          {unreadCount > 0 && <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] font-black align-middle">{unreadCount}</span>}
+<MSG_Jelveny szam={msgOlvasatlan} />
         </button>
         <button 
           onClick={() => setActiveTab('profile')}
@@ -9511,7 +9522,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
         {activeTab === 'visa' && renderVisa()}
         {activeTab === 'finance' && renderFinance()}
         {activeTab === 'interviews' && renderInterviews()}
-        {activeTab === 'messages' && renderMessages()}
+        {activeTab === 'messages' && <MSG_Inbox role="applicant" />}
         {activeTab === 'profile' && renderProfile()}
       </div>
     </div>
@@ -12015,10 +12026,16 @@ const App: React.FC = () => {
               <ICONS.Globe size={19} />
               <span className="text-[11px] font-black tracking-wide">{(typeof localStorage !== 'undefined' && localStorage.getItem('nje_lang') === 'en') ? 'EN' : 'HU'}</span>
             </button>
-            <button className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 transition-colors text-slate-500 relative">
-              <ICONS.Bell size={20} />
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            {/* Üzenet-értesítő (features/messages.jsx): olvasatlan szám, felugró jelzés; kattintásra az üzenetekhez visz. */}
+            <MSG_Csengo user={currentUser} onOpen={() => {
+              const cel = currentUser.role === 'STUDENT' ? AppView.STUDENT_PORTAL
+                : filteredMenuItems.some(i => i.id === AppView.ENGAGEMENT_CRM) ? AppView.ENGAGEMENT_CRM : null;
+              if (!cel) return;
+              window.__njeUzenetek = true;
+              setShowAccount(false);
+              setActiveView(cel);
+              setTimeout(() => { try { window.dispatchEvent(new Event('nje:uzenetek')); } catch (e) {} }, 0);
+            }} />
             <button onClick={() => setShowAccount(true)} className="flex items-center gap-2.5 pl-1 pr-3 py-1 rounded-xl hover:bg-slate-50 transition-colors" title="Profilom">
               <span className="w-9 h-9 rounded-lg overflow-hidden bg-primary/10 shadow-sm"><img src={currentUser.avatar} alt="" className="w-full h-full object-cover" /></span>
               <span className="text-left hidden sm:block"><span className="block text-xs font-black text-slate-700 leading-tight">{currentUser.name}</span><span className="block text-[10px] text-slate-400 leading-tight">Profil megnyitása</span></span>
@@ -12857,6 +12874,31 @@ HU_EN_PHRASES.push(
   [/^A kért időpont túl közel esik egy másik interjúhoz: két interjú között (\d+) perc szünet kell\.$/g, 'The requested time is too close to another interview: a $1-minute break is needed between interviews.'],
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
+);
+// Üzenetváltás a felvételi eljárásban (features/messages.jsx, 62_admission_chat.sql).
+Object.entries({
+  'Üzenetváltás a felvételi irodával': 'Conversation with the admissions office',
+  'Az üzenetküldéshez le kell futtatni a 62-es adatbázis-migrációt (62_admission_chat.sql).': 'Messaging requires database migration 62 (62_admission_chat.sql).',
+  'Az üzenetküldés hamarosan elérhető.': 'Messaging will be available soon.',
+  'Betöltés...': 'Loading...', 'Még nincs üzenet ebben a beszélgetésben.': 'No messages in this conversation yet.',
+  'Tárgy (nem kötelező)': 'Subject (optional)', 'Írj üzenetet a jelentkezőnek…': 'Write a message to the applicant…',
+  'Írj üzenetet a felvételi irodának…': 'Write a message to the admissions office…', 'Fájl csatolása': 'Attach file',
+  'Ctrl + Enter: küldés': 'Ctrl + Enter to send', 'Küldés…': 'Sending…', 'Küldés': 'Send',
+  'Egy üzenethez legfeljebb 10 fájl csatolható.': 'You can attach up to 10 files to a message.',
+  'A fájl túl nagy — legfeljebb 20 MB lehet.': 'The file is too large — the limit is 20 MB.',
+  'A fájl feltöltése nem engedélyezett. Jelentkezz ki és be újra; ha így sem megy, szólj az ügyintézőnek.': 'Uploading the file is not allowed. Sign out and back in; if it still fails, contact the admissions office.',
+  'A fájl most nem nyitható meg.': 'The file cannot be opened right now.', 'Csatolmány eltávolítása': 'Remove attachment',
+  'dokumentum-hivatkozás': 'document reference', 'Olvasva': 'Read', 'Látta': 'Seen',
+  'Jelentkezői üzenetek': 'Applicant messages', 'Beszélgetés keresése…': 'Search conversations…', 'Mind': 'All', 'Olvasatlan': 'Unread',
+  'Új beszélgetés: minden eljárás': 'New conversation: all processes', 'Még nincs üzenetváltás a jelentkezőkkel.': 'No conversations with applicants yet.',
+  'Még nincs felvételi eljárásod. Üzenetet a felvételi irodának egy jelentkezésből küldhetsz.': 'You have no admission process yet. You can message the admissions office from an application.',
+  'Nincs találat.': 'No results.', 'Válassz beszélgetést.': 'Select a conversation.', 'Vissza a beszélgetésekhez': 'Back to conversations',
+  'Felvételi iroda': 'Admissions office', 'Felvételi eljárás': 'Admission process', 'Még nincs üzenet': 'No messages yet', 'Te:': 'You:', 'Csatolmány': 'Attachment',
+  'Új üzenet érkezett': 'New message received', 'Nincs olvasatlan üzenet': 'No unread messages', 'Bezárás': 'Close', 'Megnyitás': 'Open',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push(
+  [/^(\d+) olvasatlan üzenet$/, '$1 unread messages'],
+  [/^(\d+) új üzenet$/, '$1 new messages'],
 );
 // Valós folyamatállapot, gyűjtőnézet, dokumentum-követelmény, fiókelőzmények, admin interjú-szerkesztés.
 Object.entries({

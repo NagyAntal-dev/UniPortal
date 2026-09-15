@@ -72,3 +72,4 @@
 59_legal_consents.sql
 60_admission_decision_terms.sql
 61_interview_calendar.sql
+62_admission_chat.sql
