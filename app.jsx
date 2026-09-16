@@ -2539,6 +2539,69 @@ function FIZ_KozlemenyDoboz({ refNo, magyarazat, kompakt }) {
     </div>
   );
 }
+/* Az adott jelentkezőhöz tartozó utalási adatok az irodai nézetben: ugyanaz,
+   amit a levél és a hallgatói felület mutat (banki adatok, összegek, közlemény),
+   egy helyen, vágólapra másolható formában — ezt kérdezi vissza a jelentkező. */
+function ADM_UtalasInfo({ p, L, v }) {
+  const [masolva, setMasolva] = useState(false);
+  const b = (JourneyShared && JourneyShared.FEES && JourneyShared.FEES.bank) || {};
+  const koz = FIZ_kozlemeny(p && p.refNo);
+  const vanLevel = !!(L && L.fileNumber);
+  // Ugyanaz a formátum, mint a levélben (LEVEL_osszeg): ezres elválasztó nélkül.
+  const penz = (n) => { const x = Math.round((Number(n) || 0) * 100) / 100; return 'EUR ' + (Number.isInteger(x) ? String(x) : x.toFixed(2)); };
+  const dij = (p && p.data && p.data.fee) || null;
+  const sorok = [
+    ['Kedvezményezett', b.holder || '—', false],
+    ['Bank', b.name || '—', false],
+    ['IBAN', b.iban || '—', true],
+    ['Számlaszám', b.accountNumber || '—', true],
+    ['SWIFT', b.swift || '—', true],
+  ];
+  const osszegek = vanLevel ? [
+    ['Jelentkezési díj', penz(v.applicationFee), false],
+    ['Két félév tandíja', penz(v.firstTwo), false],
+    ['Kollégiumi díj (1 félév)', penz(v.dormitoryFee), false],
+    ['Összesen', penz(v.total), false],
+    ['Befizetési határidő', v.deadline || '—', false],
+  ] : [];
+  const masol = async () => {
+    const szoveg = [...sorok, ['Utalási közlemény', koz || '—', true], ...osszegek]
+      .map(([cim, ertek]) => cim + ': ' + ertek).join('\n');
+    if (await FIZ_masol(szoveg)) { setMasolva(true); setTimeout(() => setMasolva(false), 1800); }
+  };
+  const sor = ([cim, ertek, mono], i) => (
+    <div key={i} className="flex justify-between gap-3 py-1 border-b border-amber-100 last:border-0">
+      <span className="text-slate-500 whitespace-nowrap">{cim}</span>
+      <span className={'font-bold text-slate-800 text-right break-all' + (mono ? ' font-mono text-[12px]' : '')}>{ertek}</span>
+    </div>
+  );
+  return (
+    <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4" data-utalas-info={p && p.id}>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <ICONS.Landmark size={15} className="text-amber-600" />
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Utalási információk</span>
+        </div>
+        <button type="button" onClick={masol} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-800 hover:bg-amber-200 inline-flex items-center gap-1.5">
+          {masolva ? <><ICONS.Check size={13} /> Másolva</> : <><ICONS.Copy size={13} /> Adatok másolása</>}
+        </button>
+      </div>
+      <div className="grid md:grid-cols-2 gap-x-6 text-[13px]">
+        <div>{sorok.map(sor)}</div>
+        <div>
+          <div className="flex justify-between gap-3 py-1 border-b border-amber-100">
+            <span className="text-slate-500 whitespace-nowrap">Utalási közlemény</span>
+            <span className="font-mono text-[12px] font-black text-slate-900 text-right break-all select-all">{koz || '—'}</span>
+          </div>
+          {osszegek.map((x, i) => sor(x, 'o' + i))}
+        </div>
+      </div>
+      {!vanLevel && <p className="text-[11px] text-slate-500 mt-2">Az összegek a levéltervezet elkészítése után jelennek meg. A közlemény már most megadható a jelentkezőnek.</p>}
+      {dij && dij.paid && <p className="text-[11px] font-semibold text-emerald-700 mt-2">{'Jelentkezési díj rögzítve: ' + [dij.method, dij.date, dij.reference].filter(Boolean).join(' · ')}</p>}
+    </div>
+  );
+}
+
 /* Pénzügyek → Tranzakciók: a bankszámlakivonat közleményéből kikeresi a jelentkezést.
    Csak olvas (admission_process_list, a hívó jogán). */
 function FIZ_Azonosito() {
@@ -2576,7 +2639,7 @@ function FIZ_Azonosito() {
     tartalom = (
       <div className="grid md:grid-cols-2 gap-x-8 text-sm" data-fiz-talalat={p.id}>
         <div>{sor('Jelentkező', nev)}{sor('E-mail', p._owner || '—')}{sor('Folyamat', ADM_azon(p))}</div>
-        <div>{sor('Felvételi levél', kiment ? (L.fileNumber || '—') : 'nincs kiküldve')}{sor('Várt összeg a levél szerint', (v && kiment) ? 'EUR ' + Number(v.total || 0).toLocaleString('hu-HU') : '—')}{sor('Jelentkezési díj', (d.fee && d.fee.paid) ? 'Fizetve' : 'nincs rögzítve')}</div>
+        <div>{sor('Felvételi levél', kiment ? (L.fileNumber || '—') : 'nincs kiküldve')}{sor('Várt összeg a levél szerint', (v && kiment) ? 'EUR ' + (Number.isInteger(Number(v.total)) ? String(Number(v.total)) : Number(v.total).toFixed(2)) : '—')}{sor('Jelentkezési díj', (d.fee && d.fee.paid) ? 'Fizetve' : 'nincs rögzítve')}</div>
       </div>
     );
   }
@@ -3689,6 +3752,7 @@ const AdmissionsCore = ({ user }) => {
                       )}
                     </div>
                     {uz && <div role={uz.tone === 'error' ? 'alert' : 'status'} className={'mb-4 rounded-xl px-3 py-2.5 text-[12px] font-semibold border ' + (uz.tone === 'error' ? 'bg-red-50 border-red-100 text-red-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700')}>{uz.text}</div>}
+                    <ADM_UtalasInfo p={p} L={L} v={v} />
                     <ADM_LevelNaplo processId={p.id} jel={levelNaploJel} />
                     {!L.fileNumber ? (
                       levelLepes ? (
@@ -13476,6 +13540,15 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// Irodai utalási információk a jelentkezőnél.
+Object.entries({
+  'Utalási információk': 'Transfer details', 'Kedvezményezett': 'Beneficiary', 'Számlaszám': 'Account number',
+  'Két félév tandíja': 'Tuition for two semesters', 'Kollégiumi díj (1 félév)': 'Dormitory fee (1 semester)',
+  'Összesen': 'Altogether', 'Befizetési határidő': 'Payment deadline', 'Adatok másolása': 'Copy details',
+  'Az összegek a levéltervezet elkészítése után jelennek meg. A közlemény már most megadható a jelentkezőnek.':
+    'The amounts appear once the letter draft has been created. The payment reference can already be given to the applicant.',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push([/^Jelentkezési díj rögzítve: /, 'Application fee recorded: ']);
 // Interjú értékelő szempontrendszer (66_interview_scoring.sql).
 Object.entries({
   'Értékelés': 'Evaluation', 'Interjú értékelése': 'Interview evaluation', 'Értékelési szempontok': 'Evaluation criteria',
