@@ -2278,6 +2278,7 @@ const AgentPortal: React.FC<AgentPortalProps> = ({ user }) => {
 
   const renderResources = () => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <DEMO_Jel kieg="col-span-full" szoveg="Minta anyagok — a letölthető fájlok még nincsenek feltöltve." />
       {mockResources.map(resource => (
         <div key={resource.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
           <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 mb-4 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors">
@@ -2493,6 +2494,30 @@ const ADM_azon = (p) => (p && p.refNo) ? 'FV-' + String(p.refNo).padStart(5, '0'
    mindenhol ugyanazt látja. A végén ISO 7064 MOD 97-10 ellenőrzőszám áll: a
    bankszámlakivonatról bemásolt, elírt közleményt a rendszer érvénytelennek jelzi,
    ahelyett hogy egy másik jelentkezőhöz rendelné. */
+/* DEMO-JELÖLÉS — azoknak a képernyőknek, amelyek még kitalált adatot mutatnak.
+   Nem elrejtjük őket, hanem megmondjuk, hogy az itt látható adat nem valódi:
+   így senki nem hoz döntést kitalált szám alapján, és látszik, mi van hátra. */
+/* Lead- és integrációs státuszok magyar felirata; az adatban az angol kulcs marad
+   (a színezés és a szűrés arra épül). Angol módban a HU_EN adja vissza az angolt. */
+const STATUSZ_FELIRAT: Record<string, string> = {
+  New: 'Új', Contacted: 'Kapcsolatfelvétel', Converted: 'Konvertált', Lost: 'Elveszett',
+  Connected: 'Csatlakoztatva', Disconnected: 'Nincs csatlakoztatva', Error: 'Hiba',
+};
+
+function DEMO_Jel({ szoveg, kompakt, kieg }) {
+  if (kompakt) return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[10px] font-black uppercase tracking-wide align-middle" data-demo-jel="1">
+      <ICONS.AlertCircle size={11} /> Demo
+    </span>
+  );
+  return (
+    <div className={'rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1 ' + (kieg || '')} data-demo-jel="1">
+      <span className="px-2 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-black uppercase tracking-widest">Demo állapot</span>
+      <span className="text-[12px] font-semibold text-violet-900">{szoveg || 'Az ezen a képernyőn látható adat minta, nem a valós rendszerből származik.'}</span>
+    </div>
+  );
+}
+
 const FIZ_ellenorzo = (n) => String(98 - ((Number(n) * 100) % 97)).padStart(2, '0');
 const FIZ_kozlemeny = (refNo) => {
   const n = Number(refNo);
@@ -4206,6 +4231,7 @@ const AdmissionsCore = ({ user }) => {
 
   const renderFormBuilder = () => (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <DEMO_Jel kieg="col-span-full" szoveg="A jelentkezési lap szerkesztője még nem működik, a mezők nem menthetők." />
       <div className="lg:col-span-2 space-y-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
@@ -4347,6 +4373,7 @@ const AdmissionsCore = ({ user }) => {
           </div>
           <button 
             onClick={simulateScan}
+            title="DEMO — minta adatkiolvasás, nem valódi dokumentumelemzés"
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${isScanning ? 'bg-indigo-100 text-indigo-400' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100'}`}
           >
             <ICONS.ScanLine size={16} />
@@ -4654,7 +4681,8 @@ const EngagementCRM: React.FC = ({ user }) => {
   }, [waId]);
 
   const renderInbox = () => (
-    <div className="flex flex-col lg:flex-row bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden h-[calc(100vh-280px)] animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="flex flex-col lg:flex-row lg:flex-wrap bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden h-[calc(100vh-280px)] animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <DEMO_Jel kieg="w-full m-3" szoveg="Minta beérkező üzenetek. A valódi jelentkezői üzenetek a „Jelentkezői üzenetek” fülön vannak." />
       {/* Inbox Sidebar */}
       <div className="w-full lg:w-80 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-50 flex flex-col max-h-[40%] lg:max-h-none">
         <div className="p-4 border-b border-slate-50">
@@ -4980,6 +5008,7 @@ const EngagementCRM: React.FC = ({ user }) => {
 
   const renderCampaigns = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <DEMO_Jel szoveg="Minta kampányadatok — a kiküldés és a statisztika nem valós." />
       <div className="flex justify-between items-center">
         <h3 className="text-xl font-bold text-slate-800">Korábbi Kampányok</h3>
         <button 
@@ -5028,6 +5057,7 @@ const EngagementCRM: React.FC = ({ user }) => {
 
   const renderNudges = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <DEMO_Jel szoveg="Minta emlékeztetők — automatikus kiküldés még nincs bekötve." />
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-8 border-b border-slate-50">
           <h3 className="text-xl font-bold text-slate-800">Automatikus Emlékeztetők (Nudges)</h3>
@@ -5067,6 +5097,7 @@ const EngagementCRM: React.FC = ({ user }) => {
 
   const renderVideoMessage = () => (
     <div className="max-w-4xl mx-auto animate-in zoom-in-95 duration-500">
+      <DEMO_Jel szoveg="A videóüzenet-felvétel még nem működik, felvétel nem készül." />
       <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl aspect-video relative group">
         {!isVideoRecording ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-slate-900/40 backdrop-blur-sm">
@@ -5230,6 +5261,7 @@ const EngagementCRM: React.FC = ({ user }) => {
 
   const renderWorkflows = () => (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <DEMO_Jel szoveg="Minta munkafolyamatok kitalált futási adatokkal — a motor még nincs bekötve." />
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-xl font-bold text-slate-800">Automatizált Munkafolyamatok</h3>
@@ -5524,26 +5556,6 @@ const Finance: React.FC = () => {
     }
   };
 
-  const handleUploadProof = async (studentId: string, amount: number) => {
-    setUploadingFile(studentId);
-    try {
-      // Simulation of file upload and submission
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await api.submitBankTransfer({
-        studentId,
-        amount,
-        type: 'Tuition',
-        proofName: 'bank_receipt_2024.pdf'
-      });
-      refreshPayments();
-      refreshStudents();
-      alert('Bizonylat sikeresen feltöltve! A pénzügyi osztály hamarosan ellenőrzi.');
-    } catch (error) {
-      console.error('Upload failed:', error);
-    } finally {
-      setUploadingFile(null);
-    }
-  };
 
   const handleVerifyPayment = async (paymentId: string) => {
     try {
@@ -5599,7 +5611,7 @@ const Finance: React.FC = () => {
             <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Átváltási Árfolyam</p>
           </div>
           <h3 className="text-lg font-bold text-slate-800">1 EUR = 394 HUF</h3>
-          <p className="text-slate-400 text-[10px] font-bold mt-1">Utolsó frissítés: 1 órája</p>
+          <p className="text-slate-400 text-[10px] font-bold mt-1"><DEMO_Jel kompakt /> <span className="align-middle">nincs árfolyamforrás bekötve</span></p>
         </div>
       </div>
     );
@@ -5829,6 +5841,7 @@ const Finance: React.FC = () => {
 
   const renderIntegrations = () => (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <DEMO_Jel szoveg="A kapcsolatok állapota és a szinkronidők mintaadatok — külső rendszer még nincs bekötve." />
       <div>
         <h3 className="text-xl font-bold text-slate-800">Külső Integrációk</h3>
         <p className="text-sm text-slate-400 mt-1">Kapcsolja össze az UniPortal Pro-t fizetési kapukkal és számlázó rendszerekkel.</p>
@@ -5937,6 +5950,7 @@ const Finance: React.FC = () => {
 
     return (
       <div className="max-w-4xl mx-auto space-y-8 animate-in zoom-in-95 duration-500">
+        <DEMO_Jel szoveg="Ez a képernyő a jelentkezői fizetési oldal szimulációja — valódi terhelés nem történik." />
         <div className="bg-indigo-900 rounded-3xl p-5 sm:p-8 text-white shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-10">
             <ICONS.CreditCard size={120} />
@@ -6027,19 +6041,9 @@ const Finance: React.FC = () => {
                               <p className="flex justify-between"><span className="text-slate-400">Közlemény:</span> {fizRefek[String(student.email || '').toLowerCase()] ? <span className="font-bold font-mono text-indigo-600">{FIZ_kozlemeny(fizRefek[String(student.email || '').toLowerCase()])}</span> : <span className="font-bold text-indigo-600">{student.id} - {student.name}</span>}</p>
                             </div>
                           </div>
-                          <div className="flex flex-col justify-center items-center border-2 border-dashed border-slate-200 rounded-2xl p-6 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer group" onClick={() => handleUploadProof(student.id, student.tuitionFee)}>
-                            {uploadingFile === student.id ? (
-                              <div className="flex flex-col items-center">
-                                <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2"></div>
-                                <span className="text-xs font-bold text-indigo-600">Feltöltés...</span>
-                              </div>
-                            ) : (
-                              <>
-                                <ICONS.Upload size={32} className="text-slate-300 group-hover:text-indigo-500 mb-2 transition-colors" />
-                                <span className="text-xs font-bold text-slate-500 group-hover:text-indigo-600">Utalási bizonylat feltöltése</span>
-                                <span className="text-[10px] text-slate-400 mt-1">PDF, JPG vagy PNG (max. 5MB)</span>
-                              </>
-                            )}
+                          <div className="flex flex-col justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-6" data-bizonylat-info="1">
+                            <span className="text-xs font-bold text-slate-600">A bizonylatot nem itt kell feltölteni</span>
+                            <span className="text-[11px] text-slate-500 leading-relaxed">Az utalást a fenti közlemény alapján azonosítjuk: Pénzügyek → Befizetések → „Utalás azonosítása közlemény alapján”. A beérkezett tételt ott lehet jóváhagyni.</span>
                           </div>
                         </div>
                       </div>
@@ -6643,9 +6647,13 @@ const mockVideos: VideoInterview[] = [
   { id: 'V3', question: 'Meséljen egy szakmai kihívásról, amit sikeresen megoldott!', videoUrl: '#', duration: '03:00' },
 ];
 
+/* A pontozólap ÜRESEN nyílik: a szempontok a rubrika, a pontszám a bírálóé.
+   Korábban a minta-pontszámokkal nyílt, így úgy tűnt, mintha már ki lenne töltve. */
+const URES_PONTOZOLAP: Criterion[] = mockCriteria.map(c => ({ ...c, currentScore: 0 }));
+
 const Evaluation: React.FC = () => {
   const [activeSubView, setActiveSubView] = useState<EvaluationSubView>('scorecard');
-  const [scores, setScores] = useState<Criterion[]>(mockCriteria);
+  const [scores, setScores] = useState<Criterion[]>(URES_PONTOZOLAP);
   const [selectedVideo, setSelectedVideo] = useState<VideoInterview>(mockVideos[0]);
   const { data: students, isLoading: studentsLoading, refresh: refreshStudents } = useApi(api.getStudents);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -6663,7 +6671,7 @@ const Evaluation: React.FC = () => {
     if (selectedStudent?.evaluation?.criteria) {
       setScores(selectedStudent.evaluation.criteria);
     } else {
-      setScores(mockCriteria);
+      setScores(URES_PONTOZOLAP);
     }
     
     if (selectedStudent?.evaluation?.videos && selectedStudent.evaluation.videos.length > 0) {
@@ -6684,8 +6692,10 @@ const Evaluation: React.FC = () => {
       await api.updateStudent(selectedStudentId, {
         evaluation: {
           criteria: scores,
-          comments: selectedStudent?.evaluation?.comments || mockComments,
-          videos: selectedStudent?.evaluation?.videos || mockVideos
+          // Csak a valóban meglévő tartalom marad meg; minta-megjegyzés és minta-videó
+          // SOHA nem kerül az éles sorba (korábban ez történt bírálat nélküli jelentkezőnél).
+          comments: selectedStudent?.evaluation?.comments || [],
+          videos: selectedStudent?.evaluation?.videos || []
         }
       });
       refreshStudents();
@@ -6864,6 +6874,7 @@ const Evaluation: React.FC = () => {
         <div className="space-y-6">
           <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl aspect-video relative group">
              {/* Mock Video Player */}
+             <div className="absolute top-3 left-3 z-10"><DEMO_Jel kompakt /></div>
              <div className="absolute inset-0 bg-slate-800 flex items-center justify-center">
                <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-sm group-hover:scale-110 transition-transform cursor-pointer">
                  <ICONS.Play size={32} />
@@ -10391,6 +10402,7 @@ const MarketingLeads: React.FC = () => {
 
   const renderCampaigns = () => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <DEMO_Jel kieg="col-span-full" szoveg="Minta kampányadatok — a kiküldés és a statisztika nem valós." />
       {campaigns.map((campaign) => (
         <div key={campaign.id} className="bg-white p-5 sm:p-8 rounded-3xl border border-slate-100 shadow-sm hover:border-primary/20 transition-all group">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -10495,13 +10507,6 @@ return MarketingLeads;
 /* ===== Reports ===== */
 const Reports = (() => {
 type ReportType = 'ApplicantRegistrations' | 'ApplicationLastRevised' | 'ApplicationRevisions' | 'DocumentUploads' | 'Status' | 'StatusByCitizenship' | 'StatusByInstitutionAll' | 'StatusByInstitutionTop1' | 'StatusByInstitutionTop3' | 'SizeByStatus' | 'Invoices' | 'StatusByCourseAdmin' | 'StatusByCourseApplicant' | 'StatusByCitizenshipAdmin' | 'StatusByCitizenshipApplicant' | 'ApplicationsMatrix' | 'OffersMatrix' | 'ApplicationsFunnelMonthly' | 'ApplicationsFunnelWeekly' | 'ApplicationsPriorities' | 'InvoicesDetails';
-
-/* Lead- és integrációs státuszok magyar felirata; az adatban az angol kulcs marad
-   (a színezés és a szűrés arra épül). Angol módban a HU_EN adja vissza az angolt. */
-const STATUSZ_FELIRAT: Record<string, string> = {
-  New: 'Új', Contacted: 'Kapcsolatfelvétel', Converted: 'Konvertált', Lost: 'Elveszett',
-  Connected: 'Csatlakoztatva', Disconnected: 'Nincs csatlakoztatva', Error: 'Hiba',
-};
 
 const Reports: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
@@ -11614,6 +11619,7 @@ const Reports: React.FC = () => {
 
   return (
     <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1720px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
+      <DEMO_Jel szoveg="A riportok számai mintaadatok, részben véletlenszerűen generáltak — döntéshez még nem használhatók." />
       <div className="flex items-center justify-between border-b border-slate-200 pb-8">
         <div>
           {selectedReport ? (
@@ -11826,6 +11832,7 @@ const Intelligence: React.FC = () => {
 
   return (
     <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1720px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
+      <DEMO_Jel szoveg="A duplikátum-kereső, a lejárt útlevelek és a keresztellenőrzés mintaadatot mutat — valódi vizsgálat még nincs mögötte." />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-8">
         <div>
           <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Intelligence</h2>
@@ -13540,6 +13547,31 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// DEMO-jelölés és a díjlépés bejelentéses módja.
+Object.entries({
+  'Demo állapot': 'Demo state', 'Demo': 'Demo',
+  'Az ezen a képernyőn látható adat minta, nem a valós rendszerből származik.': 'The data on this screen is sample data, not from the live system.',
+  'Minta anyagok — a letölthető fájlok még nincsenek feltöltve.': 'Sample materials — the downloadable files have not been uploaded yet.',
+  'A jelentkezési lap szerkesztője még nem működik, a mezők nem menthetők.': 'The application form builder does not work yet; fields cannot be saved.',
+  'Minta beérkező üzenetek. A valódi jelentkezői üzenetek a „Jelentkezői üzenetek” fülön vannak.': 'Sample inbox. Real applicant messages are on the “Applicant messages” tab.',
+  'Minta emlékeztetők — automatikus kiküldés még nincs bekötve.': 'Sample reminders — automatic sending is not wired up yet.',
+  'A videóüzenet-felvétel még nem működik, felvétel nem készül.': 'Video message recording does not work yet; nothing is recorded.',
+  'Minta munkafolyamatok kitalált futási adatokkal — a motor még nincs bekötve.': 'Sample workflows with invented run data — the engine is not wired up yet.',
+  'A kapcsolatok állapota és a szinkronidők mintaadatok — külső rendszer még nincs bekötve.': 'Connection states and sync times are sample data — no external system is connected yet.',
+  'Minta kampányadatok — a kiküldés és a statisztika nem valós.': 'Sample campaign data — sending and statistics are not real.',
+  'Ez a képernyő a jelentkezői fizetési oldal szimulációja — valódi terhelés nem történik.': 'This screen simulates the applicant payment page — no real charge is made.',
+  'A riportok számai mintaadatok, részben véletlenszerűen generáltak — döntéshez még nem használhatók.': 'The report figures are sample data, partly randomly generated — not yet usable for decisions.',
+  'A duplikátum-kereső, a lejárt útlevelek és a keresztellenőrzés mintaadatot mutat — valódi vizsgálat még nincs mögötte.': 'The duplicate finder, expired passports and cross-checks show sample data — no real analysis behind them.',
+  'nincs árfolyamforrás bekötve': 'no exchange-rate source connected',
+  'DEMO — minta adatkiolvasás, nem valódi dokumentumelemzés': 'DEMO — sample extraction, not real document analysis',
+  'A bizonylatot nem itt kell feltölteni': 'Proof of payment is not uploaded here',
+  'Az utalást a fenti közlemény alapján azonosítjuk: Pénzügyek → Befizetések → „Utalás azonosítása közlemény alapján”. A beérkezett tételt ott lehet jóváhagyni.':
+    'Transfers are identified by the payment reference above: Finance → Payments → “Identify a transfer by its payment reference”. The received item can be approved there.',
+  'Befizetés jóváhagyva': 'Payment approved', 'Átutalás bejelentve — a pénzügy ellenőrzi': 'Transfer reported — finance will verify it',
+  'Átutalás bejelentése': 'Report transfer',
+  'A díjat banki átutalással kell rendezni a fenti közleménnyel. A bejelentés után a jelentkezés folytatható; a befizetést a pénzügy a bankkivonaton ellenőrzi, és csak azután lesz jóváhagyva.':
+    'The fee must be paid by bank transfer using the reference above. You can continue the application after reporting it; finance verifies the payment against the bank statement before approving it.',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
 // Irodai utalási információk a jelentkezőnél.
 Object.entries({
   'Utalási információk': 'Transfer details', 'Kedvezményezett': 'Beneficiary', 'Számlaszám': 'Account number',

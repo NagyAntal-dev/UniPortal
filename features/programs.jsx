@@ -700,7 +700,9 @@ function PROG_canAdvance(stepKey, program, data) {
   if (stepKey === 'motivation') return (data.motivation || '').trim().length >= 40;
   // Új (61-es) formában a `booked` dönt; a régi, beégetett foglalásnak csak `slot`-ja van.
   if (stepKey === 'interview') return !!(data.interview && (data.interview.booked || (!data.interview.status && data.interview.slot)));
-  if (stepKey === 'fee') return program.tuition === 0 || (data.fee && data.fee.paid);
+  // A díj akkor enged tovább, ha a pénzügy jóváhagyta (paid), VAGY a jelentkező bejelentette az
+  // átutalást (declared). A bejelentés nem befizetés — a pénzügy a bankkivonaton ellenőrzi.
+  if (stepKey === 'fee') return program.tuition === 0 || (data.fee && (data.fee.paid || data.fee.declared));
   if (stepKey === 'personal') return data.personal && data.personal.name && data.personal.country;
   return true;
 }
@@ -941,20 +943,24 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
         <div className="p-5 rounded-2xl bg-slate-50 flex items-center justify-between"><span className="font-bold text-slate-600">{feeLabel}</span><span className="text-2xl font-black text-slate-900">{DL_money(amount)}</span></div>
         {amount === 0 ? (
           <div className="flex items-center gap-2 text-emerald-600 font-black p-4 rounded-2xl bg-emerald-50 border border-emerald-100"><Lucide.CheckCircle2 size={18} /> Nincs fizetendő díj — minden rendben.</div>
-        ) : fee.paid ? (
-          <div className="flex flex-wrap items-center gap-2 text-emerald-600 font-black p-4 rounded-2xl bg-emerald-50 border border-emerald-100"><Lucide.CheckCircle2 size={18} /> Fizetve: {fee.method} · {fee.date}{fee.reference ? <span className="font-mono text-[12px] text-emerald-800">{' · ' + fee.reference}</span> : null}</div>
+        ) : (fee.paid || fee.declared) ? (
+          <div className={'flex flex-wrap items-center gap-2 font-black p-4 rounded-2xl border ' + (fee.paid ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-200')}>
+            {fee.paid ? <Lucide.CheckCircle2 size={18} /> : <Lucide.Clock size={18} />}
+            <span>{fee.paid ? 'Befizetés jóváhagyva' : 'Átutalás bejelentve — a pénzügy ellenőrzi'}</span>
+            <span className="font-semibold text-[13px]">{[fee.method, fee.date].filter(Boolean).join(' · ')}</span>
+            {fee.reference ? <span className="font-mono text-[12px]">{fee.reference}</span> : null}
+          </div>
         ) : (
           <>
             {/* Az utalási közlemény a folyamatszámból (ref_no) képződik — ugyanazt látja az iroda és a pénzügy. */}
             {cur.ref_no ? <FIZ_KozlemenyDoboz refNo={cur.ref_no} magyarazat="A díj banki átutalásakor ezt írd a közlemény rovatba — enélkül nem tudjuk a befizetést a jelentkezésedhez rendelni." />
               : <p className="text-[12px] text-slate-500">Az utalási közlemény a jelentkezés mentése után jelenik meg.</p>}
             <div className="flex flex-wrap gap-3">
-              <button className={U_btnPrimary} onClick={() => setData({ fee: { paid: true, method: 'Kártya', date: todayStr() } })}><Lucide.CreditCard size={16} /> Fizetés kártyával</button>
-              <button className={U_btnGhost} onClick={() => setData({ fee: { paid: true, method: 'Banki átutalás', date: todayStr(), reference: FIZ_kozlemeny(cur.ref_no) || null } })}><Lucide.Landmark size={16} /> Banki átutalás rögzítése</button>
+              <button className={U_btnPrimary} onClick={() => setData({ fee: { declared: true, method: 'Banki átutalás', date: todayStr(), reference: FIZ_kozlemeny(cur.ref_no) || null } })}><Lucide.Landmark size={16} /> Átutalás bejelentése</button>
             </div>
           </>
         )}
-        <p className="text-[11px] text-slate-400">Teszt üzemmód — valódi terhelés nem történik.</p>
+        <p className="text-[12px] text-slate-500 leading-relaxed">A díjat banki átutalással kell rendezni a fenti közleménnyel. A bejelentés után a jelentkezés folytatható; a befizetést a pénzügy a bankkivonaton ellenőrzi, és csak azután lesz jóváhagyva.</p>
       </div>
     );
   }
