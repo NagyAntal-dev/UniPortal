@@ -303,6 +303,7 @@ function CRS_Tab({ user }) {
   const [sel, setSel]       = useState(null);     // a kiválasztott kurzus id-ja
   const [det, setDet]       = useState(null);     // echo_course_get()
   const [detBusy, setDetBusy] = useState(false);
+  const [detFrissit, setDetFrissit] = useState(false);
   const [nevsor, setNevsor] = useState(null);
   const [nq, setNq]         = useState('');
   const [mind, setMind]     = useState(false);   // a nevsor a tantargy MINDEN felevet mutassa
@@ -328,13 +329,16 @@ function CRS_Tab({ user }) {
     CRS_api.options('term').then(d => setTerms(Array.isArray(d) ? d : [])).catch(() => setTerms([]));
   }, []);
 
-  const loadDet = async (id) => {
+  /* csendes = művelet (pl. oktató hozzáadása) utáni frissítés: a meglévő tartalom
+     a helyén marad, csak a frissítésjelző forog. Korábban ilyenkor is a váz-animáció
+     jelent meg, a panel összeesett, és az oldal fel-le ugrott (hibajelentés). */
+  const loadDet = async (id, csendes) => {
     if (!id) { setDet(null); setNevsor(null); setHist(null); return; }
     CRS_api.history(id).then(setHist).catch(() => setHist(null));
-    setDetBusy(true);
+    if (csendes) setDetFrissit(true); else setDetBusy(true);
     try { setDet(await CRS_api.get(id)); }
-    catch (e) { setDet(null); setErr(CRS_msg(e)); }
-    finally { setDetBusy(false); }
+    catch (e) { if (!csendes) setDet(null); setErr(CRS_msg(e)); }
+    finally { setDetBusy(false); setDetFrissit(false); }
   };
   useEffect(() => { loadDet(sel); setNq(''); setMind(false); }, [sel]);
   useEffect(() => {
@@ -349,7 +353,7 @@ function CRS_Tab({ user }) {
   }, [sel, nq, mind]);
 
   const szol = (m) => { setUzenet(m); setTimeout(() => setUzenet(''), 4000); };
-  const ujra = async () => { await loadDet(sel); await load();
+  const ujra = async () => { await loadDet(sel, true); await load();
                              CRS_api.students(sel, nq, mind).then(d => setNevsor(Array.isArray(d) ? d : [])); };
 
   const tesz = async (fn, sikerUzenet) => {
@@ -481,7 +485,7 @@ function CRS_Tab({ user }) {
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-none">
-                    <RefreshingBadge on={detBusy} />
+                    <RefreshingBadge on={detBusy || detFrissit} />
                     {szerk && (
                       <React.Fragment>
                         <button onClick={() => { setFormKurzus(det); setFormOpen(true); }}

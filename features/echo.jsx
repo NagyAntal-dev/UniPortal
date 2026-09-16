@@ -66,9 +66,34 @@ const ECHO_ATADAS_KULCS = 'echo_megnyitando';
      felület KIMONDJA — nem hagyjuk abban a hitben, hogy a rendszer őrzi.
    ============================================================ */
 const ECHO_MASOLAT_KULCS = 'echo_valaszaim';
+/* A MÁSOLAT FELHASZNÁLÓHOZ KÖTÖTT. Korábban egyetlen közös kulcs alatt élt, ezért
+   közös gépen a következő bejelentkező hallgató az előző hallgató másolatát kapta:
+   a kurzust „Kész”-nek látta, és nem tudta kitölteni (hibajelentés, 2026-09-16).
+   Az azonosítót a bejelentkezett munkamenetből olvassuk ki, SZINKRON — a hírfolyam
+   kártyája (feed.jsx) a Kurzusértékelés nézet előtt fut, onnan is ez hívódik.
+   Ha nincs bejelentkezett felhasználó, nincs másolat sem (sem olvasás, sem írás). */
+let ECHO__masolatUid = null;
+function ECHO_masolatUidBeallit(uid) { ECHO__masolatUid = uid || null; }
+function ECHO_aktualisUid() {
+  if (ECHO__masolatUid) return ECHO__masolatUid;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && /^sb-.+-auth-token$/.test(k)) {
+        const s = JSON.parse(localStorage.getItem(k) || 'null');
+        const u = (s && s.user) || (s && s.currentSession && s.currentSession.user);
+        if (u && u.id) return u.id;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+function ECHO_masolatTarolo() { const uid = ECHO_aktualisUid(); return uid ? ECHO_MASOLAT_KULCS + ':' + uid : null; }
 
 function ECHO_masolatMind() {
-  try { return JSON.parse(localStorage.getItem(ECHO_MASOLAT_KULCS) || '{}') || {}; }
+  const k = ECHO_masolatTarolo();
+  if (!k) return {};
+  try { return JSON.parse(localStorage.getItem(k) || '{}') || {}; }
   catch (e) { return {}; }
 }
 
@@ -124,7 +149,9 @@ function ECHO_masolatMent(course, compiled, teachers, ans, tans, lang) {
       kampany: course.campaign_name,
       tetelek: ECHO_masolatTetelek(compiled, teachers, ans, tans, lang),
     };
-    localStorage.setItem(ECHO_MASOLAT_KULCS, JSON.stringify(m));
+    const k = ECHO_masolatTarolo();
+    if (!k) return false;
+    localStorage.setItem(k, JSON.stringify(m));
     return true;
   } catch (e) {
     // Privát ablak, tele tárhely, letiltott sütik — a beküldés ettől még
@@ -407,13 +434,13 @@ const ECHO_api = {
   audienceSet:    (id, items)   => ECHO_rpc('echo_campaign_audience_set',
                                     { p_campaign: id, p_items: items }),
   audienceStudents:(id, items, q) => ECHO_rpc('echo_audience_target_students',
-                                    { p_campaign: id, p_items: items, p_q: q || null, p_limit: 300 }),
+                                    { p_campaign: id, p_items: items, p_q: q || null, p_limit: 2000 }),
   campaignForm:   (id)          => ECHO_rpc('echo_campaign_form', { p_campaign: id }),
   studentCourses: (id, profile, items) => ECHO_rpc('echo_student_courses',
                                     { p_campaign: id, p_profile: profile,
                                       p_items: items || null }),
   campaignStudents:(id, q)      => ECHO_rpc('echo_campaign_students',
-                                    { p_campaign: id, p_q: q || null, p_limit: 300 }),
+                                    { p_campaign: id, p_q: q || null, p_limit: 2000 }),
   audiencePreview:(id, items)   => ECHO_rpc('echo_audience_preview',
                                     { p_campaign: id, p_items: items }),
   audienceOptions:(id, kind, q) => ECHO_rpc('echo_audience_options',
@@ -1023,7 +1050,9 @@ function ECHO_QSkip({ q, opts, value, onChange }) {
           ))}
           {q.allowOther && (
             <input className={U_input} value={other} maxLength={200}
-              onChange={e => { setOther(e.target.value); if (e.target.value.trim()) onChange(e.target.value.trim()); }}
+              onChange={e => { const t = e.target.value; setOther(t);
+                // Kiürítéskor visszaáll a felkínált első indokra — különben a törölt szöveg maradna az érték.
+                onChange(t.trim() ? t.trim() : (opts[0] ? opts[0].value : 'Nem tudom értékelni')); }}
               placeholder="Egyéb ok — saját szöveg" />
           )}
         </div>
@@ -1036,7 +1065,7 @@ function ECHO_QSkip({ q, opts, value, onChange }) {
    A `ctx` a behelyettesítés környezete (kurzus, aktuális oktató, aktuális cél).
    A TOKENFELOLDÁS ITT történik — ezért csinálja a kitöltő és a szerkesztő
    előnézete pontosan ugyanazt: mindkettő ezen a komponensen megy át. */
-function ECHO_Question({ q: rawQ, index, value, onChange, lang, seed, ctx }) {
+function ECHO_Question({ q: rawQ, index, value, onChange, lang, seed, ctx, hiba }) {
   const q = ctx ? ECHO_resolveTokens(rawQ, ctx) : rawQ;
   const opts = ECHO_options(q, lang);
   // A súgó kétféle alakban jöhet: sztring (a 15-ös seed) vagy {hu,en} pár
@@ -1045,7 +1074,8 @@ function ECHO_Question({ q: rawQ, index, value, onChange, lang, seed, ctx }) {
   const help = (q.help && typeof q.help === 'object') ? ECHO_txt(q.help, lang) : (q.help || '');
   const shown = q.randomize ? ECHO_shuffle(opts, seed + '|' + q.id) : opts;
   return (
-    <div className="py-6 border-b border-slate-50 last:border-0">
+    <div className={'py-6 border-b border-slate-50 last:border-0 scroll-mt-24 ' + (hiba ? '-mx-3 px-3 rounded-2xl bg-red-50/60 ring-1 ring-red-200' : '')}
+      data-echo-kerdes={q.id} data-echo-hiba={hiba || undefined}>
       <div className="flex items-start gap-3 mb-4">
         <span className="flex-none w-7 h-7 rounded-xl bg-slate-100 text-slate-500 text-xs font-black flex items-center justify-center mt-0.5">
           {index}
@@ -1058,6 +1088,12 @@ function ECHO_Question({ q: rawQ, index, value, onChange, lang, seed, ctx }) {
           {help && (
             <p className="text-xs text-slate-400 font-medium mt-1.5 leading-relaxed">
               <ECHO_Src>{help}</ECHO_Src>
+            </p>
+          )}
+          {/* A hiba a kérdésnél szól, nem az oldal alján (hibajelentés). */}
+          {hiba && (
+            <p className="text-xs font-bold text-red-600 mt-1.5" role="alert">
+              {hiba === 'egyeb' ? 'Az „Egyéb” mellé írd le, mi volt az, és add hozzá a + gombbal.' : 'Ez a kérdés kötelező — válaszolj rá a továbblépéshez.'}
             </p>
           )}
         </div>
@@ -1492,6 +1528,17 @@ function ECHO_otherGaps(compiled, teachers, ans, tans, hasGoals, goalItems) {
   return gaps;
 }
 
+/* A blokkolt továbblépésnél az első hibás kérdéshez görgetünk. */
+function ECHO_elsoHibara(kerdes) {
+  if (!kerdes) return;
+  setTimeout(() => {
+    try {
+      const el = document.querySelector('[data-echo-kerdes="' + String(kerdes.id).replace(/"/g, '') + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {}
+  }, 60);
+}
+
 function ECHO_Wizard({ course, onBack, onSubmitted }) {
   const [form, setForm] = useState(null);
   const [err, setErr] = useState('');
@@ -1916,6 +1963,7 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
             <ECHO_Question key={stepKey + '|' + q.id}
               q={q} index={i + 1} lang={lang} seed={seed + '|' + stepKey}
               ctx={tokenCtx}
+              hiba={touched ? (missing.indexOf(q) >= 0 ? 'kotelezo' : (otherOpen.indexOf(q) >= 0 ? 'egyeb' : null)) : null}
               value={getV(q)} onChange={(v) => setV(q, v)} />
           ))
         )}
@@ -1950,6 +1998,13 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
 
       {/* navigáció — mobilon a hüvelykujj közelében ragad meg */}
       <div className="fixed bottom-0 left-72 right-0 bg-white/95 backdrop-blur border-t border-slate-100 px-4 sm:px-8 py-3 z-40">
+        {/* A figyelmeztetés a gombok fölött is látszik — az oldal alján a sáv mögé kerülhetett. */}
+        {touched && blocked > 0 && (
+          <div className="max-w-3xl mx-auto mb-2 text-[12px] font-bold text-red-600 flex items-center gap-1.5" role="alert" data-echo-sav-hiba="1">
+            <Lucide.AlertCircle size={14} className="flex-none" />
+            {missing.length > 0 ? 'Még ' + missing.length + ' kötelező kérdés vár válaszra — pirossal jelöltük.' : 'Egy „Egyéb” válasz mellé még szöveg kell — pirossal jelöltük.'}
+          </div>
+        )}
         <div className="max-w-3xl mx-auto flex gap-3">
           {/* Lepesvaltaskor mentunk — ez a masik automatikus mentesi pont. */}
           <button onClick={() => { setTouched(false); const n = Math.max(0, step - 1); setStep(n); saveDraft(ans, tans, n); }}
@@ -1964,7 +2019,7 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
           ) : (
             <button
               onClick={() => {
-                if (blocked) { setTouched(true); return; }
+                if (blocked) { setTouched(true); ECHO_elsoHibara(visibleQs.find(x => missing.indexOf(x) >= 0 || otherOpen.indexOf(x) >= 0)); return; }
                 setTouched(false); const n = step + 1; setStep(n); saveDraft(ans, tans, n);
               }}
               className={U_btnPrimary + ' flex-1'}>
@@ -2116,6 +2171,12 @@ function ECHO_Review({ compiled, teachers, ans, tans, hasGoals, goalItems, lang,
    ------------------------------------------------------------ */
 
 function ECHO_StudentView({ user }) {
+  // A másolat a bejelentkezett hallgatóé; a régi, közös (felhasználó nélküli)
+  // kulcsot eltakarítjuk — nem rendelhető senkihez, és épp ez zárta ki a többieket.
+  useEffect(() => {
+    ECHO_masolatUidBeallit(user && user.id);
+    try { localStorage.removeItem(ECHO_MASOLAT_KULCS); } catch (e) {}
+  }, [user && user.id]);
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -5259,6 +5320,13 @@ const ECHO_REPEATS = [
 // A cond-ban használható KÖRNYEZETI kulcsok. Az echo.setting
 // 'cond_context_keys' sorából mérve: has_goals, attendance_band, lang.
 const ECHO_COND_CTX = ['has_goals', 'attendance_band', 'lang'];
+const ECHO_COND_CTX_CIMKE = { has_goals: 'Célkitűzés megadása', attendance_band: 'Óralátogatási sáv', lang: 'Kitöltés nyelve' };
+// Előre adott értékek a környezeti kulcsokhoz, mondatba illeszthető címkével.
+const ECHO_COND_CTX_ERTEK = {
+  has_goals: [{ k: 'true', v: true, cimke: 'megadott célkitűzést' }, { k: 'false', v: false, cimke: 'nem adott meg célkitűzést' }],
+  lang: [{ k: 's:hu', v: 'hu', cimke: 'magyarul tölti ki' }, { k: 's:en', v: 'en', cimke: 'angolul tölti ki' }],
+};
+function ECHO_rovid(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
 /* ELŐNÉZETI KÖRNYEZET. A kérdőívszövegek helykitöltőket tartalmazhatnak, amiket
    a kitöltéskor a konkrét oktató/kurzus neve tölt ki. Az előnézetben minta
@@ -5319,6 +5387,41 @@ function ECHO_parseVal(s) {
   return t;
 }
 
+/* ---- törlés megerősítéssel ----
+   A törlés egy kattintásra azonnal megtörtént (a szakasznál a böngésző natív
+   ablaka kérdezett). Most a gomb mellett nyíló kis kérdés erősíti meg; Escape
+   vagy mellékattintás bezárja. */
+function ECHO_TorlesGomb({ onTorol, cim, kerdes, meret, osztaly }) {
+  const [nyit, setNyit] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!nyit) return;
+    const kint = (e) => { if (ref.current && !ref.current.contains(e.target)) setNyit(false); };
+    const esc = (e) => { if (e.key === 'Escape') setNyit(false); };
+    document.addEventListener('mousedown', kint); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', kint); document.removeEventListener('keydown', esc); };
+  }, [nyit]);
+  return (
+    <span className="relative inline-flex" ref={ref}>
+      <button type="button" title={cim} aria-label={cim} aria-expanded={nyit} className={osztaly}
+        onClick={(e) => { e.stopPropagation(); setNyit(v => !v); }}>
+        <Lucide.Trash2 size={meret || 13} />
+      </button>
+      {nyit && (
+        <div role="dialog" aria-label={cim} onClick={e => e.stopPropagation()} data-echo-torles-megerosites="1"
+          className="absolute right-0 top-full mt-1.5 z-30 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 text-left">
+          <p className="text-xs font-bold text-slate-700 leading-snug">{kerdes || 'Biztosan törlöd?'}</p>
+          <div className="flex justify-end gap-2 mt-3">
+            <button type="button" onClick={() => setNyit(false)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-100">Mégse</button>
+            <button type="button" autoFocus onClick={() => { setNyit(false); onTorol(); }}
+              className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-600 text-white hover:bg-red-700">Törlés</button>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 /* ---- opció-szerkesztő ---- */
 function ECHO_OptionEditor({ q, ro, onChange }) {
   const opts = ECHO_normOpts(q.options);
@@ -5353,7 +5456,7 @@ function ECHO_OptionEditor({ q, ro, onChange }) {
                 <>
                   <button onClick={() => move(i, -1)} className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 flex items-center justify-center flex-none"><Lucide.ChevronUp size={14} /></button>
                   <button onClick={() => move(i, 1)} className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 flex items-center justify-center flex-none"><Lucide.ChevronDown size={14} /></button>
-                  <button onClick={() => set(opts.filter((_, k) => k !== i))} className="w-7 h-7 rounded-lg hover:bg-red-50 text-red-400 flex items-center justify-center flex-none"><Lucide.Trash2 size={14} /></button>
+                  <ECHO_TorlesGomb onTorol={() => set(opts.filter((_, k) => k !== i))} cim="Opció törlése" kerdes="Törlöd ezt a válaszopciót?" meret={14} osztaly="w-7 h-7 rounded-lg hover:bg-red-50 text-red-400 flex items-center justify-center flex-none" />
                 </>
               )}
             </div>
@@ -5393,7 +5496,7 @@ function ECHO_Toggle({ label, hint, on, ro, onChange }) {
 }
 
 /* ---- kérdés-szerkesztő panel ---- */
-function ECHO_QuestionPanel({ q, allIds, ro, onPatch, lang }) {
+function ECHO_QuestionPanel({ q, allIds, allQs, ro, onPatch, lang }) {
   if (!q) {
     return (
       <div className="bg-white rounded-3xl border border-slate-100 p-8 text-center">
@@ -5417,6 +5520,28 @@ function ECHO_QuestionPanel({ q, allIds, ro, onPatch, lang }) {
   const condVal = condIsNamed ? (q.cond.val !== undefined ? q.cond.val : true)
     : (condKey ? q.cond[condKey] : '');
   const aud = ECHO_asArr(q.audience);
+
+  /* A FELTÉTEL EMBERI NYELVEN. Eddig a kérdés belső azonosítója (q_x7k…) és egy
+     nyers érték (true / null) volt a két mező — nehezen értelmezhető (hibajelentés).
+     Most a kérdés SZÖVEGE és egy válaszlista áll ott, alatta egy kimondott mondat. */
+  const kerdesek = (allQs || []).filter(x => x && x.id && x.id !== q.id);
+  const refQ = condKey ? (kerdesek.find(x => x.id === condKey) || null) : null;
+  const ertekOpciok = !condKey ? [] : (refQ
+    ? [{ k: 'true', v: true, cimke: 'bármilyen választ adott' }, { k: 'null', v: null, cimke: 'üresen hagyta' }]
+        .concat(ECHO_normOpts(refQ.options).map(o => ({ k: 'o:' + o.value, v: o.value, cimke: 'ezt választotta: ' + (o.hu || o.en || o.value) })))
+    : (ECHO_COND_CTX_ERTEK[condKey] || [])).concat([{ k: '__egyeni', v: undefined, cimke: 'egyéni érték…' }]);
+  const talalt = ertekOpciok.find(o => o.k !== '__egyeni' && JSON.stringify(o.v) === JSON.stringify(condVal));
+  const ertekKulcs = talalt ? talalt.k : '__egyeni';
+  const valasztErtek = (k) => {
+    const o = ertekOpciok.find(x => x.k === k);
+    if (!o || k === '__egyeni') { onPatch({ cond: { [condKey]: condVal === '' ? true : condVal } }); return; }
+    onPatch({ cond: { [condKey]: o.v } });
+  };
+  const alanyNev = refQ ? '„' + ECHO_rovid(refQ.hu || refQ.id, 80) + '”' : (ECHO_COND_CTX_CIMKE[condKey] || condKey);
+  const feltetelMondat = !condKey ? '' : (talalt
+    ? (refQ ? 'A kérdés csak akkor jelenik meg, ha a kitöltő a(z) ' + alanyNev + ' kérdésnél ' + talalt.cimke + '.'
+            : 'A kérdés csak akkor jelenik meg, ha a kitöltő ' + talalt.cimke + '.')
+    : 'A kérdés csak akkor jelenik meg, ha ' + (refQ ? 'a(z) ' + alanyNev + ' kérdés válasza' : String(alanyNev).toLowerCase()) + ': ' + (condVal === null ? 'üres' : String(condVal)) + '.');
 
   const setScale = (patch) => onPatch({ scale: Object.assign({ min: scMin, max: scMax }, sc, patch) });
 
@@ -5470,7 +5595,18 @@ function ECHO_QuestionPanel({ q, allIds, ro, onPatch, lang }) {
 
       {/* opciók */}
       {['single', 'multi', 'skip'].indexOf(q.type) >= 0 && (
-        <ECHO_OptionEditor q={q} ro={ro} onChange={arr => onPatch({ options: arr })} />
+        <div>
+          <ECHO_OptionEditor q={q} ro={ro} onChange={arr => onPatch({ options: arr })} />
+          {q.type === 'skip' && (
+            <div className="mt-3 rounded-2xl bg-slate-50 border border-slate-100 p-3 space-y-2" data-echo-skip-sajat="1">
+              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                A fenti opciók a kihagyás felkínált indokai. Ha a kitöltő saját indokot is írhat, kapcsold be:
+              </p>
+              <ECHO_Toggle label="Saját indok megadása" on={!!q.allowOther} ro={ro} onChange={v => onPatch({ allowOther: v })}
+                hint="A saját indok szövegét az oktató nem látja; csak az adminisztrátori nyers nézetben jelenik meg." />
+            </div>
+          )}
+        </div>
       )}
 
       {/* skála */}
@@ -5513,7 +5649,7 @@ function ECHO_QuestionPanel({ q, allIds, ro, onPatch, lang }) {
       )}
 
       {/* kapcsolók */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-5 border-t border-slate-100">
         <ECHO_Toggle label="Kötelező" on={!!q.required} ro={ro} onChange={v => onPatch({ required: v })}
           hint="Feltétel mögötti kötelező kérdés élesítés-blokkoló hiba." />
         <ECHO_Toggle label="Moderált" on={!!q.moderated} ro={ro} onChange={v => onPatch({ moderated: v })}
@@ -5538,33 +5674,49 @@ function ECHO_QuestionPanel({ q, allIds, ro, onPatch, lang }) {
         </UField>
       </div>
 
-      {/* megjelenítési feltétel */}
-      <div>
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Megjelenítési feltétel</span>
-        <div className="grid grid-cols-2 gap-3">
-          <select className={U_input} value={condKey} disabled={ro}
-            onChange={e => onPatch({ cond: e.target.value ? { [e.target.value]: condVal === '' ? true : condVal } : null })}>
-            <option value="">— nincs feltétel —</option>
-            <optgroup label="Környezeti kulcs">
-              {ECHO_COND_CTX.map(k => <option key={k} value={k}>{k}</option>)}
-            </optgroup>
-            <optgroup label="Kérdés">
-              {allIds.filter(id => id !== q.id).map(id => <option key={id} value={id}>{id}</option>)}
-            </optgroup>
-          </select>
-          <input className={U_input + ' font-mono text-xs'} disabled={ro || !condKey}
+      {/* megjelenítési feltétel — emberi nyelven */}
+      <div className="pt-5 border-t border-slate-100" data-echo-feltetel="1">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Megjelenítési feltétel</span>
+        <p className="text-[11px] text-slate-500 font-medium mb-2 leading-relaxed">Alapból minden kitöltő látja a kérdést. Ha feltételt adsz meg, csak az látja, akinek az előző válasza (vagy a kitöltés adata) megfelel.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <UField label="Mitől függjön?">
+            <select className={U_input} value={condKey} disabled={ro}
+              onChange={e => { const k = e.target.value; onPatch({ cond: k ? { [k]: true } : null }); }}>
+              <option value="">Mindig jelenjen meg</option>
+              <optgroup label="Egy korábbi kérdés válaszától">
+                {kerdesek.map(x => <option key={x.id} value={x.id}>{ECHO_rovid(x.hu || x.id, 60)}</option>)}
+              </optgroup>
+              <optgroup label="A kitöltés adataitól">
+                {ECHO_COND_CTX.map(k => <option key={k} value={k}>{ECHO_COND_CTX_CIMKE[k] || k}</option>)}
+              </optgroup>
+            </select>
+          </UField>
+          {condKey && (
+            <UField label="Milyen válasznál?">
+              <select className={U_input} value={ertekKulcs} disabled={ro} onChange={e => valasztErtek(e.target.value)}>
+                {ertekOpciok.map(o => <option key={o.k} value={o.k}>{o.cimke}</option>)}
+              </select>
+            </UField>
+          )}
+        </div>
+        {condKey && ertekKulcs === '__egyeni' && (
+          <input className={U_input + ' font-mono text-xs mt-2'} disabled={ro}
             value={condVal === null ? 'null' : String(condVal)}
             onChange={e => onPatch({ cond: { [condKey]: ECHO_parseVal(e.target.value) } })}
-            placeholder="true / null / érték" />
-        </div>
-        <p className="text-[10px] text-slate-400 font-medium mt-1.5 leading-relaxed">
-          A `null` érték azt jelenti: „akkor jelenjen meg, ha az a kérdés ÜRESEN maradt”.
-          Nem létező kérdésre hivatkozó feltétel élesítés-blokkoló hiba.
-        </p>
+            placeholder="egyéni érték (pl. true / null / szöveg)" />
+        )}
+        {condKey && (
+          <p className="mt-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-[11px] font-semibold text-amber-900 leading-relaxed" data-echo-feltetel-mondat="1">
+            {feltetelMondat}
+          </p>
+        )}
+        {condKey && !refQ && ECHO_COND_CTX.indexOf(condKey) < 0 && (
+          <p className="text-[11px] font-black text-red-500 mt-1.5">A hivatkozott kérdés nem létezik — ez élesítés-blokkoló hiba.</p>
+        )}
       </div>
 
       {/* célközönség */}
-      <div>
+      <div className="pt-5 border-t border-slate-100">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Célközönség-címkék</span>
         <div className="flex flex-wrap gap-1.5 mb-2">
           {aud.length === 0 && <span className="text-[11px] font-bold text-slate-400">Nincs szűkítés — mindenki látja.</span>}
@@ -5716,13 +5868,14 @@ function ECHO_Editor({ user }) {
   const hibaDb = (checks || []).filter(c => c && c.sulyossag === 'hiba').length;
   const allIds = [];
   sections.forEach(s => (s.questions || []).forEach(x => allIds.push(x.id)));
+  const allQs = [];
+  sections.forEach(s => (s.questions || []).forEach(x => allQs.push(x)));
 
   const addSection = () => mut(d => {
     d.sections.push({ id: 's_' + ECHO_uid(8), hu: 'Új szakasz', en: '', part: 'part2', audience: [], questions: [] });
     setSi(d.sections.length - 1); setQi(null);
   });
   const delSection = (i) => {
-    if (!window.confirm('Törlöd a szakaszt a benne lévő kérdésekkel együtt?')) return;
     mut(d => { d.sections.splice(i, 1); setSi(Math.max(0, i - 1)); setQi(null); });
   };
   const moveSection = (i, dd) => mut(d => {
@@ -6015,10 +6168,9 @@ function ECHO_Editor({ user }) {
                             className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 flex items-center justify-center">
                             <Lucide.ChevronDown size={14} />
                           </button>
-                          <button onClick={() => delSection(i)} title="Szakasz törlése"
-                            className="w-7 h-7 rounded-lg hover:bg-red-50 text-red-400 flex items-center justify-center">
-                            <Lucide.Trash2 size={13} />
-                          </button>
+                          <ECHO_TorlesGomb onTorol={() => delSection(i)} cim="Szakasz törlése"
+                            kerdes="Törlöd a szakaszt a benne lévő összes kérdéssel együtt?" meret={13}
+                            osztaly="w-7 h-7 rounded-lg hover:bg-red-50 text-red-400 flex items-center justify-center" />
                         </div>
                       )}
                     </div>
@@ -6146,10 +6298,9 @@ function ECHO_Editor({ user }) {
                                   className="w-6 h-6 rounded hover:bg-slate-100 text-slate-300 flex items-center justify-center">
                                   <Lucide.ChevronDown size={13} />
                                 </button>
-                                <button onClick={() => delQuestion(i, k)} title="Kérdés törlése"
-                                  className="w-6 h-6 rounded hover:bg-red-50 text-red-300 flex items-center justify-center">
-                                  <Lucide.Trash2 size={12} />
-                                </button>
+                                <ECHO_TorlesGomb onTorol={() => delQuestion(i, k)} cim="Kérdés törlése"
+                                  kerdes="Törlöd ezt a kérdést?" meret={12}
+                                  osztaly="w-6 h-6 rounded hover:bg-red-50 text-red-300 flex items-center justify-center" />
                               </div>
                             )}
                             <Lucide.ChevronDown size={15}
@@ -6170,7 +6321,7 @@ function ECHO_Editor({ user }) {
                                   </select>
                                 </UField>
                               )}
-                              <ECHO_QuestionPanel q={x} allIds={allIds} ro={ro}
+                              <ECHO_QuestionPanel q={x} allIds={allIds} allQs={allQs} ro={ro}
                                 onPatch={patchQuestion} lang={lang} />
                             </div>
                           )}
@@ -6227,7 +6378,7 @@ function ECHO_Editor({ user }) {
                       pl. [Oktató neve] → {ECHO_TOKENS['[Oktató neve]']}.
                     </p>
 
-                    <div className="rounded-2xl border border-slate-100 p-3">
+                    <div className="rounded-2xl border border-slate-100 p-3 xl:max-h-[calc(100vh-15rem)] xl:overflow-y-auto overscroll-contain" data-echo-elonezet="1">
                       {pvMode === 'q' && (q
                         ? <ECHO_Question q={ECHO_previewQuestion(q, lang)} index={(qi || 0) + 1}
                             value={pv} onChange={setPv} lang={lang} seed="preview" ctx={ECHO_PREVIEW_CTX} />

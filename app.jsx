@@ -13547,6 +13547,34 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// Kurzusértékelés hibajelentés (2026-09-16): törlés-megerősítés, feltétel, hibajelölés.
+Object.entries({
+  'Biztosan törlöd?': 'Delete this?', 'Törlés': 'Delete', 'Opció törlése': 'Delete option', 'Kérdés törlése': 'Delete question', 'Szakasz törlése': 'Delete section',
+  'Törlöd ezt a válaszopciót?': 'Delete this answer option?', 'Törlöd ezt a kérdést?': 'Delete this question?',
+  'Törlöd a szakaszt a benne lévő összes kérdéssel együtt?': 'Delete the section together with all its questions?',
+  'Alapból minden kitöltő látja a kérdést. Ha feltételt adsz meg, csak az látja, akinek az előző válasza (vagy a kitöltés adata) megfelel.':
+    'By default every respondent sees the question. With a condition, only respondents whose earlier answer (or response data) matches will see it.',
+  'Mitől függjön?': 'Depends on', 'Mindig jelenjen meg': 'Always show', 'Egy korábbi kérdés válaszától': 'An earlier question’s answer',
+  'A kitöltés adataitól': 'Response data', 'Milyen válasznál?': 'Which answer?', 'bármilyen választ adott': 'gave any answer',
+  'üresen hagyta': 'left it empty', 'egyéni érték…': 'custom value…', 'megadott célkitűzést': 'set goals', 'nem adott meg célkitűzést': 'did not set goals',
+  'magyarul tölti ki': 'responds in Hungarian', 'angolul tölti ki': 'responds in English',
+  'Célkitűzés megadása': 'Goal setting', 'Óralátogatási sáv': 'Attendance band', 'Kitöltés nyelve': 'Response language',
+  'A hivatkozott kérdés nem létezik — ez élesítés-blokkoló hiba.': 'The referenced question does not exist — this blocks publishing.',
+  'egyéni érték (pl. true / null / szöveg)': 'custom value (e.g. true / null / text)',
+  'A fenti opciók a kihagyás felkínált indokai. Ha a kitöltő saját indokot is írhat, kapcsold be:': 'The options above are the offered reasons for skipping. To let respondents write their own reason, turn this on:',
+  'Saját indok megadása': 'Allow own reason',
+  'A saját indok szövegét az oktató nem látja; csak az adminisztrátori nyers nézetben jelenik meg.': 'Teachers never see the own-reason text; it only appears in the administrator raw view.',
+  'Ez a kérdés kötelező — válaszolj rá a továbblépéshez.': 'This question is required — answer it to continue.',
+  'Az „Egyéb” mellé írd le, mi volt az, és add hozzá a + gombbal.': 'Next to “Other”, write what it was and add it with the + button.',
+  'Egy „Egyéb” válasz mellé még szöveg kell — pirossal jelöltük.': 'An “Other” answer still needs text — marked in red.',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push(
+  [/^Még (\d+) kötelező kérdés vár válaszra — pirossal jelöltük\.$/, '$1 required question(s) still need an answer — marked in red.'],
+  [/^A kérdés csak akkor jelenik meg, ha a kitöltő a\(z\) (.+) kérdésnél ezt választotta: (.+)\.$/, 'This question only appears if the respondent chose “$2” for $1.'],
+  [/^A kérdés csak akkor jelenik meg, ha a kitöltő a\(z\) (.+) kérdésnél bármilyen választ adott\.$/, 'This question only appears if the respondent answered $1.'],
+  [/^A kérdés csak akkor jelenik meg, ha a kitöltő a\(z\) (.+) kérdésnél üresen hagyta\.$/, 'This question only appears if the respondent left $1 empty.'],
+  [/^A kérdés csak akkor jelenik meg, ha a kitöltő (megadott célkitűzést|nem adott meg célkitűzést|magyarul tölti ki|angolul tölti ki)\.$/, 'This question only appears if the respondent: $1.'],
+);
 // DEMO-jelölés és a díjlépés bejelentéses módja.
 Object.entries({
   'Demo állapot': 'Demo state', 'Demo': 'Demo',
