@@ -883,6 +883,295 @@ function IV_AssignModal({ slot, ctx, cal, roster, target, processes, programName
 /* ============================================================
    JELENTKEZŐ — az interjú lépés a felvételi folyamatban
    ============================================================ */
+/* ===================== INTERJÚ ÉRTÉKELŐ SZEMPONTRENDSZER =====================
+   A korábbi „Interjú értékelő.xlsx” helyett: a szempontokat a rendszergazda a
+   felületen bővíti (interview_criterion), a kitöltött lap a jelentkezéshez
+   kötődik (interview_evaluation, 66-os migráció). Az összeget és az értékelő
+   személyét a szerver számolja — a kliens csak a pontokat küldi.            */
+const IVE_KAT = 'interview_criterion';
+const IVE_LAP = 'interview_evaluation';
+const IVE_nincsTabla = (error) => !!error && (
+  error.code === '42P01' || error.code === 'PGRST205' || error.code === 'PGRST202' ||
+  /does not exist|Could not find the table|schema cache/i.test(String(error.message || ''))
+);
+const IVE_HIANY = 'Az interjú értékelése a 66-os adatbázis-migráció lefuttatása után érhető el.';
+const IVE_EREDMENY = { yes: 'Megfelelt', no: 'Nem felelt meg', pending: 'Nincs eldöntve' };
+// Kulcs a megnevezésből: ékezet nélkül, kisbetűvel — a szerver mintája ^[a-z0-9_]{2,60}$.
+const IVE_kulcs = (nev) => {
+  const alap = String(nev || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
+  return alap.length >= 2 ? alap : ('szempont_' + Math.random().toString(36).slice(2, 8));
+};
+const IVE_hiba = (error) => {
+  if (!error) return '';
+  if (error.code === '23505') return 'Ilyen nevű szempont már van.';
+  return String(error.message || error.details || 'Ismeretlen hiba.');
+};
+async function IVE_katalogus(mind) {
+  if (!window.sb) return { rows: [], hiba: 'Nincs adatbázis-kapcsolat.' };
+  let q = window.sb.from(IVE_KAT).select('*').order('sort_order', { ascending: true });
+  if (!mind) q = q.eq('active', true);
+  const { data, error } = await q;
+  if (error) return { rows: [], hiba: IVE_nincsTabla(error) ? IVE_HIANY : IVE_hiba(error) };
+  return { rows: Array.isArray(data) ? data : [], hiba: '' };
+}
+const IVE_cimke = (c) => (typeof localStorage !== 'undefined' && localStorage.getItem('nje_lang') === 'en' && c.label_en) ? c.label_en : c.label_hu;
+
+/* A kitöltő lap a jelentkezés interjúkártyáján. Csak ügyintéző látja (RLS is ezt mondja ki). */
+function IVE_Panel({ processId, slotId, interviewerName, canEdit }) {
+  const [kat, setKat] = useState(null);
+  const [lap, setLap] = useState(null);
+  const [pontok, setPontok] = useState({});
+  const [eredmeny, setEredmeny] = useState('pending');
+  const [megjegyzes, setMegjegyzes] = useState('');
+  const [hiba, setHiba] = useState('');
+  const [ok, setOk] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [nyitva, setNyitva] = useState(false);
+
+  const betolt = React.useCallback(async () => {
+    const k = await IVE_katalogus(false);
+    setKat(k.rows); if (k.hiba) { setHiba(k.hiba); return; }
+    if (!window.sb || !processId) return;
+    const { data, error } = await window.sb.from(IVE_LAP).select('*').eq('process_id', processId).maybeSingle();
+    if (error) { setHiba(IVE_nincsTabla(error) ? IVE_HIANY : IVE_hiba(error)); return; }
+    setHiba('');
+    setLap(data || null);
+    setPontok((data && data.scores) || {});
+    setEredmeny((data && data.result) || 'pending');
+    setMegjegyzes((data && data.note) || '');
+  }, [processId]);
+  useEffect(() => { betolt(); }, [betolt]);
+
+  if (hiba && !kat) return <p className="text-[12px] text-amber-700 font-semibold">{hiba}</p>;
+  if (!kat) return <p className="text-sm text-slate-400">Betöltés...</p>;
+  if (!kat.length) return <p className="text-[12px] text-slate-500">Még nincs értékelési szempont. A rendszergazda az Interjú foglalás → Értékelés fülön veheti fel őket.</p>;
+
+  const max = kat.reduce((a, c) => a + (Number(c.max_score) || 0), 0);
+  const ossz = kat.reduce((a, c) => a + (Number(pontok[c.key]) || 0), 0);
+  const ment = async () => {
+    if (!window.sb) { setHiba('Nincs adatbázis-kapcsolat.'); return; }
+    setBusy(true); setHiba(''); setOk('');
+    const tiszta = {};
+    kat.forEach(c => { const v = Number(pontok[c.key]); if (Number.isFinite(v) && v > 0) tiszta[c.key] = v; });
+    const sor = { process_id: processId, slot_id: slotId || null, scores: tiszta, result: eredmeny,
+      note: megjegyzes.trim() || null, interviewer_name: interviewerName || null };
+    const res = (lap && lap.id)
+      ? await window.sb.from(IVE_LAP).update(sor).eq('id', lap.id).select().maybeSingle()
+      : await window.sb.from(IVE_LAP).insert(sor).select().maybeSingle();
+    setBusy(false);
+    if (res.error) { setHiba(IVE_nincsTabla(res.error) ? IVE_HIANY : IVE_hiba(res.error)); return; }
+    if (res.data) { setLap(res.data); setPontok(res.data.scores || tiszta); }
+    setOk('Az értékelés elmentve.');
+    setNyitva(false);
+  };
+
+  const skala = (c) => {
+    const ertek = Number(pontok[c.key]) || 0;
+    const max1 = Math.max(1, Math.min(10, Number(c.max_score) || 5));
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        {Array.from({ length: max1 + 1 }, (_, i) => i).map(i => (
+          <button key={i} type="button" disabled={!canEdit || !nyitva} data-ive-pont={c.key + ':' + i}
+            onClick={() => setPontok(p => ({ ...p, [c.key]: i }))}
+            className={'w-8 h-8 rounded-lg text-[12px] font-bold border transition-colors ' +
+              (ertek === i ? 'bg-slate-900 text-white border-slate-900'
+                           : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400 disabled:hover:border-slate-200 disabled:opacity-60')}>
+            {i}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-3" data-ive-panel={processId}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Lucide.ClipboardList size={16} className="text-primary" />
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Interjú értékelése</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-black text-slate-800" data-ive-osszesen={ossz}>{ossz + ' / ' + max + ' pont'}</span>
+          {lap && <UBadge tone={lap.result === 'yes' ? 'emerald' : lap.result === 'no' ? 'red' : 'slate'}>{IVE_EREDMENY[lap.result] || IVE_EREDMENY.pending}</UBadge>}
+        </div>
+      </div>
+      {lap && lap.evaluated_at && !nyitva && (
+        <p className="text-[11px] text-slate-400">{'Utolsó mentés: ' + new Date(lap.evaluated_at).toLocaleString(IV_locale(), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + (lap.interviewer_name ? ' · ' + lap.interviewer_name : '')}</p>
+      )}
+      <div className="space-y-2">
+        {kat.map(c => (
+          <div key={c.key} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2">
+            <span className="text-sm font-semibold text-slate-700 min-w-0">{IVE_cimke(c)}</span>
+            <div className="flex items-center gap-3">
+              {nyitva ? skala(c) : <span className="text-sm font-black text-slate-800">{(Number(pontok[c.key]) || 0) + ' / ' + c.max_score}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {nyitva && (
+        <div className="space-y-3">
+          <UField label="Eredmény">
+            <select className={U_input} value={eredmeny} onChange={e => setEredmeny(e.target.value)} data-ive-eredmeny="1">
+              <option value="pending">Nincs eldöntve</option>
+              <option value="yes">Megfelelt</option>
+              <option value="no">Nem felelt meg</option>
+            </select>
+          </UField>
+          <UField label="Megjegyzés (nem kötelező)">
+            <textarea className={U_input + ' min-h-[72px]'} value={megjegyzes} onChange={e => setMegjegyzes(e.target.value)} />
+          </UField>
+        </div>
+      )}
+      {lap && lap.note && !nyitva && <p className="text-[12px] text-slate-500 whitespace-pre-line">{lap.note}</p>}
+      <IV_Err>{hiba}</IV_Err>
+      <IV_Ok>{ok}</IV_Ok>
+      {canEdit && (
+        <div className="flex justify-end gap-2">
+          {nyitva && <button type="button" className={U_btnGhost + ' !py-2 text-sm'} onClick={() => { setNyitva(false); betolt(); }}>Mégse</button>}
+          <button type="button" className={(nyitva ? U_btnPrimary : U_btnGhost) + ' !py-2 text-sm'} disabled={busy}
+            onClick={() => (nyitva ? ment() : setNyitva(true))} data-ive-mentes="1">
+            {nyitva ? (busy ? 'Mentés…' : 'Értékelés mentése') : (lap ? 'Értékelés szerkesztése' : 'Értékelés kitöltése')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Rendszergazdai fül: a szempontrendszer bővítése és a kitöltött lapok listája. */
+function IVE_Szempontok({ ctx }) {
+  const admin = !!(ctx && ctx.admin);
+  const URES = { key: null, hu: '', en: '', max: 5, sort: 100, active: true, busy: false, hiba: '' };
+  const [rows, setRows] = useState(null);
+  const [hiba, setHiba] = useState('');
+  const [f, setF] = useState(URES);
+  const [lapok, setLapok] = useState([]);
+
+  const betolt = React.useCallback(async () => {
+    const k = await IVE_katalogus(true);
+    setRows(k.rows); setHiba(k.hiba);
+    if (!window.sb || k.hiba) return;
+    const { data } = await window.sb.from('interview_evaluation_list').select('*').order('evaluated_at', { ascending: false }).limit(500);
+    setLapok(Array.isArray(data) ? data : []);
+  }, []);
+  useEffect(() => { betolt(); }, [betolt]);
+
+  const ment = async () => {
+    const hu = f.hu.trim();
+    if (hu.length < 2) { setF(x => ({ ...x, hiba: 'A megnevezés legalább 2 karakter.' })); return; }
+    if (!window.sb) { setF(x => ({ ...x, hiba: 'Nincs adatbázis-kapcsolat.' })); return; }
+    setF(x => ({ ...x, busy: true, hiba: '' }));
+    const mezok = { label_hu: hu, label_en: f.en.trim() || null, max_score: Number(f.max) || 5, sort_order: Number(f.sort) || 100, active: !!f.active };
+    const res = f.key
+      ? await window.sb.from(IVE_KAT).update(mezok).eq('key', f.key).select().maybeSingle()
+      : await window.sb.from(IVE_KAT).insert({ key: IVE_kulcs(hu), ...mezok }).select().maybeSingle();
+    if (res.error) { setF(x => ({ ...x, busy: false, hiba: IVE_nincsTabla(res.error) ? IVE_HIANY : IVE_hiba(res.error) })); return; }
+    setF(URES); betolt();
+  };
+  const rejt = async (c) => {
+    if (!window.sb) return;
+    await window.sb.from(IVE_KAT).update({ active: !c.active }).eq('key', c.key).select().maybeSingle();
+    betolt();
+  };
+  const csv = () => {
+    const kulcsok = (rows || []).map(c => c.key);
+    const fej = ['Dátum', 'Név', 'Azonosító', 'Szak', ...(rows || []).map(c => c.label_hu), 'Összesen', 'Maximum', 'Eredmény', 'Interjúztató', 'Megjegyzés'];
+    const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const sorok = (lapok || []).map(r => [
+      (r.evaluated_at || '').slice(0, 10), r.personal_name || r.applicant_name || '',
+      r.ref_no ? 'FV-' + String(r.ref_no).padStart(5, '0') : '', r.program_id || '',
+      ...kulcsok.map(k => (r.scores && r.scores[k] != null ? r.scores[k] : '')),
+      r.total, r.max_total, IVE_EREDMENY[r.result] || '', r.interviewer_name || r.slot_interviewer || '', r.note || '',
+    ].map(esc).join(','));
+    const url = URL.createObjectURL(new Blob(['﻿' + [fej.map(esc).join(','), ...sorok].join('\n')], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'interju-ertekeles-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const max = (rows || []).filter(c => c.active).reduce((a, c) => a + (Number(c.max_score) || 0), 0);
+  return (
+    <div className="space-y-6" data-ive-szempontok="1">
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-slate-800 text-lg">Értékelési szempontok</h3>
+            <p className="text-xs text-slate-500 mt-1 max-w-[75ch]">Ezeket a szempontokat kapja az interjúztató a jelentkezés interjúkártyáján. A sor bármikor bővíthető; a már kitöltött értékelések a régi szempontokkal együtt megmaradnak, ezért törölni nem lehet, csak elrejteni.</p>
+          </div>
+          <span className="text-sm font-black text-slate-800 whitespace-nowrap">{'Összesen ' + max + ' pont'}</span>
+        </div>
+        {hiba && <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-[12px] font-semibold text-amber-800">{hiba}</div>}
+        {rows === null ? <p className="text-sm text-slate-400">Betöltés...</p> : (
+          <div className="space-y-2">
+            {rows.map(c => (
+              <div key={c.key} className={'flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 ' + (c.active ? 'border-slate-100' : 'border-slate-100 bg-slate-50 opacity-70')}>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-slate-700">{c.label_hu}{!c.active && <span className="ml-2 text-[10px] font-bold uppercase text-slate-400">rejtett</span>}</div>
+                  {c.label_en && <div className="text-[11px] text-slate-400">{c.label_en}</div>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] font-bold text-slate-500">{'max. ' + c.max_score}</span>
+                  {admin && (
+                    <>
+                      <button type="button" className="text-[12px] font-bold text-primary hover:underline" onClick={() => setF({ key: c.key, hu: c.label_hu, en: c.label_en || '', max: c.max_score, sort: c.sort_order, active: c.active, busy: false, hiba: '' })}>Szerkesztés</button>
+                      <button type="button" className="text-[12px] font-bold text-slate-400 hover:text-slate-700" onClick={() => rejt(c)}>{c.active ? 'Elrejtés' : 'Visszaállítás'}</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+            {!rows.length && <p className="text-sm text-slate-500">Még nincs felvett szempont.</p>}
+          </div>
+        )}
+        {admin ? (
+          <div className="rounded-2xl border border-slate-100 p-4 space-y-3" data-ive-urlap="1">
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{f.key ? 'Szempont szerkesztése' : 'Új szempont'}</div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <UField label="Megnevezés (magyar)"><input className={U_input} value={f.hu} onChange={e => setF(x => ({ ...x, hu: e.target.value }))} data-ive-uj-hu="1" /></UField>
+              <UField label="Megnevezés (angol, nem kötelező)"><input className={U_input} value={f.en} onChange={e => setF(x => ({ ...x, en: e.target.value }))} /></UField>
+              <UField label="Maximális pontszám"><input type="number" min="1" max="100" className={U_input} value={f.max} onChange={e => setF(x => ({ ...x, max: e.target.value }))} /></UField>
+              <UField label="Sorrend"><input type="number" className={U_input} value={f.sort} onChange={e => setF(x => ({ ...x, sort: e.target.value }))} /></UField>
+            </div>
+            {f.hiba && <p className="text-[12px] font-semibold text-red-600">{f.hiba}</p>}
+            <div className="flex justify-end gap-2">
+              {f.key && <button type="button" className={U_btnGhost + ' !py-2 text-sm'} onClick={() => setF(URES)}>Mégse</button>}
+              <button type="button" className={U_btnPrimary + ' !py-2 text-sm'} disabled={f.busy} onClick={ment} data-ive-uj-mentes="1">{f.busy ? 'Mentés…' : (f.key ? 'Mentés' : 'Szempont hozzáadása')}</button>
+            </div>
+          </div>
+        ) : <p className="text-[12px] text-slate-400">A szempontokat rendszergazda bővítheti.</p>}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-bold text-slate-800 text-lg">Kitöltött értékelések</h3>
+          <button type="button" className={U_btnGhost + ' !py-2 text-sm'} onClick={csv} disabled={!lapok.length}><Lucide.Download size={15} /> CSV export</button>
+        </div>
+        {!lapok.length ? <p className="text-sm text-slate-500">Még nincs kitöltött értékelés.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <tr><th className="py-2 pr-3">Dátum</th><th className="py-2 pr-3">Jelentkező</th><th className="py-2 pr-3">Azonosító</th><th className="py-2 pr-3">Pont</th><th className="py-2 pr-3">Eredmény</th><th className="py-2">Interjúztató</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {lapok.map(r => (
+                  <tr key={r.id} data-ive-sor={r.process_id}>
+                    <td className="py-2 pr-3 text-slate-500 whitespace-nowrap">{(r.evaluated_at || '').slice(0, 10)}</td>
+                    <td className="py-2 pr-3 font-semibold text-slate-700">{r.personal_name || r.applicant_name || '—'}</td>
+                    <td className="py-2 pr-3 font-mono text-[12px] text-slate-500">{r.ref_no ? 'FV-' + String(r.ref_no).padStart(5, '0') : '—'}</td>
+                    <td className="py-2 pr-3 font-bold text-slate-800 whitespace-nowrap">{r.total + ' / ' + r.max_total}</td>
+                    <td className="py-2 pr-3">{IVE_EREDMENY[r.result] || '—'}</td>
+                    <td className="py-2 text-slate-500">{r.interviewer_name || r.slot_interviewer || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function IV_ProcessInterview({ processId, readOnly, fallback, onState }) {
   const { ctx } = IV_useContext();
   const [st, setSt] = useState(null);
@@ -1111,6 +1400,11 @@ function IV_AdminProcessInterview({ processId, canEdit, fallback, onChanged }) {
       {canEdit && loaded && (
         <div className="pt-3 border-t border-slate-100">
           <REC_Lista processId={processId} canEdit={canEdit} />
+        </div>
+      )}
+      {canEdit && loaded && (
+        <div className="pt-3 border-t border-slate-100">
+          <IVE_Panel processId={processId} slotId={cur && cur.id} interviewerName={(cur && cur.interviewer_name) || (ctx && ctx.my_name) || null} canEdit={canEdit} />
         </div>
       )}
       <IV_Err>{err}</IV_Err>

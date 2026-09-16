@@ -7443,7 +7443,7 @@ const InterviewScheduler: React.FC<InterviewSchedulerProps> = ({ user }) => {
   // Az ügynök és a 28-as migráció nélküli környezet a régi felületet kapja.
   const naptarMod = !!ivCtx && !isAgent;
   const nezet = naptarMod
-    ? (['calendar', 'availability', 'recordings', 'prep'].includes(activeSubView) ? activeSubView : 'calendar')
+    ? (['calendar', 'availability', 'recordings', 'scoring', 'prep'].includes(activeSubView) ? activeSubView : 'calendar')
     : (['booking', 'prep'].includes(activeSubView) ? activeSubView : 'booking');
 
   const availableSlots = slots?.filter(s => s.status === 'Available') || [];
@@ -7472,7 +7472,7 @@ const InterviewScheduler: React.FC<InterviewSchedulerProps> = ({ user }) => {
           a feliratok egymásra csúsztak; így a sáv vízszintesen görgethető marad. */}
       <div className="flex items-center gap-1 p-1 bg-white border border-slate-100 rounded-2xl w-fit shadow-sm overflow-x-auto max-w-full">
         {(naptarMod
-          ? [['calendar', 'Naptár'], ...((ivCtx.admin || ivCtx.interviewer) ? [['availability', 'Elérhetőség']] : []), ...((ivCtx.admin || ivCtx.can_manage || ivCtx.interviewer) ? [['recordings', 'Felvételek']] : []), ['prep', 'Interjú Felkészítő']]
+          ? [['calendar', 'Naptár'], ...((ivCtx.admin || ivCtx.interviewer) ? [['availability', 'Elérhetőség']] : []), ...((ivCtx.admin || ivCtx.can_manage || ivCtx.interviewer) ? [['recordings', 'Felvételek']] : []), ...((ivCtx.admin || ivCtx.can_manage || ivCtx.interviewer) ? [['scoring', 'Értékelés']] : []), ['prep', 'Interjú Felkészítő']]
           : [['booking', 'Időpontfoglalás'], ['prep', 'Interjú Felkészítő']]
         ).map(([k, cim]) => (
           <button key={k} onClick={() => setActiveSubView(k)}
@@ -7490,6 +7490,7 @@ const InterviewScheduler: React.FC<InterviewSchedulerProps> = ({ user }) => {
       )}
 
       {nezet === 'recordings' && naptarMod && <REC_Felvetelek ctx={ivCtx} programName={ivProgNev} />}
+      {nezet === 'scoring' && naptarMod && <IVE_Szempontok ctx={ivCtx} />}
       {nezet === 'availability' && naptarMod && (
         <IV_AvailabilityPanel ctx={ivCtx} reloadCtx={ivReload} />
       )}
@@ -13474,6 +13475,32 @@ HU_EN_PHRASES.push(
   [/^A kért időpont túl közel esik egy másik interjúhoz: két interjú között (\d+) perc szünet kell\.$/g, 'The requested time is too close to another interview: a $1-minute break is needed between interviews.'],
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
+);
+// Interjú értékelő szempontrendszer (66_interview_scoring.sql).
+Object.entries({
+  'Értékelés': 'Evaluation', 'Interjú értékelése': 'Interview evaluation', 'Értékelési szempontok': 'Evaluation criteria',
+  'Kitöltött értékelések': 'Completed evaluations', 'Értékelés kitöltése': 'Fill in evaluation', 'Értékelés szerkesztése': 'Edit evaluation',
+  'Értékelés mentése': 'Save evaluation', 'Az értékelés elmentve.': 'The evaluation has been saved.',
+  'Eredmény': 'Result', 'Megfelelt': 'Passed', 'Nem felelt meg': 'Not passed', 'Nincs eldöntve': 'Not decided',
+  'Megjegyzés (nem kötelező)': 'Comment (optional)', 'Új szempont': 'New criterion', 'Szempont szerkesztése': 'Edit criterion',
+  'Szempont hozzáadása': 'Add criterion', 'Megnevezés (magyar)': 'Name (Hungarian)', 'Megnevezés (angol, nem kötelező)': 'Name (English, optional)',
+  'Maximális pontszám': 'Maximum score', 'Sorrend': 'Order', 'Elrejtés': 'Hide', 'Visszaállítás': 'Restore', 'rejtett': 'hidden',
+  'A megnevezés legalább 2 karakter.': 'The name must be at least 2 characters.', 'Ilyen nevű szempont már van.': 'A criterion with this name already exists.',
+  'A szempontokat rendszergazda bővítheti.': 'Criteria can be extended by an administrator.',
+  'Még nincs felvett szempont.': 'No criteria have been added yet.', 'Még nincs kitöltött értékelés.': 'No evaluations have been completed yet.',
+  'Ezeket a szempontokat kapja az interjúztató a jelentkezés interjúkártyáján. A sor bármikor bővíthető; a már kitöltött értékelések a régi szempontokkal együtt megmaradnak, ezért törölni nem lehet, csak elrejteni.':
+    'These criteria appear for the interviewer on the application\u2019s interview card. The list can be extended at any time; completed evaluations keep their original criteria, so criteria can only be hidden, not deleted.',
+  'Még nincs értékelési szempont. A rendszergazda az Interjú foglalás → Értékelés fülön veheti fel őket.':
+    'There are no evaluation criteria yet. An administrator can add them under Interview booking → Evaluation.',
+  'Az interjú értékelése a 66-os adatbázis-migráció lefuttatása után érhető el.':
+    'The interview evaluation becomes available once database migration 66 has been run.',
+  'Jelentkező': 'Applicant', 'Azonosító': 'ID', 'Pont': 'Score', 'Dátum': 'Date', 'Interjúztató': 'Interviewer',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push(
+  [/^Összesen (\d+) pont$/, 'Total: $1 points'],
+  [/^(\d+) \/ (\d+) pont$/, '$1 / $2 points'],
+  [/^max\. (\d+)$/, 'max. $1'],
+  [/^Utolsó mentés: /, 'Last saved: '],
 );
 // Utalási közlemény (hallgató, iroda, Pénzügyek).
 Object.entries({
