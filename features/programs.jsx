@@ -428,12 +428,11 @@ function PROG_seed() {
 let PROG_KAT_CACHE = [];
 async function PROG_loadPrograms() {
   const list = await dlSelect(PROG_TABLE, PROG_LS, PROG_seed, 'name', true);
-  // Add any seed programmes missing from an existing store (e.g. the newer
-  // short courses / excursions), and backfill images + category — all
-  // non-destructive (never overwrites an admin's own edits).
+  // Demo backfill belongs only to the local preview. Live deletions must persist.
+  // Fill missing display images without overwriting an admin's own edits.
   const seed = PROG_seed();
   const has = {}; list.forEach(p => { has[p.id] = true; });
-  const missing = seed.filter(s => !has[s.id]);
+  const missing = DL_PROBE[PROG_TABLE] === 'ls' ? seed.filter(s => !has[s.id]) : [];
   let changed = missing.length > 0;
   let merged = list.concat(missing).map(p => {
     let q = p;
@@ -442,7 +441,6 @@ async function PROG_loadPrograms() {
   });
   if (changed) {
     if (DL_PROBE[PROG_TABLE] === 'ls') { try { dlLocalSave(PROG_LS, merged); } catch (e) {} }
-    else if (DL_PROBE[PROG_TABLE] === 'sb' && missing.length && window.sb) { try { await window.sb.from(PROG_TABLE).upsert(missing.map(s => ({ ...s, image_url: PROG_IMGS[s.id] || null })), { onConflict: 'id', ignoreDuplicates: true }); } catch (e) {} }
   }
   // A 60-as migráció után a sorok hordozzák az intakes mezőt; localStorage-ban bármi tárolható.
   PROG_INTAKE_COL = DL_PROBE[PROG_TABLE] === 'ls' || list.some(x => x && Object.prototype.hasOwnProperty.call(x, 'intakes'));

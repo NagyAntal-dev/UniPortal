@@ -138,8 +138,8 @@ Lépésenként ugyanez:
 > **`05_features.sql` nélkül** a Hírfolyam / Programok / AI asszisztens modulok
 > egy seed-elt `localStorage` tárolóra esnek vissza: működnek, de eszközönként
 > külön adatot látnak. A migráció után minden élőben megosztott — a táblák
-> üresen indulnak, és az első bejelentkezett betöltés tölti fel őket
-> (17 program, 6 hírfolyam-poszt, 9 tudásbázis-dokumentum).
+> üresen indulnak; az élő táblákba a frontend nem tölt automatikus demó adatot.
+> A mintaadatok csak a helyi, `localStorage`-alapú előnézetben jelennek meg.
 
 > A `programs` táblának **nincs `kind` oszlopa**, és nem is kell: a
 > program/képzés kategória a `level`-ből származik (`PROG_kind()`). Ha új mezőt

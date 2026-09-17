@@ -52,13 +52,9 @@ async function dlSelect(table, lsKey, seedFn, orderCol, ascending = true) {
       // hogy várjanak.
       if (POLL_nezdKorlat(valasz)) return dlLocalLoad(lsKey, seedFn);
       if (!error && Array.isArray(data)) {
-        // First-run seed of an empty live table (best-effort; ignores RLS errors).
-        if (data.length === 0 && seedFn) {
-          const seed = seedFn();
-          if (seed && seed.length) {
-            try { await window.sb.from(table).upsert(seed, { onConflict: 'id', ignoreDuplicates: true }); return seed; } catch (e) {}
-          }
-        }
+        // Empty live tables are intentional after an administrative reset.
+        // Seeds belong only to the local preview; refresh its cache as well.
+        dlLocalSave(lsKey, data);
         return data;
       }
     } catch (e) {}

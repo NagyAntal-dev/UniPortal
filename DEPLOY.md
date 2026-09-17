@@ -242,6 +242,50 @@ A jelenlegi állapotot nem törli, hanem a `backups/elozo-<időbélyeg>/` könyv
 
 > Az archívum személyes adatokat és a rendszer titkait tartalmazza. A szerveren kívülre csak **titkosítva** vidd (pl. `gpg -c`, restic, borg). Negyedévente próbáld ki a visszaállítást egy tesztszerveren. Ha a szerverről VM-pillanatkép is készül, az jó kiegészítés.
 
+### Reset application data while keeping users and RBAC
+
+Deploy this version first (`docker compose up -d --build`), and close old browser
+tabs: older frontend versions automatically insert demo programs into empty tables.
+Run the following from the repository directory on the Docker server:
+
+```sh
+# Preview only: exercises the database reset and rolls it back, lists upload counts.
+sh deploy/reset-data.sh --dry-run
+
+# Optional full backup before deletion.
+sudo sh deploy/backup.sh
+
+# Permanently delete application data and uploads.
+sh deploy/reset-data.sh --yes
+```
+
+The command clears business data in `public`, `echo`, and `dorm`, including courses,
+enrollments, programs, applications, survey responses, financial records, logs,
+templates, settings and reference catalogs. It preserves:
+
+- Supabase Auth accounts, passwords and identities; `public.users` and `profiles`.
+- User attributes, RBAC role definitions, permissions, grants, groups and membership.
+- Only the organization scopes (and their ancestors), buildings and related
+  site/landlord/tenure rows required by existing scoped grants. These are retained
+  to preserve the grants' meaning; scoped permissions never become global permissions.
+- User avatars; all other Storage objects are deleted through the Storage API.
+- Database schema, functions, policies, bucket definitions and migration history.
+
+Profile links to deleted students/agencies are cleared. The application requires
+fresh configuration/catalog data before those modules can be used again. Existing
+migrations are not rerun and demo data is not automatically reinserted by the new
+frontend. Browser-local demo data, server logs and backup archives are outside this reset.
+
+The destructive command pauses running entry points and background writers, validates
+the SQL in a rolled-back transaction, removes uploads, then commits the database reset.
+It restarts only the services it paused. File deletion cannot be rolled back together
+with SQL: a failure may leave some files deleted. The command reports errors and can
+be retried after the cause is fixed. Do not run other maintenance jobs or direct
+database writers concurrently. Without `--yes`, no deletion is committed.
+
+This is a manual command, **not a migration**. Never add `deploy/reset-data.sql` to
+`deploy/migrate/manifest.txt`.
+
 ## 9. Meglévő adatok áthozása a felhős Supabase-ből (haladó)
 
 Az új telepítés üres adatbázissal indul, amelyben csak a migrációk demó adatai vannak. Ha a jelenlegi, felhős rendszer felhasználóit, jelentkezéseit és dokumentumait is át kell hozni, azt külön lépésben, előbb tesztszerveren kipróbálva végezd:
