@@ -43,7 +43,14 @@ async function dlSelect(table, lsKey, seedFn, orderCol, ascending = true) {
     try {
       let qb = window.sb.from(table).select('*');
       if (orderCol) qb = qb.order(orderCol, { ascending });
-      const { data, error } = await qb;
+      const valasz = await qb;
+      const { data, error } = valasz;
+      // Sebességkorlát: NEM váltunk localStorage-módra. A DL_PROBE[table]='ls'
+      // az egész munkamenetre átállítaná a táblát a helyi másolatra, és a
+      // felhasználó egy múló 429 után végig elavult adatot látna. Csak most
+      // adjuk vissza a helyi másolatot, és megkérjük a háttérfrissítéseket,
+      // hogy várjanak.
+      if (POLL_nezdKorlat(valasz)) return dlLocalLoad(lsKey, seedFn);
       if (!error && Array.isArray(data)) {
         // First-run seed of an empty live table (best-effort; ignores RLS errors).
         if (data.length === 0 && seedFn) {

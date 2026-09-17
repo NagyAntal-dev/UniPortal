@@ -24,3 +24,35 @@ window.SUPABASE_URL = '${URL}' || window.location.origin;
 window.SUPABASE_ANON_KEY = '${KEY}';
 EOF
 echo "[uniportal] config.js kész (API: ${URL:-azonos cím, továbbítva})."
+
+# ---------------------------------------------------------------------------
+# Valós ügyfél-IP a sebességkorláthoz (deploy/web/default.conf.template).
+#
+# Élesben a web egy TLS-proxy MÖGÖTT fut (DEPLOY.md 5. pont), tehát a
+# $remote_addr a proxy címe — MINDEN kérésé ugyanaz. Enélkül a
+# sebességkorlát egyetlen közös vödör lenne, és az első terhelés az egész
+# oldalt kizárná. A proxy X-Forwarded-For fejlécét csak MEGBÍZHATÓ feladótól
+# szabad elhinni, különben bárki hamisíthatna magának új IP-t.
+#
+#   UNIPORTAL_TRUSTED_PROXY   szóközzel elválasztott cím/CIDR lista.
+#                             Alapérték: 127.0.0.1 (a proxy ugyanazon a gépen).
+#                             Ha nincs előtte proxy, állítsd üresre.
+# ---------------------------------------------------------------------------
+RIP_CONF="/etc/nginx/uniportal/realip.conf"
+: > "$RIP_CONF"
+for cidr in ${UNIPORTAL_TRUSTED_PROXY:-}; do
+  case "$cidr" in
+    *[!0-9a-fA-F.:/]*)
+      echo "[uniportal] HIBA: tiltott karakter az UNIPORTAL_TRUSTED_PROXY értékében: $cidr" >&2
+      exit 1 ;;
+  esac
+  echo "set_real_ip_from $cidr;" >> "$RIP_CONF"
+done
+if [ -s "$RIP_CONF" ]; then
+  echo "real_ip_header X-Forwarded-For;" >> "$RIP_CONF"
+  echo "real_ip_recursive on;"           >> "$RIP_CONF"
+  echo "[uniportal] valós ügyfél-IP a következőktől: ${UNIPORTAL_TRUSTED_PROXY}"
+else
+  echo "# Nincs megbízható proxy: a \$remote_addr marad az ügyfél címe." >> "$RIP_CONF"
+  echo "[uniportal] FIGYELEM: UNIPORTAL_TRUSTED_PROXY üres — ha TLS-proxy mögött futsz, a sebességkorlát MINDEN látogatót egy vödörbe tesz."
+fi

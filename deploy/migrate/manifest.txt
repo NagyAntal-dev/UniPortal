@@ -9,6 +9,8 @@
 #   RUN_ALL_*.sql           — a SQL Editorhoz összefűzött duplikátumok
 #   DIAG_rpc.sql, diagnostics/ — diagnosztika
 #   TESZT_valaszok.sql      — tesztadat
+#   99_harden_grants.sql    — NEM egyszeri migráció: a run.sh MINDEN indításkor
+#                             lefuttatja, a lista után (lásd a fájl fejlécét)
 # ============================================================================
 01_schema_and_seed.sql
 02_auth_profiles.sql
@@ -80,3 +82,8 @@
 67_echo_campaign_students_status.sql
 68_echo_campaign_ref_no.sql
 69_feed_audience.sql
+67_agency_guard_fix.sql
+68_signup_role_allowlist.sql
+69_storage_limits.sql
+70_rpc_authz_fixes.sql
+71_profiles_privacy.sql

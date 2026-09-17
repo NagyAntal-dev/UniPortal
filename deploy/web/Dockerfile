@@ -24,9 +24,11 @@ COPY --from=build /src/app.html /src/app.bundle.js /usr/share/nginx/html/
 COPY deploy/web/email/ /usr/share/nginx/html/email/
 COPY deploy/web/default.conf.template /etc/nginx/templates/default.conf.template
 COPY deploy/web/headers.conf deploy/web/proxy.conf /etc/nginx/uniportal/
-COPY --chmod=755 deploy/web/40-uniportal-config.sh /docker-entrypoint.d/40-uniportal-config.sh
-# A config.js-t induláskor a nem-root nginx felhasználó írja.
-RUN chown -R 101:0 /usr/share/nginx/html && chmod -R g+w /usr/share/nginx/html
+COPY --chmod=755 deploy/web/10-uniportal-defaults.envsh /docker-entrypoint.d/10-uniportal-defaults.envsh
+COPY --chmod=755 deploy/web/40-uniportal-config.sh   /docker-entrypoint.d/40-uniportal-config.sh
+# A config.js-t és a realip.conf-ot induláskor a nem-root nginx felhasználó írja.
+RUN chown -R 101:0 /usr/share/nginx/html /etc/nginx/uniportal \
+ && chmod -R g+w /usr/share/nginx/html /etc/nginx/uniportal
 USER 101
 ENV API_GW_UPSTREAM=api-gw:8000
 EXPOSE 8080

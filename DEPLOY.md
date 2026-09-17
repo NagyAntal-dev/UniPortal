@@ -98,6 +98,47 @@ ssh -L 8000:127.0.0.1:8000 <szerver>     # majd a böngészőben: http://localho
 
 A felhasználónév `supabase`, a jelszó a `.env` `DASHBOARD_PASSWORD` sora.
 
+### Sebességkorlát és a valós ügyfél-IP
+
+A web-konténer nginxe korlátozza a kérések számát (`/auth/v1/`, `/rest/v1/`,
+`/functions/v1/`, `/storage/v1/`). Ehhez tudnia kell, **ki a kérés valódi
+küldője** — TLS-proxy mögött ugyanis minden kérés a proxy címéről érkezik, és
+akkor a korlát egyetlen közös vödör lenne: az első terhelés az egész
+intézményt kizárná.
+
+Ezért a `.env`-ben **kötelező** megadni, honnan fogadjuk el az
+`X-Forwarded-For` fejlécet:
+
+```sh
+UNIPORTAL_TRUSTED_PROXY=127.0.0.1      # a proxy ugyanezen a gépen fut
+```
+
+Több proxy esetén szóközzel elválasztva sorolhatók fel. Ha **nincs** proxy a
+web előtt, hagyd üresen.
+
+**A proxynak továbbítania kell az `X-Forwarded-For` fejlécet** — a lenti
+Caddy- és nginx-minta ezt megteszi. Ha az egyetemi proxy nem küldi, a korlát
+mindenkit egy vödörbe tesz.
+
+A mértékek a `.env`-ből hangolhatók (`UNIPORTAL_RL_*`, `UNIPORTAL_CONN_LIMIT`);
+üresen hagyva a beépített alapérték él. Az alapértékek a felület mért
+terheléséhez igazodnak, és **közös kimenő IP (kampusz NAT) mellett is
+használhatók**: a bejelentkezett forgalmat munkamenetenként, nem IP-nként
+számoljuk. A bejelentkezési korlát viszont IP szerinti, tehát közös NAT mögött
+az egész intézményre vonatkozik — ezért az alapértéke szándékosan bőkezű
+(`60r/m`). Ha a felhasználók nem közös IP mögül jönnek, nyugodtan húzd le:
+
+```sh
+UNIPORTAL_RL_AUTH=20r/m
+```
+
+Ellenőrzés indulás után:
+
+```sh
+docker compose logs web | grep uniportal     # a valós IP forrása
+docker compose logs web | grep limiting      # üres, ha semmi nem akadt el
+```
+
 **HTTPS.** A `web` sima HTTP-t szolgál ki a 8080-as porton, ezért élesben tegyél elé TLS-proxyt (Caddy, nginx, Traefik vagy az egyetemi proxy). A kamera- és mikrofonfunkciók (videós interjú) a böngészőben **csak HTTPS-en** működnek. Ha a proxy ugyanazon a gépen fut, állítsd be a `.env`-ben: `UNIPORTAL_HTTP_PORT=127.0.0.1:8080`. Így a 8080 kívülről nem is látszik.
 
 Caddy (a Let's Encrypt-tanúsítványt magától megszerzi):
@@ -243,13 +284,19 @@ Az áthozott mentés személyes adatokat tartalmaz: kezeld a GDPR szerint.
 - [ ] Van rendszergazda, és a `superadmin_email()` címe rendben van.
 - [ ] Az ütemezett mentés fut, és a visszaállítást kipróbáltátok.
 - [ ] Az adatkezelési tájékoztató és a felhasználási feltételek (`privacy.html`, `terms.html`) `[kitöltendő]` helyei ki vannak töltve.
+- [ ] `UNIPORTAL_TRUSTED_PROXY` be van állítva, és a `docker compose logs web` a valós ügyfél-címeket mutatja, nem a proxyét. Enélkül a sebességkorlát mindenkit egy vödörbe tesz.
+- [ ] A `migrate` naplójában nincs „FIGYELEM: a UniPortal compose-réteg NEM töltődött be”.
+- [ ] A `migrate` naplójának biztonsági önellenőrzése (`--- UniPortal biztonsagi onellenorzes ---`) nem ír FIGYELEM sort.
+- [ ] `WHATSAPP_APP_SECRET` és `WHATSAPP_VERIFY_TOKEN` ki van töltve — különben a webhook szándékosan nem üzemel (503).
+- [ ] Néhány perc valódi használat után a `docker compose logs web | grep limiting` üres (a korlát nem akadályozza a normál munkát).
 - [ ] A szerver és a Docker frissítései ütemezve vannak.
 
 ## 12. Ismert korlátok
 
 - **CDN-függés:** a felhasználók böngészője néhány könyvtárat nyilvános CDN-ről tölt: cdn.jsdelivr.net (supabase-js, PDF-előnézet), cdn.tailwindcss.com, unpkg.com (ikonok), fonts.googleapis.com (betűtípus). Zárt hálózaton ezeket helyben kellene kiszolgálni.
 - **Demó adatok:** a 01-es migráció bemutató adatokat is betölt (ügynökségek, hallgatók, számlák, kampányok stb.). Ezek a mostani éles rendszerben is látszanak. A demó *fiókokat* a `migrate` lezárja, de az adatok eltávolítása külön feladat.
-- **WhatsApp:** a `whatsapp-send` és `whatsapp-webhook` függvények a `.env` `WHATSAPP_*` soraival működnek; ha üresek, a WhatsApp-küldés nem működik. A Meta webhook címe: `https://<domain>/functions/v1/whatsapp-webhook`. A `WHATSAPP_APP_SECRET`-et mindenképp állítsd be: nélküle a webhook az aláírás nélküli kéréseket is fogadja (hitelesítetlenként jelölve). A beállítás után futtasd: `docker compose up -d`.
+- **WhatsApp:** a `whatsapp-send` és `whatsapp-webhook` függvények a `.env` `WHATSAPP_*` soraival működnek; ha üresek, a WhatsApp-küldés nem működik. A Meta webhook címe: `https://<domain>/functions/v1/whatsapp-webhook`. A `WHATSAPP_APP_SECRET` és a `WHATSAPP_VERIFY_TOKEN` **kötelező**: e kettő nélkül a webhook szándékosan nem üzemel (503-at ad). Korábban ilyenkor átengedte az aláírás nélküli kéréseket is (hitelesítetlenként jelölve) — vagyis bárki írhatott az ügyintézői beérkezett mappába. A beállítás után futtasd: `docker compose up -d`.
+- **A `dorm` séma a REST API-n is kint van:** a `.env` `PGRST_DB_SCHEMAS` sora `public,graphql_public,dorm` (a hivatalos alapértelmezés csak `public,graphql_public`), és a 26-os migráció `grant select on all tables in schema dorm to authenticated`-et ad. Így van rendjén — a felület közvetlenül a `dorm` sémából olvas (`features/dorm.jsx`, `features/dorm-views.jsx`) —, és minden `dorm` táblán be van kapcsolva az RLS, tehát ez nem nyitott ajtó. A `dorm` policy-k viszont abban a feltevésben készültek, hogy a sémát csak a saját RPC-ken át érik el; **érdemes egyszer átnézni őket abból a szemszögből, hogy bármelyik tábla közvetlenül is lekérdezhető.**
 - **Levélsablonok:** csak a jelszó-visszaállító levél magyarított, a többi a Supabase alap angol sablonja.
 
 ## 13. Csak a felület, a felhős Supabase-szel

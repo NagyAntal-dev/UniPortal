@@ -1,0 +1,58 @@
+#!/bin/sh
+# ============================================================================
+# UniPortal — a sebességkorlát alapértékei.
+#
+# Az nginx-kép belépési pontja a /docker-entrypoint.d/ fájljait NÉVSORRENDBEN
+# dolgozza fel, és a .envsh végűeket BEOLVASSA (source), nem futtatja — így az
+# itt beállított változók a 20-envsubst-on-templates.sh sablonhelyettesítéséig
+# is élnek. Ezért 10-es: a 20-as előtt kell lefutnia.
+#
+# MIÉRT KELL: az envsubst a NEM LÉTEZŐ (és az ÜRES) változót üres szövegre
+# cseréli. A docker-compose környezet-átadása pedig üres értéket ad, ha a .env
+# nem definiálja a változót. Abból "rate=;" lenne a default.conf-ban, és az
+# nginx el sem indulna. Itt tehát MINDEN üres értéket alapértékre cserélünk.
+#
+# A mértékek a felület MÉRT terheléséhez igazodnak: egy nyitott fül tartósan
+# ~13-14 kérés/perc (üzenetek 20-30 mp-enként, naptár 45-60 mp, munkaasztal
+# 60 mp), nézetváltáskor 20-40 kérés egyszerre, fülváltáskor 5 RPC. A `burst`
+# nyeli el ezeket a lökéseket, a `rate` a tartós terhelést szabja meg.
+#
+# Hangolás: írd be a .env-be, majd `docker compose up -d`.
+# ============================================================================
+
+# Megbízható TLS-proxy(k) — a valós ügyfél-IP ettől függ. Lásd DEPLOY.md 5.
+: "${UNIPORTAL_TRUSTED_PROXY:=127.0.0.1}"
+
+# Bejelentkezés, regisztráció, jelszókérés — IP szerint.
+# KÖZÖS NAT MÖGÖTT EZ AZ EGÉSZ INTÉZMÉNYRE VONATKOZIK, ezért bőkezű az
+# alapérték. Ha a telepítés nem közös kimenő IP mögött van, húzd le (20r/m).
+: "${UNIPORTAL_RL_AUTH:=60r/m}"
+: "${UNIPORTAL_RL_AUTH_BURST:=120}"
+
+# A többi auth-hívás (/user, /verify, /logout): a felület normál működése.
+: "${UNIPORTAL_RL_AUTHGEN:=240r/m}"
+
+# Adat-API. Munkamenetenként, nem IP-nként — lásd a default.conf.template
+# "vödör" térképét.
+: "${UNIPORTAL_RL_API:=20r/s}"
+: "${UNIPORTAL_RL_API_BURST:=100}"
+
+# Edge Function-ök (WhatsApp küldés és webhook).
+: "${UNIPORTAL_RL_FN:=30r/m}"
+: "${UNIPORTAL_RL_FN_BURST:=20}"
+
+# Tároló: feltöltés és képátalakítás.
+: "${UNIPORTAL_RL_STORAGE:=10r/s}"
+: "${UNIPORTAL_RL_STORAGE_BURST:=40}"
+
+# Egyidejű kapcsolatok egy IP-ről. A valós idejű (WebSocket) kapcsolatokat is
+# ez fogja, és közös NAT mögött egy kampusz sok száz kapcsolatot nyit, ezért
+# magas az alapérték.
+: "${UNIPORTAL_CONN_LIMIT:=200}"
+
+export UNIPORTAL_TRUSTED_PROXY \
+       UNIPORTAL_RL_AUTH UNIPORTAL_RL_AUTH_BURST UNIPORTAL_RL_AUTHGEN \
+       UNIPORTAL_RL_API UNIPORTAL_RL_API_BURST \
+       UNIPORTAL_RL_FN UNIPORTAL_RL_FN_BURST \
+       UNIPORTAL_RL_STORAGE UNIPORTAL_RL_STORAGE_BURST \
+       UNIPORTAL_CONN_LIMIT

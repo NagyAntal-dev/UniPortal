@@ -62,6 +62,21 @@ services:
       UNIPORTAL_SUPABASE_URL: ${UNIPORTAL_SUPABASE_URL:-}
       UNIPORTAL_SUPABASE_ANON_KEY: ${ANON_KEY}
       API_GW_UPSTREAM: api-gw:8000
+      # ---- Sebességkorlát (deploy/web/10-uniportal-defaults.envsh) ----
+      # Üresen hagyva a képbe épített alapérték érvényes. A megbízható proxy
+      # címét ÉLESBEN mindenképp állítsd be, különben a korlát minden
+      # látogatót egy vödörbe tesz. Lásd DEPLOY.md, 5. pont.
+      UNIPORTAL_TRUSTED_PROXY: ${UNIPORTAL_TRUSTED_PROXY:-}
+      UNIPORTAL_RL_AUTH: ${UNIPORTAL_RL_AUTH:-}
+      UNIPORTAL_RL_AUTH_BURST: ${UNIPORTAL_RL_AUTH_BURST:-}
+      UNIPORTAL_RL_AUTHGEN: ${UNIPORTAL_RL_AUTHGEN:-}
+      UNIPORTAL_RL_API: ${UNIPORTAL_RL_API:-}
+      UNIPORTAL_RL_API_BURST: ${UNIPORTAL_RL_API_BURST:-}
+      UNIPORTAL_RL_FN: ${UNIPORTAL_RL_FN:-}
+      UNIPORTAL_RL_FN_BURST: ${UNIPORTAL_RL_FN_BURST:-}
+      UNIPORTAL_RL_STORAGE: ${UNIPORTAL_RL_STORAGE:-}
+      UNIPORTAL_RL_STORAGE_BURST: ${UNIPORTAL_RL_STORAGE_BURST:-}
+      UNIPORTAL_CONN_LIMIT: ${UNIPORTAL_CONN_LIMIT:-}
     depends_on:
       api-gw:
         condition: service_healthy

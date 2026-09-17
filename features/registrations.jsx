@@ -387,7 +387,14 @@ function RegistrationsView({ user, onCountChange }) {
                   </tr>
                 );
                 const st = REG_STATUS_STYLE[r.approval_status] || REG_STATUS_STYLE.pending;
-                const chosen = roleDraft[r.id] || r.requested_role || r.role || 'STUDENT';
+                // A legördülő ALAPÉRTÉKE szándékosan NEM a kért szerepkör.
+                // A requested_role a regisztráció beküldője által megadott,
+                // ellenőrizetlen érték (auth.signUp options.data) — a 68-as
+                // migráció óta a profiles.role-ba már nem kerülhet be, de a
+                // kérés maga itt látszik. Ha ez lenne az alapérték, a sort
+                // végigkattintó superadmin észrevétlenül osztana ki magasabb
+                // jogot. A kért szerepkör külön, jelölve jelenik meg.
+                const chosen = roleDraft[r.id] || r.role || 'STUDENT';
                 const busy = busyId === r.id;
                 const isSelf = !!(user && (user.id === r.id || user.email === r.email));
                 return (
@@ -426,7 +433,16 @@ function RegistrationsView({ user, onCountChange }) {
                           </select>
                         )
                       ) : (
-                        REG_ROLE_LABEL[r.requested_role || r.role] || r.requested_role || r.role || '—'
+                        <>
+                          {REG_ROLE_LABEL[r.role] || r.role || '—'}
+                          {/* A KÉRT szerepkör külön, jelölve: ez a beküldő
+                              ellenőrizetlen kívánsága, nem a tényleges jog. */}
+                          {r.requested_role && r.requested_role !== r.role && (
+                            <span className="ml-2 text-[11px] font-bold text-amber-600" title="A regisztráló ezt kérte — nem a tényleges szerepkör.">
+                              kért: {REG_ROLE_LABEL[r.requested_role] || r.requested_role}
+                            </span>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="px-5 py-4 text-[13px] text-slate-500">{REG_fmtDate(r.created_at)}</td>
@@ -464,7 +480,7 @@ function RegistrationsView({ user, onCountChange }) {
                       ) : (
                         <div className="flex items-center gap-2 justify-end">
                           {r.approval_status === 'rejected' && (
-                            <button disabled={busy} onClick={() => decide(r, 'approved', r.requested_role || r.role || 'STUDENT')}
+                            <button disabled={busy} onClick={() => decide(r, 'approved', r.role || 'STUDENT')}
                               className="px-3 py-2 rounded-xl text-[13px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 transition-colors">
                               Mégis jóváhagyom
                             </button>

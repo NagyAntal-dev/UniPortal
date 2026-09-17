@@ -216,6 +216,19 @@ function FEED_CelkozonsegValaszto({ ertek, onValt }) {
 const FEED_loadRsvps = () => dlSelect(RSVP_TABLE, RSVP_LS, () => [], 'created_at', false);
 const FEED_loadTix = () => dlSelect(TIX_TABLE, TIX_LS, () => [], 'created_at', false);
 
+// A gomb hivatkozását szerkesztő írja be, szabad szövegként. A React a
+// href attribútumot nem szűri, tehát egy "javascript:…" cím a megnyitáskor
+// kódot futtatna a felület saját originjén. Csak http(s)-t engedünk át.
+function FEED_biztonsagosHivatkozas(url) {
+  const s = String(url || '').trim();
+  if (!s) return '';
+  try {
+    const u = new URL(s, window.location.origin);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+  } catch (e) {
+    return '';
+  }
+}
 function FEED_img(url, className, alt) {
   return <img src={url} alt={alt || ''} loading="lazy" className={className} referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = 'none'; }} />;
 }
@@ -444,8 +457,8 @@ function FeedCard({ post, user, rsvps, tix, onChange, onDelete }) {
         )}
 
         {/* generic CTA */}
-        {post.cta_label && post.cta_href && (
-          <a href={post.cta_href} target="_blank" rel="noreferrer" className={U_btnGhost + ' mt-4'}>{post.cta_label} <Lucide.ArrowUpRight size={15} /></a>
+        {post.cta_label && FEED_biztonsagosHivatkozas(post.cta_href) && (
+          <a href={FEED_biztonsagosHivatkozas(post.cta_href)} target="_blank" rel="noreferrer" className={U_btnGhost + ' mt-4'}>{post.cta_label} <Lucide.ArrowUpRight size={15} /></a>
         )}
 
         <div className="mt-5 pt-4 border-t border-slate-50 flex items-center gap-2 text-[12px] text-slate-400 font-bold">

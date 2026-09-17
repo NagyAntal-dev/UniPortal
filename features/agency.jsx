@@ -145,7 +145,7 @@ async function AGENCY_upload(file, ownerId, agencyId) {
   const path = [ownerId, 'agency', agencyId,
     Date.now().toString(36) + '-' + safe].join('/');
   const { error } = await window.sb.storage.from('documents').upload(path, file, {
-    upsert: true, contentType: file.type || 'application/octet-stream',
+    upsert: true, contentType: FELT_dokumentumTipus(file),
   });
   if (error) throw new Error(AGENCY_msg(error));
   return path;
