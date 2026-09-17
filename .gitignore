@@ -23,3 +23,8 @@ node_modules/
 deploy/supabase/volumes/db/data/
 deploy/supabase/volumes/storage/
 backups/
+
+# Local enrollment imports contain personal data and account credentials.
+private-imports/
+NJE kurzusfelvételek*.xlsx
+tools/__pycache__/

@@ -1,0 +1,259 @@
+-- Generated NJE import. Run as database owner after the UniPortal migrations.
+-- Private personal data. Never add the generated file to the migration manifest.
+-- Existing credentials and records are preserved; conflicts abort atomically.
+begin;
+set local search_path = public, extensions, pg_temp;
+set local standard_conforming_strings = on;
+set local lock_timeout = '15s';
+set local statement_timeout = '0';
+select pg_advisory_xact_lock(hashtext('uniportal-nje-workbook-import'));
+
+do $$
+begin
+  if auth.uid() is not null then
+    raise exception 'Run this import as the database owner without an end-user JWT';
+  end if;
+end $$;
+
+-- The UI supports TEACHER, but migration 39 seeds only the original six roles.
+insert into public.role_definition(kod,nev,leiras,sorrend,beepitett)
+values ('TEACHER','Oktató','Kurzusok és saját oktatói eredmények.',70,false)
+on conflict (kod) do nothing;
+
+create temp table nje_accounts (
+  key text primary key, role text not null, code text not null, name text not null,
+  email text not null unique, password_hash text not null,
+  uid uuid, is_new boolean not null default false
+) on commit drop;
+create temp table nje_attributes (
+  key text primary key references nje_accounts(key), neptun text not null unique,
+  tagozat text, kepzesi_szint text, szak text, kar text, szak_kod text, nyelv text, telephely text
+) on commit drop;
+create temp table nje_orgs (code text primary key) on commit drop;
+create temp table nje_courses (
+  term text, code text, name_hu text, name_en text, lang text, org_code text,
+  letszam int, van_orarendi_info boolean, vizsgakurzus boolean, leiras text,
+  primary key (term, code)
+) on commit drop;
+create temp table nje_teachers (
+  code text primary key, name text, key text references nje_accounts(key), tid uuid
+) on commit drop;
+create temp table nje_links (
+  term text, course_code text, teacher_code text references nje_teachers(code), share_pct int,
+  primary key(term,course_code,teacher_code),
+  foreign key(term,course_code) references nje_courses(term,code)
+) on commit drop;
+create temp table nje_enrollments (
+  term text, course_code text, key text references nje_accounts(key),
+  primary key(term,course_code,key),
+  foreign key(term,course_code) references nje_courses(term,code)
+) on commit drop;
+
+-- INSERT_WORKBOOK_DATA
+
+-- Resolve teachers before users: a previously linked teacher may have a real email.
+create temp table nje_teacher_matches on commit drop as
+select n.code, t.id from nje_teachers n join echo.teacher t
+  on t.code = n.code or (t.ext_source = 'nje-workbook' and t.ext_id = n.code)
+  or lower(btrim(t.name)) = lower(n.name);
+do $$
+begin
+  if exists (select code from nje_teacher_matches group by code having count(distinct id) > 1)
+     or exists (select id from nje_teacher_matches group by id having count(distinct code) > 1) then
+    raise exception 'Ambiguous existing teacher match; resolve duplicate names/codes before importing';
+  end if;
+end $$;
+update nje_teachers n set tid = m.id from nje_teacher_matches m where m.code = n.code;
+update nje_teachers set tid = gen_random_uuid() where tid is null;
+
+create temp table nje_account_matches on commit drop as
+select n.key, u.id from nje_accounts n join auth.users u on lower(u.email) = n.email
+union
+select n.key, a.profile_id from nje_accounts n join public.student_attributes a
+  on n.role = 'STUDENT' and upper(btrim(a.neptun)) = n.code
+union
+select n.key, t.profile_id from nje_teachers n join echo.teacher t on t.id = n.tid
+ where t.profile_id is not null
+union
+select n.key, u.id from nje_teachers n join echo.teacher t on t.id = n.tid
+ join auth.users u on lower(u.email) = lower(t.email) where nullif(t.email, '') is not null;
+
+do $$
+begin
+  if exists (select key from nje_account_matches group by key having count(distinct id) > 1)
+     or exists (select id from nje_account_matches group by id having count(distinct key) > 1) then
+    raise exception 'Ambiguous account match by email/Neptun/teacher; no data imported';
+  end if;
+end $$;
+update nje_accounts n set uid = m.id from nje_account_matches m where m.key = n.key;
+update nje_accounts set uid = gen_random_uuid(), is_new = true where uid is null;
+create unique index on nje_accounts(uid);
+
+do $$
+begin
+  if exists (
+    select 1 from nje_accounts n left join public.profiles p on p.id = n.uid
+    join auth.users u on u.id = n.uid
+    where not n.is_new and (p.id is null or p.approval_status is distinct from 'approved'
+      or (n.role = 'STUDENT' and p.role <> 'STUDENT')
+      or (n.role = 'TEACHER' and p.role not in ('TEACHER','ADMIN','SUPERADMIN'))
+      or u.deleted_at is not null or u.banned_until > now())
+  ) then
+    raise exception 'An existing matched account is missing its profile, unapproved, disabled, or has an incompatible role';
+  end if;
+  if exists (select 1 from nje_accounts n join public.student_attributes a on a.profile_id = n.uid
+    where n.role = 'STUDENT' and nullif(btrim(a.neptun),'') is not null
+      and upper(btrim(a.neptun)) <> n.code) then
+    raise exception 'Existing account has a different Neptun code';
+  end if;
+  if exists (select 1 from nje_teachers n join nje_accounts a on a.key = n.key
+    join echo.teacher t on t.profile_id = a.uid where t.id <> n.tid) then
+    raise exception 'Existing account is already linked to a different teacher';
+  end if;
+  if exists (select 1 from nje_teachers n join echo.teacher t on t.id = n.tid where not t.active) then
+    raise exception 'Matched teacher is inactive; review before importing';
+  end if;
+end $$;
+
+insert into auth.users (
+  id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+  created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change, email_change_token_new,
+  email_change_token_current, reauthentication_token
+)
+select uid, '00000000-0000-0000-0000-000000000000'::uuid, 'authenticated', 'authenticated',
+  email, password_hash, now(), now(), now(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  jsonb_build_object('name', name, 'role', role, 'import_source', 'nje-workbook', 'import_key', key),
+  '', '', '', '', '', ''
+from nje_accounts where is_new;
+
+-- GoTrue versions differ in their optional token columns. Initialize only
+-- newly imported accounts; never reset an existing recovery/change token.
+do $$
+declare col text;
+begin
+  foreach col in array array['phone_change','phone_change_token'] loop
+    if exists (select 1 from information_schema.columns
+      where table_schema='auth' and table_name='users' and column_name=col) then
+      execute format('update auth.users u set %I = '''' from nje_accounts n
+                      where n.uid=u.id and n.is_new and u.%I is null', col, col);
+    end if;
+  end loop;
+end $$;
+
+insert into auth.identities (id,user_id,provider,provider_id,identity_data,created_at,updated_at)
+select gen_random_uuid(), uid, 'email', uid::text,
+  jsonb_build_object('sub',uid::text,'email',email,'email_verified',true), now(),now()
+from nje_accounts where is_new;
+
+-- Signup deliberately downgrades TEACHER metadata to STUDENT. Assign the
+-- authorized role here, after the trigger, only for accounts created above.
+insert into public.profiles (id,email,name,role,requested_role,approval_status,approved_at,approved_by)
+select uid,email,name,role,role,'approved',now(),'nje-workbook-import'
+from nje_accounts where is_new
+on conflict (id) do update set role=excluded.role, requested_role=excluded.requested_role,
+  approval_status=excluded.approval_status, approved_at=excluded.approved_at, approved_by=excluded.approved_by;
+
+insert into public.student_attributes
+  (profile_id,neptun,tagozat,kepzesi_szint,szak,kar,szak_kod,nyelv,telephely,forras)
+select a.uid,n.neptun,n.tagozat,n.kepzesi_szint,n.szak,n.kar,n.szak_kod,n.nyelv,n.telephely,'nje-workbook'
+from nje_attributes n join nje_accounts a on a.key=n.key
+on conflict (profile_id) do update set
+  neptun=coalesce(nullif(btrim(student_attributes.neptun),''),excluded.neptun);
+
+-- Source gives organization codes but no names or verified hierarchy.
+insert into echo.org_unit (code,name_hu,kind,ext_source,ext_id,ext_synced_at)
+select code,code,case when code='NJE' then 'egyetem'
+  when code in ('NJE-GAMF','NJE-GTK','NJE-KVK') then 'kar' else 'tanszek' end,
+  'nje-workbook',code,now() from nje_orgs
+on conflict (code) do nothing;
+
+insert into echo.teacher (id,code,name,email,profile_id,ext_source,ext_id,ext_synced_at)
+select n.tid,n.code,n.name,u.email,a.uid,'nje-workbook',n.code,now()
+from nje_teachers n join nje_accounts a on a.key=n.key join auth.users u on u.id=a.uid
+on conflict (id) do update set profile_id=excluded.profile_id,
+  email=coalesce(nullif(echo.teacher.email,''),excluded.email);
+
+-- Mirror the OKTATO grant established by echo_teacher_link(). Do not revive
+-- a revoked/expired grant without explicit review.
+do $$
+begin
+  if exists (select 1 from nje_teachers n join echo.teacher t on t.id=n.tid
+    join echo.role_grant g on g.person=t.profile_id and g.role='OKTATO'
+      and g.scope_org is not distinct from t.org_unit_id
+    where g.expires_at <= now()) then
+    raise exception 'Matched teacher has an expired/revoked OKTATO grant';
+  end if;
+end $$;
+insert into echo.role_grant (person,role,scope_org,megjegyzes)
+select t.profile_id,'OKTATO',t.org_unit_id,'NJE workbook account import'
+from nje_teachers n join echo.teacher t on t.id=n.tid
+where not exists (select 1 from echo.role_grant g where g.person=t.profile_id
+  and g.role='OKTATO' and g.scope_org is not distinct from t.org_unit_id);
+
+insert into echo.course (code,name_hu,name_en,term,lang,org_unit_id,letszam,
+  van_orarendi_info,vizsgakurzus,leiras,ext_source,ext_id,ext_synced_at)
+select n.code,n.name_hu,n.name_en,n.term,n.lang,o.id,n.letszam,
+  n.van_orarendi_info,n.vizsgakurzus,n.leiras,'nje-workbook',n.term||':'||n.code,now()
+from nje_courses n join echo.org_unit o on o.code=n.org_code
+on conflict (code,term) do nothing;
+
+insert into echo.course_teacher (course_id,teacher_id,share_pct,role,ext_source,ext_synced_at)
+select c.id,t.tid,n.share_pct,'oktato','nje-workbook',now()
+from nje_links n join echo.course c on c.code=n.course_code and c.term=n.term
+join nje_teachers t on t.code=n.teacher_code
+on conflict (course_id,teacher_id) do nothing;
+
+-- Preserve an intentional withdrawal instead of silently reactivating it.
+do $$
+begin
+  if exists (select 1 from nje_enrollments n
+    join echo.course c on c.code=n.course_code and c.term=n.term
+    join nje_accounts a on a.key=n.key
+    join echo.enrollment e on e.course_id=c.id and e.student_key=a.uid
+    where e.status <> 'active') then
+    raise exception 'An existing enrollment is dropped; review before importing';
+  end if;
+end $$;
+insert into echo.enrollment (course_id,student_key,status,ext_source,ext_id,ext_synced_at)
+select c.id,a.uid,'active','nje-workbook',n.term||':'||n.course_code||':'||a.code,now()
+from nje_enrollments n join echo.course c on c.code=n.course_code and c.term=n.term
+join nje_accounts a on a.key=n.key
+on conflict (course_id,student_key) do nothing;
+
+create temp table nje_checks (item text, expected bigint, actual bigint) on commit drop;
+insert into nje_checks
+select 'Student accounts',count(*),count(p.id) filter(where p.role='STUDENT' and p.approval_status='approved')
+  from nje_accounts a left join public.profiles p on p.id=a.uid where a.role='STUDENT'
+union all
+select 'Teacher profiles and grants',count(*),count(t.id) filter(where t.profile_id=a.uid and exists
+  (select 1 from echo.role_grant g where g.person=a.uid and g.role='OKTATO'
+   and (g.expires_at is null or g.expires_at>now())))
+  from nje_teachers n join nje_accounts a on a.key=n.key left join echo.teacher t on t.id=n.tid
+union all
+select 'Courses',count(*),count(c.id) from nje_courses n
+  left join echo.course c on c.code=n.code and c.term=n.term
+union all
+select 'Teacher assignments',count(*),count(ct.teacher_id) from nje_links n
+  join echo.course c on c.code=n.course_code and c.term=n.term
+  join nje_teachers t on t.code=n.teacher_code
+  left join echo.course_teacher ct on ct.course_id=c.id and ct.teacher_id=t.tid
+union all
+select 'Enrollments',count(*),count(e.id) filter(where e.status='active') from nje_enrollments n
+  join echo.course c on c.code=n.course_code and c.term=n.term
+  join nje_accounts a on a.key=n.key
+  left join echo.enrollment e on e.course_id=c.id and e.student_key=a.uid
+union all
+select 'New email identities',count(*),count(i.id) from nje_accounts a
+  left join auth.identities i on i.user_id=a.uid and i.provider='email' where a.is_new;
+do $$
+begin
+  if exists(select 1 from nje_checks where expected<>actual) then
+    raise exception 'Import verification failed; all changes rolled back';
+  end if;
+end $$;
+select item,expected,actual,expected=actual as ok from nje_checks
+union all select 'New accounts (CSV credentials apply)',count(*),count(*),true from nje_accounts where is_new
+union all select 'Reused accounts (keep existing credentials)',count(*),count(*),true from nje_accounts where not is_new;
+commit;
