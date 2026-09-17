@@ -13588,6 +13588,10 @@ Object.entries({
   'Ez a kérdés kötelező — válaszolj rá a továbblépéshez.': 'This question is required — answer it to continue.',
   'Az „Egyéb” mellé írd le, mi volt az, és add hozzá a + gombbal.': 'Next to “Other”, write what it was and add it with the + button.',
   'Egy „Egyéb” válasz mellé még szöveg kell — pirossal jelöltük.': 'An “Other” answer still needs text — marked in red.',
+  'Nem lett kitöltve — ez a kérdés kötelező.': 'Not answered — this question is required.',
+  'Az „Egyéb” mellé hiányzik a szöveg — írd le, mi volt az, és add hozzá a + gombbal.': 'The text next to “Other” is missing — write what it was and add it with the + button.',
+  'Nem lett kitöltve — legalább egy célt adj meg (e nélkül a félév végén nincs mit értékelni).': 'Not filled in — add at least one goal (otherwise there is nothing to evaluate at the end of the term).',
+  'A hiányzó válaszokat pirossal jelöltük a kérdéseknél.': 'Missing answers are marked in red at the questions.',
 }).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
 HU_EN_PHRASES.push(
   [/^Még (\d+) kötelező kérdés vár válaszra — pirossal jelöltük\.$/, '$1 required question(s) still need an answer — marked in red.'],

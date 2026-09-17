@@ -1102,8 +1102,8 @@ function ECHO_Question({ q: rawQ, index, value, onChange, lang, seed, ctx, hiba 
     <div className={'py-6 border-b border-slate-50 last:border-0 scroll-mt-24 ' + (hiba ? '-mx-3 px-3 rounded-2xl bg-red-50/60 ring-1 ring-red-200' : '')}
       data-echo-kerdes={q.id} data-echo-hiba={hiba || undefined}>
       <div className="flex items-start gap-3 mb-4">
-        <span className="flex-none w-7 h-7 rounded-xl bg-slate-100 text-slate-500 text-xs font-black flex items-center justify-center mt-0.5">
-          {index}
+        <span className={'flex-none w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center mt-0.5 ' + (hiba ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500')}>
+          {hiba ? <Lucide.AlertCircle size={15} /> : index}
         </span>
         <div className="min-w-0">
           <h4 className="text-[15px] sm:text-base font-black text-slate-900 leading-snug">
@@ -1117,8 +1117,8 @@ function ECHO_Question({ q: rawQ, index, value, onChange, lang, seed, ctx, hiba 
           )}
           {/* A hiba a kérdésnél szól, nem az oldal alján (hibajelentés). */}
           {hiba && (
-            <p className="text-xs font-bold text-red-600 mt-1.5" role="alert">
-              {hiba === 'egyeb' ? 'Az „Egyéb” mellé írd le, mi volt az, és add hozzá a + gombbal.' : 'Ez a kérdés kötelező — válaszolj rá a továbblépéshez.'}
+            <p className="inline-flex items-center gap-1.5 rounded-lg bg-red-100 text-red-700 text-xs font-black px-2 py-1 mt-2" role="alert" data-echo-kerdes-hiba={hiba}>
+              {hiba === 'egyeb' ? 'Az „Egyéb” mellé hiányzik a szöveg — írd le, mi volt az, és add hozzá a + gombbal.' : 'Nem lett kitöltve — ez a kérdés kötelező.'}
             </p>
           )}
         </div>
@@ -1226,15 +1226,21 @@ function ECHO_dateTime(s) {
    értékelésbe — a kettő közt egyedül a "célteljesülés" összegzés megy át.
    ------------------------------------------------------------ */
 
-function ECHO_ListEditor({ title, hint, items, setItems, max = 3, placeholder }) {
+function ECHO_ListEditor({ title, hint, items, setItems, max = 3, placeholder, hiba, azon }) {
   const setAt = (i, v) => { const a = items.slice(); a[i] = v; setItems(a); };
   const del   = (i)     => setItems(items.filter((_, k) => k !== i));
   return (
-    <div>
+    <div className={'scroll-mt-24 ' + (hiba ? '-mx-3 px-3 py-3 rounded-2xl bg-red-50/60 ring-1 ring-red-200' : '')}
+      data-echo-kerdes={azon || undefined} data-echo-hiba={hiba ? 'kotelezo' : undefined}>
       <div className="flex items-baseline justify-between mb-2">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{title}</span>
+        <span className={'text-[10px] font-black uppercase tracking-widest ' + (hiba ? 'text-red-600' : 'text-slate-400')}>{title}</span>
         <span className="text-[11px] font-bold text-slate-400">{items.length}/{max}</span>
       </div>
+      {hiba && (
+        <p className="inline-flex items-center gap-1.5 rounded-lg bg-red-100 text-red-700 text-xs font-black px-2 py-1 mb-2" role="alert" data-echo-kerdes-hiba="kotelezo">
+          <Lucide.AlertCircle size={13} className="flex-none" /> {hiba}
+        </p>
+      )}
       {hint && <p className="text-xs text-slate-400 font-medium mb-3">{hint}</p>}
       <div className="space-y-2">
         {items.map((v, i) => (
@@ -1338,7 +1344,11 @@ function ECHO_GoalsView({ course, onBack, onSaved }) {
   const blocked = noGoal || introMissing.length > 0;
 
   const save = async () => {
-    if (blocked) { setTouched(true); return; }
+    if (blocked) {
+      setTouched(true);
+      ECHO_elsoHibara(introMissing[0] || { id: 'echo-celok' });
+      return;
+    }
     setBusy(true); setErr(''); setTouched(false);
     try {
       await ECHO_api.saveGoals(course.campaign_id, course.course_id,
@@ -1396,6 +1406,7 @@ function ECHO_GoalsView({ course, onBack, onSaved }) {
             {introQs.map((q, i) => (
               <ECHO_Question key={q.id} q={q} index={i + 1} lang={lang} seed={'goals|' + course.course_id}
                 ctx={{ course: courseMeta }}
+                hiba={touched && introMissing.indexOf(q) >= 0 ? 'kotelezo' : null}
                 value={intro[q.id]}
                 onChange={(v) => { setIntro(prev => ({ ...prev, [q.id]: v })); setTouched(false); }} />
             ))}
@@ -1403,7 +1414,8 @@ function ECHO_GoalsView({ course, onBack, onSaved }) {
         )}
 
         <div className="space-y-8">
-          <ECHO_ListEditor title="Céljaim ezen a kurzuson" max={3} items={goals} setItems={setGoals}
+          <ECHO_ListEditor title="Céljaim ezen a kurzuson" max={3} items={goals} setItems={(v) => { setGoals(v); setTouched(false); }}
+            azon="echo-celok" hiba={touched && noGoal ? 'Nem lett kitöltve — legalább egy célt adj meg (e nélkül a félév végén nincs mit értékelni).' : null}
             placeholder="Pl. magabiztosan írjak SQL lekérdezést"
             hint="Legalább 1, legfeljebb 3 cél. Konkrét, félév végén eldönthető megfogalmazás segít a legtöbbet." />
           <ECHO_ListEditor title="Elvárásaim az oktatótól" max={3} items={exps} setItems={setExps}
@@ -1411,25 +1423,11 @@ function ECHO_GoalsView({ course, onBack, onSaved }) {
             hint="Legfeljebb 3 elvárás — ez a rész nem kötelező." />
         </div>
 
-        {/* MEGMONDJUK, MI HIÁNYZIK. Egy letiltott gomb magyarázat nélkül itt
-            azt jelentené, hogy a hallgató nem tudja, mit kellene tennie. */}
+        {/* A hiányt a kérdéseknél jelöljük; itt csak egy rövid utalás marad a gomb közelében. */}
         {touched && blocked && (
-          <div className="mt-6 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 text-sm font-bold text-amber-700 flex gap-2">
-            <Lucide.AlertTriangle size={16} className="flex-none mt-0.5" />
-            <div className="space-y-1.5">
-              {noGoal && (
-                <p>Legalább egy célt meg kell fogalmaznod — e nélkül a félév végén
-                   nincs mit értékelni, és a „Célok teljesülése" szakasz kimarad
-                   a kérdőívből.</p>
-              )}
-              {introMissing.map(q => (
-                <p key={'in_' + q.id} className="font-medium">
-                  Válaszolatlan bevezető kérdés:{' '}
-                  <span className="font-bold"><ECHO_Src>{ECHO_txt(q, lang)}</ECHO_Src></span>
-                </p>
-              ))}
-            </div>
-          </div>
+          <p className="mt-6 text-[12px] font-bold text-red-600 flex items-center gap-1.5" role="alert" data-echo-sav-hiba="1">
+            <Lucide.AlertCircle size={14} className="flex-none" /> A hiányzó válaszokat pirossal jelöltük a kérdéseknél.
+          </p>
         )}
 
         {err && (
@@ -1551,6 +1549,32 @@ function ECHO_otherGaps(compiled, teachers, ans, tans, hasGoals, goalItems) {
     });
   });
   return gaps;
+}
+
+/* Az első olyan lépés, ahol kötelező kérdés válasz nélkül maradt, vagy az „Egyéb”
+   mellől hiányzik a szöveg. Ugyanaz a láthatósági szabály, mint a varázsló
+   visibleQs-ében. { lepes, q } vagy null. */
+function ECHO_elsoHianyosLepes(steps, ans, tans, hasGoals) {
+  for (let i = 0; i < (steps || []).length; i++) {
+    const st = steps[i];
+    if (!st || !st.section) continue;
+    const qs = Array.isArray(st.section.questions) ? st.section.questions : [];
+    let lathato, ertek;
+    if (st.kind === 'teacher') {
+      const bag = (tans && tans[st.teacher.id]) || {};
+      lathato = qs.filter(q => q.repeat === 'teacher' && ECHO_condOk(q.cond, { answers: bag, hasGoals }));
+      ertek = (q) => bag[q.id];
+    } else if (st.kind === 'goal') {
+      lathato = qs.filter(q => q.repeat === 'goal' && ECHO_condOk(q.cond, { answers: ans, hasGoals }));
+      ertek = (q) => ans[ECHO_goalKey(q, st.goal)];
+    } else {
+      lathato = qs.filter(q => !q.repeat && ECHO_condOk(q.cond, { answers: ans, hasGoals }));
+      ertek = (q) => ans[q.id];
+    }
+    const q = lathato.find(x => (x.required && !ECHO_answered(x, ertek(x))) || ECHO_otherMissing(x, ertek(x)));
+    if (q) return { lepes: i, q };
+  }
+  return null;
 }
 
 /* A blokkolt továbblépésnél az első hibás kérdéshez görgetünk. */
@@ -1811,6 +1835,13 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
       setErr('Egyetlen kérdésre sem válaszoltál — üres értékelést nem küldünk be. Lépj vissza, és töltsd ki a kérdéseket.');
       return;
     }
+    /* Ha egy korábbi lépés hiányos (pl. piszkozatból közvetlenül az összegzésre
+       érkezett), oda lépünk vissza, és a hibát a kérdésnél mutatjuk. */
+    const hiany = ECHO_elsoHianyosLepes(steps, ans, tans, hasGoals);
+    if (hiany) {
+      setErr(''); setStep(hiany.lepes); setTouched(true); ECHO_elsoHibara(hiany.q);
+      return;
+    }
     // Végső ellenőrzés a teljes kitöltésen — lásd ECHO_otherGaps.
     const gaps = ECHO_otherGaps(compiled, teachers, ans, tans, hasGoals, goalItems);
     if (gaps.length) {
@@ -2023,27 +2054,6 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
         )}
       </div>
 
-      {touched && blocked > 0 && (
-        <div className="mt-3 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 text-sm font-bold text-amber-700 flex gap-2">
-          <Lucide.AlertTriangle size={16} className="flex-none mt-0.5" />
-          <div className="space-y-1.5">
-            {missing.length > 0 && (
-              <p>Még {missing.length} kötelező kérdés vár válaszra ezen a lépésen.</p>
-            )}
-            {/* MEGMONDJUK, MELYIK kérdésnél és MIÉRT nem enged tovább — egy
-                puszta "hiányzik valami" itt azt jelentené, hogy a hallgató
-                végigpásztázza a lépést anélkül, hogy tudná, mit keres. */}
-            {otherOpen.map(q => (
-              <p key={'oth_' + q.id} className="font-medium">
-                <span className="font-bold">„Egyéb" bejelölve:</span>{' '}
-                <ECHO_Src>{ECHO_txt(ECHO_resolveTokens(q, tokenCtx), lang)}</ECHO_Src>{' '}
-                — írd is le a szövegmezőbe, mi volt az, majd nyomd meg a + gombot.
-                Enélkül a válasz nem értelmezhető.
-              </p>
-            ))}
-          </div>
-        </div>
-      )}
       {err && (
         <div className="mt-3 bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-sm font-bold text-red-600 flex gap-2">
           <Lucide.AlertCircle size={16} className="flex-none mt-0.5" /> {err}
