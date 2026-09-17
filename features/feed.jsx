@@ -32,7 +32,187 @@ function FEED_seed() {
   ];
 }
 
-const FEED_loadPosts = () => dlSelect(FEED_TABLE, FEED_LS, FEED_seed, 'created_at', false);
+/* A demo-bejegyzésekkel csak ÜGYINTÉZŐ tölthet fel üres táblát. Célzott
+   bejegyzéseknél egy hallgató hírfolyama jogosan lehet üres — ilyenkor a régi
+   betöltő a demo-bejegyzéseket mutatta neki, és megpróbálta beírni őket. */
+const FEED_loadPosts = (seedOk) => dlSelect(FEED_TABLE, FEED_LS, seedOk ? FEED_seed : () => [], 'created_at', false);
+
+/* ---------- Célközönség (69_feed_audience.sql) ----------
+   Üres célközönség = mindenki. A szempontok ÉS kapcsolatban, egy szemponton
+   belül VAGY; az egyedi személyek mindig látják. A szűrést az adatbázis
+   sorszintű szabálya végzi (feed_post_visible) — a felület csak összeállítja. */
+/* Ki kezeli a hírfolyamot: a SUPERADMIN is (az isAdmin csak a pontos 'ADMIN'
+   szerepkört ismeri). Ki látja a célközönség-jelölést: minden ügyintéző. */
+const FEED_szerkeszto = (user) => !!(user && ['SUPERADMIN', 'ADMIN'].includes(user.role));
+const FEED_ugyintezo = (user) => !!(user && ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(user.role));
+const FEED_CEL_LISTAK = ['szerep', 'tagozat', 'kepzesi_szint', 'kar', 'szak'];
+const FEED_CEL_TETELEK = ['kurzus', 'csoport', 'szemely'];
+const FEED_SZEREPEK = [['STUDENT', 'Hallgatók és jelentkezők'], ['TEACHER', 'Oktatók'], ['AGENT', 'Ügynökök']];
+const FEED_celUres = () => ({ mod: 'mindenki', szerep: [], tagozat: [], kepzesi_szint: [], kar: [], szak: [], kurzus: [], csoport: [], szemely: [] });
+
+/* A mentendő JSON: csak a nem üres listák, a tételekből csak az azonosító
+   (név SOHA — a célzott hallgatók a sort a célközönséggel együtt olvassák). */
+function FEED_celNormal(c) {
+  if (!c || c.mod !== 'celzott') return null;
+  const out = {};
+  FEED_CEL_LISTAK.forEach(k => { const v = (c[k] || []).filter(Boolean); if (v.length) out[k] = v; });
+  FEED_CEL_TETELEK.forEach(k => { const v = (c[k] || []).map(x => x && x.ref).filter(Boolean); if (v.length) out[k] = v; });
+  return Object.keys(out).length ? out : null;
+}
+
+function FEED_celOsszegzes(aud) {
+  if (!aud || typeof aud !== 'object') return '';
+  const lista = (k) => Array.isArray(aud[k]) ? aud[k].filter(Boolean) : [];
+  const reszek = [];
+  const szerepNev = {}; FEED_SZEREPEK.forEach(([k, v]) => { szerepNev[k] = v; });
+  if (lista('szerep').length) reszek.push(lista('szerep').map(r => szerepNev[r] || r).join(' / '));
+  ['tagozat', 'kepzesi_szint', 'kar', 'szak'].forEach(k => { if (lista(k).length) reszek.push(lista(k).join(' / ')); });
+  if (lista('kurzus').length) reszek.push(lista('kurzus').length + ' kurzus');
+  if (lista('csoport').length) reszek.push(lista('csoport').length + ' csoport');
+  if (lista('szemely').length) reszek.push(lista('szemely').length + ' személy');
+  return reszek.join(' · ');
+}
+
+function FEED_Chipek({ cimke, opciok, valasztott, onValt, ures }) {
+  return (
+    <div>
+      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+        {cimke}{valasztott.length > 0 && <span className="text-primary ml-1.5">{valasztott.length}</span>}
+      </span>
+      {opciok.length === 0 ? (
+        <p className="text-[11px] text-slate-300 font-bold italic">{ures || 'nincs választható érték'}</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+          {opciok.map(o => {
+            const on = valasztott.indexOf(o.ertek) >= 0;
+            return (
+              <button key={o.ertek} type="button" data-feed-cel-chip={o.ertek}
+                onClick={() => onValt(on ? valasztott.filter(x => x !== o.ertek) : valasztott.concat([o.ertek]))}
+                className={'px-2.5 py-1 rounded-xl border text-[11px] font-bold transition-all ' +
+                  (on ? 'border-primary bg-primary/10 text-primary' : 'border-slate-100 text-slate-500 hover:border-slate-300')}>
+                {o.cimke || o.ertek}{o.db != null && <span className="ml-1 font-medium opacity-60">{o.db}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FEED_CelkozonsegValaszto({ ertek, onValt }) {
+  const [attr, setAttr] = useState(null);
+  const [elo, setElo] = useState(null);
+  const [eloBusy, setEloBusy] = useState(false);
+  const [nincsMigracio, setNincsMigracio] = useState(false);
+  const set = (k) => (v) => onValt({ ...ertek, [k]: v });
+  const celzott = ertek.mod === 'celzott';
+
+  useEffect(() => {
+    if (!celzott || attr || !window.sb) return;
+    window.sb.rpc('student_attribute_options')
+      .then(({ data, error }) => setAttr(!error && data ? data : {}))
+      .catch(() => setAttr({}));
+  }, [celzott]);
+
+  const aud = FEED_celNormal(ertek);
+  const kulcs = JSON.stringify(aud);
+  useEffect(() => {
+    if (!celzott || !aud || !window.sb) { setElo(null); return; }
+    let el = true; setEloBusy(true);
+    const t = setTimeout(() => {
+      window.sb.rpc('feed_audience_preview', { p_aud: aud })
+        .then(({ data, error }) => {
+          if (!el) return;
+          if (error) {
+            if (/feed_audience_preview|schema cache|PGRST202/i.test((error.message || '') + (error.code || ''))) setNincsMigracio(true);
+            setElo(null);
+          } else { setNincsMigracio(false); setElo(data); }
+          setEloBusy(false);
+        })
+        .catch(() => { if (el) { setElo(null); setEloBusy(false); } });
+    }, 400);
+    return () => { el = false; clearTimeout(t); };
+  }, [celzott, kulcs]);
+
+  const attrOpc = (k) => ((attr && attr[k]) || []).map(x => ({ ertek: x.ertek, db: x.db }));
+  const betolt = (kind, q) => window.sb.rpc('feed_audience_options', { p_kind: kind, p_q: q || null })
+    .then(({ data, error }) => { if (error) throw error; return data; });
+  const tetel = (k) => (ertek[k] || []);
+  const Picker = typeof ECHO_AudiencePicker === 'function' ? ECHO_AudiencePicker : null;
+
+  return (
+    <div data-feed-celkozonseg="1">
+      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Kinek jelenjen meg?</span>
+      <div className="grid grid-cols-2 gap-2">
+        {[['mindenki', 'Mindenkinek', Lucide.Globe], ['celzott', 'Kiválasztott hallgatóknak', Lucide.Target]].map(([m, felirat, I]) => (
+          <button key={m} type="button" onClick={() => onValt({ ...ertek, mod: m })}
+            className={'flex items-center justify-center gap-2 py-3 rounded-2xl border text-[12px] font-bold transition-all ' +
+              (ertek.mod === m ? 'border-primary bg-primary/5 text-primary' : 'border-slate-100 text-slate-500 hover:border-slate-200')}>
+            <I size={16} /> {felirat}
+          </button>
+        ))}
+      </div>
+
+      {celzott && (
+        <div className="mt-3 rounded-2xl border border-slate-100 p-4 space-y-4">
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            A különböző szempontok <b>együtt</b> érvényesek (pl. Nappali <b>és</b> GAMF kar), egy szemponton
+            belül <b>bármelyik</b> elég (pl. Nappali <b>vagy</b> Levelező). Amit üresen hagysz, az nem szűkít.
+            Az egyedi személyek mindig látják a bejegyzést.
+          </p>
+
+          <FEED_Chipek cimke="Szerepkör" opciok={FEED_SZEREPEK.map(([k, v]) => ({ ertek: k, cimke: v }))}
+            valasztott={ertek.szerep} onValt={set('szerep')} />
+
+          {attr === null ? <SkeletonBar h={60} /> : (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <FEED_Chipek cimke="Tagozat" opciok={attrOpc('tagozat')} valasztott={ertek.tagozat} onValt={set('tagozat')} ures="nincs besorolási adat" />
+              <FEED_Chipek cimke="Képzési szint" opciok={attrOpc('kepzesi_szint')} valasztott={ertek.kepzesi_szint} onValt={set('kepzesi_szint')} ures="nincs besorolási adat" />
+              <FEED_Chipek cimke="Kar" opciok={attrOpc('kar')} valasztott={ertek.kar} onValt={set('kar')} ures="nincs besorolási adat" />
+              <FEED_Chipek cimke="Szak" opciok={attrOpc('szak')} valasztott={ertek.szak} onValt={set('szak')} ures="nincs besorolási adat" />
+            </div>
+          )}
+          <p className="text-[11px] text-slate-400 leading-relaxed -mt-2">
+            A tagozat, szint, kar és szak a Neptun-besorolásból jön: akinek nincs besorolása (pl. még csak jelentkező), azt ezek a szempontok nem érik el.
+          </p>
+
+          {Picker && (
+            <div className="grid gap-3">
+              <Picker kind="course" betolt={betolt} cimke="Kurzusok" ikon={<Lucide.BookOpen size={13} className="text-slate-400" />}
+                sug="Akik a kijelölt kurzusok bármelyikén aktív hallgatók."
+                valasztott={tetel('kurzus')} onValt={set('kurzus')} />
+              <Picker kind="group" betolt={betolt} cimke="Csoportok" ikon={<Lucide.Users size={13} className="text-slate-400" />}
+                sug="A Felhasználók → Csoportok alatt létrehozott csoportok bármelyikének tagjai."
+                valasztott={tetel('csoport')} onValt={set('csoport')} />
+              <Picker kind="user" betolt={betolt} cimke="Egyedi személyek" ikon={<Lucide.User size={13} className="text-slate-400" />}
+                sug="Ők a fenti szempontoktól függetlenül mindig látják."
+                valasztott={tetel('szemely')} onValt={set('szemely')} />
+            </div>
+          )}
+
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3" data-feed-cel-elonezet="1">
+            {nincsMigracio ? (
+              <p className="text-[11px] font-bold text-amber-700">A célzott bejegyzéshez előbb le kell futtatni a 69_feed_audience.sql migrációt.</p>
+            ) : !aud ? (
+              <p className="text-[11px] font-bold text-slate-400">Válassz legalább egy szempontot.</p>
+            ) : (
+              <p className="text-sm font-black text-slate-700 flex items-center gap-2">
+                <Lucide.Eye size={14} className="text-slate-400" />
+                {elo ? elo.osszes + ' fő látja' : '…'}
+                {elo && (elo.oktato > 0 || elo.ugynok > 0) && (
+                  <span className="text-[11px] font-bold text-slate-400">({elo.hallgato} hallgató · {elo.oktato} oktató · {elo.ugynok} ügynök)</span>
+                )}
+                {eloBusy && <Lucide.Loader2 size={13} className="animate-spin text-slate-300" />}
+              </p>
+            )}
+            <p className="text-[11px] text-slate-400 mt-1">Az ügyintézők minden bejegyzést látnak.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 const FEED_loadRsvps = () => dlSelect(RSVP_TABLE, RSVP_LS, () => [], 'created_at', false);
 const FEED_loadTix = () => dlSelect(TIX_TABLE, TIX_LS, () => [], 'created_at', false);
 
@@ -44,9 +224,11 @@ function FEED_img(url, className, alt) {
 function FeedComposer({ open, onClose, onPublished, authorName }) {
   const empty = { type: 'news', title: '', body: '', image_url: '', gallery: '', promo_code: '', discount: '', event_date: '', event_location: '', capacity: '', ticket_code: '', cta_label: '', cta_href: '', pinned: false };
   const [f, setF] = useState(empty);
+  const [cel, setCel] = useState(FEED_celUres());
+  const [hiba, setHiba] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-  useEffect(() => { if (open) setF(empty); }, [open]);
+  useEffect(() => { if (open) { setF(empty); setCel(FEED_celUres()); setHiba(''); } }, [open]);
 
   const uploadImg = async (e) => {
     const file = e.target.files && e.target.files[0]; if (!file) return;
@@ -54,6 +236,9 @@ function FeedComposer({ open, onClose, onPublished, authorName }) {
   };
   const publish = async () => {
     if (!f.title.trim()) return;
+    const aud = FEED_celNormal(cel);
+    if (cel.mod === 'celzott' && !aud) { setHiba('Válassz legalább egy szempontot, vagy állítsd „Mindenkinek”-re.'); return; }
+    setHiba('');
     setBusy(true);
     const row = {
       id: uid('FP'), type: f.type, title: f.title.trim(), body: f.body.trim(),
@@ -65,14 +250,30 @@ function FeedComposer({ open, onClose, onPublished, authorName }) {
       capacity: f.capacity ? Number(f.capacity) : null, ticket_code: f.ticket_code || null,
       cta_label: f.cta_label || null, cta_href: f.cta_href || null, created_at: new Date().toISOString(),
     };
-    await dlInsert(FEED_TABLE, row, FEED_LS);
+    if (aud) {
+      /* Célzott bejegyzés CSAK az adatbázisba mehet: a helyi tárolós tartalék
+         mindenkinek megmutatná, és a szerző azt hinné, közzétette. */
+      try {
+        if (!window.sb) throw new Error('Nincs adatbázis-kapcsolat.');
+        const { error } = await window.sb.from(FEED_TABLE).insert({ ...row, celkozonseg: aud }).select().single();
+        if (error) throw error;
+      } catch (e) {
+        const m = (e && e.message) || '';
+        setHiba(/celkozonseg/i.test(m) ? 'A célzott bejegyzéshez előbb le kell futtatni a 69_feed_audience.sql migrációt.'
+                                       : 'A közzététel nem sikerült: ' + (m || 'ismeretlen hiba'));
+        setBusy(false);
+        return;
+      }
+    } else {
+      await dlInsert(FEED_TABLE, row, FEED_LS);
+    }
     setBusy(false); onPublished && onPublished(); onClose();
   };
 
   const typeBtns = Object.entries(FEED_TYPES);
   const show = (keys) => keys.includes(f.type);
   return (
-    <UModal open={open} onClose={onClose} title="Új hírfolyam-bejegyzés" subtitle="Minden belépő felhasználó látja" icon={<Lucide.PenSquare size={20} />} max="max-w-2xl">
+    <UModal open={open} onClose={onClose} title="Új hírfolyam-bejegyzés" subtitle={cel.mod === 'celzott' ? 'Csak a kiválasztott célközönség látja' : 'Minden belépő felhasználó látja'} icon={<Lucide.PenSquare size={20} />} max="max-w-2xl">
       <div className="space-y-5">
         <div>
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Bejegyzés típusa</span>
@@ -118,10 +319,13 @@ function FeedComposer({ open, onClose, onPublished, authorName }) {
           </div>
         )}
 
+        <FEED_CelkozonsegValaszto ertek={cel} onValt={setCel} />
+
         <label className="flex items-center gap-2.5 text-sm font-bold text-slate-600 cursor-pointer">
           <input type="checkbox" checked={f.pinned} onChange={e => set('pinned', e.target.checked)} className="w-4 h-4 accent-primary" /> Kiemelés a hírfolyam tetejére
         </label>
         <div className="flex justify-end gap-3 pt-2">
+          {hiba && <p className="mr-auto self-center text-[12px] font-bold text-red-600" role="alert" data-feed-hiba="1">{hiba}</p>}
           <button className={U_btnGhost} onClick={onClose}>Mégse</button>
           <button className={U_btnPrimary} disabled={busy || !f.title.trim()} onClick={publish}>{busy ? 'Közzététel…' : 'Bejegyzés közzététele'}</button>
         </div>
@@ -169,10 +373,15 @@ function FeedCard({ post, user, rsvps, tix, onChange, onDelete }) {
           <div className="flex items-center gap-2">
             <UBadge tone={meta.tone}><I size={12} /> {meta.label}</UBadge>
             {post.pinned && <UBadge tone="slate"><Lucide.Pin size={11} /> Kiemelt</UBadge>}
+            {FEED_ugyintezo(user) && FEED_celOsszegzes(post.celkozonseg) && (
+              <span data-feed-celzott="1" title="Célközönség — csak az ügyintézők látják ezt a jelölést">
+                <UBadge tone="blue"><Lucide.Target size={11} /> {FEED_celOsszegzes(post.celkozonseg)}</UBadge>
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-slate-400 font-bold">{DL_date(post.created_at)}</span>
-            {isAdmin(user) && <button onClick={() => onDelete(post)} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors" title="Törlés"><Lucide.Trash2 size={14} /></button>}
+            {FEED_szerkeszto(user) && <button onClick={() => onDelete(post)} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors" title="Törlés"><Lucide.Trash2 size={14} /></button>}
           </div>
         </div>
 
@@ -411,7 +620,7 @@ const FeedView = ({ user, onNavigate }) => {
   const [confirmDel, setConfirmDel] = useState(null);
 
   const refetch = async () => {
-    const [p, r, t] = await Promise.all([FEED_loadPosts(), FEED_loadRsvps(), FEED_loadTix()]);
+    const [p, r, t] = await Promise.all([FEED_loadPosts(FEED_ugyintezo(user)), FEED_loadRsvps(), FEED_loadTix()]);
     setPosts(p); setRsvps(r); setTix(t);
   };
   useEffect(() => { refetch(); }, []);
@@ -431,7 +640,7 @@ const FeedView = ({ user, onNavigate }) => {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Üdv újra itt, {firstName} 👋</h1>
           <p className="text-slate-400 mt-1 font-medium">Hírek, ajánlatok, események és határidők az egyetemtől.</p>
         </div>
-        {isAdmin(user) && <button className={U_btnPrimary} onClick={() => setComposer(true)}><Lucide.Plus size={17} /> Új bejegyzés</button>}
+        {FEED_szerkeszto(user) && <button className={U_btnPrimary} onClick={() => setComposer(true)}><Lucide.Plus size={17} /> Új bejegyzés</button>}
       </div>
 
       {/* Kitöltendő kérdőívek — a hírfolyam bejegyzései ELŐTT, mert ez teendő,
@@ -448,7 +657,7 @@ const FeedView = ({ user, onNavigate }) => {
       {posts === null ? (
         <div className="space-y-4">{[0, 1, 2].map(i => <div key={i} className="h-52 rounded-3xl bg-white border border-slate-100 animate-pulse" />)}</div>
       ) : ordered.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-slate-100"><UEmpty icon={<Lucide.Newspaper size={26} />} title="Itt még nincs semmi" subtitle={isAdmin(user) ? 'Tedd közzé az első bejegyzést, hogy elinduljon a hírfolyam.' : 'Nézz vissza hamarosan a hírekért és eseményekért.'} action={isAdmin(user) ? <button className={U_btnPrimary} onClick={() => setComposer(true)}><Lucide.Plus size={16} /> Új bejegyzés</button> : null} /></div>
+        <div className="bg-white rounded-3xl border border-slate-100"><UEmpty icon={<Lucide.Newspaper size={26} />} title="Itt még nincs semmi" subtitle={FEED_szerkeszto(user) ? 'Tedd közzé az első bejegyzést, hogy elinduljon a hírfolyam.' : 'Nézz vissza hamarosan a hírekért és eseményekért.'} action={FEED_szerkeszto(user) ? <button className={U_btnPrimary} onClick={() => setComposer(true)}><Lucide.Plus size={16} /> Új bejegyzés</button> : null} /></div>
       ) : (
         <div className="space-y-5">
           {ordered.map(p => <FeedCard key={p.id} post={p} user={user} rsvps={rsvps} tix={tix} onChange={refetch} onDelete={setConfirmDel} />)}

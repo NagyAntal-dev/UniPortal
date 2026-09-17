@@ -3128,7 +3128,7 @@ function ECHO_TransitionConfirm({ step, campaign, busy, onCancel, onConfirm }) {
    Egy típus (kurzus / csoport / személy) kiválasztott tételei + kereső. Az
    ajánlatokat a szerver adja (echo_audience_options), mert a kurzuslista és a
    hallgatói névsor is túl nagy ahhoz, hogy a kliensbe töltsük. */
-function ECHO_AudiencePicker({ campaignId, kind, cimke, ikon, sug, valasztott, onValt, ro }) {
+function ECHO_AudiencePicker({ campaignId, kind, cimke, ikon, sug, valasztott, onValt, ro, betolt }) {
   const [q, setQ]         = useState('');
   const [opts, setOpts]   = useState(null);
   const [nyit, setNyit]   = useState(false);
@@ -3138,7 +3138,8 @@ function ECHO_AudiencePicker({ campaignId, kind, cimke, ikon, sug, valasztott, o
     if (!nyit || ro) return;
     let el = true;
     const t = setTimeout(() => {
-      ECHO_api.audienceOptions(campaignId, kind, q)
+      // A hírfolyam célközönség-választója saját lekérőt ad (feed_audience_options).
+      (betolt ? betolt(kind, q) : ECHO_api.audienceOptions(campaignId, kind, q))
         .then(d => { if (el) { setOpts(Array.isArray(d) ? d : []); setErr(''); } })
         .catch(e => { if (el) { setOpts([]); setErr(ECHO_msg(e)); } });
     }, 250);           // gepeles kozben ne inditsunk minden leutesre lekerest
