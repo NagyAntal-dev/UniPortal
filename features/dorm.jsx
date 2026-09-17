@@ -127,6 +127,7 @@ const DORM_api = {
   roleGrant:     (o)           => DORM_rpc('dorm_role_grant', o),
   personLink:    (o)           => DORM_rpc('dorm_person_link', o),
   linkSuggest:   ()            => DORM_rpc('dorm_person_link_suggestions'),
+  profileCandidates: ()        => DORM_rpc('dorm_profile_candidates'),
   leaseAlerts:   (d)           => DORM_rpc('dorm_lease_alerts', { p_days: d || 180 }),
   expireOffers:  ()            => DORM_rpc('dorm_expire_offers'),
 };
@@ -1808,12 +1809,9 @@ function DORM_AddResident({ open, onClose, onDone }) {
     let alive = true;
     (async () => {
       const [p, per] = await Promise.all([
-        (async () => {
-          const { data, error } = await window.sb.from('profiles')
-            .select('id,email,name,role,approval_status')
-            .eq('approval_status', 'approved').order('name').limit(1000);
-          return { rows: data || [], error: error ? DORM_msg(error) : '' };
-        })(),
+        DORM_api.profileCandidates()
+          .then(rows => ({ rows: Array.isArray(rows) ? rows : [], error: '' }))
+          .catch(error => ({ rows: [], error: DORM_msg(error) })),
         DORM_sel('person', qq => qq.limit(2000)),
       ]);
       if (!alive) return;

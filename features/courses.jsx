@@ -376,7 +376,7 @@ function CRS_Tab({ user }) {
       const nev  = CRS_safeName(file.name);
       const path = `${uid}/kurzus/${sel}/${Date.now().toString(36)}-${nev}`;
       const { error } = await window.sb.storage.from('documents')
-        .upload(path, file, { cacheControl: '3600', upsert: false });
+        .upload(path, file, { cacheControl: '3600', upsert: false, contentType: FELT_dokumentumTipus(file) });
       if (error) throw error;
       await CRS_api.docAdd(sel, file.name, file.name, path, file.type || null, file.size, 'tananyag');
       await ujra();

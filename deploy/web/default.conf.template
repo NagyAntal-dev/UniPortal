@@ -3,10 +3,55 @@
 # (auth, rest, graphql, realtime, storage, functions) továbbítása az api-gw
 # felé. Így a böngésző egyetlen címet lát: nincs CORS, és elég egy port/TLS.
 # A ${API_GW_UPSTREAM} értéket az nginx-kép indításkor helyettesíti.
+#
+# SEBESSÉGKORLÁT: itt van, és nem az api-gw (Envoy) beállításában — a
+# deploy/supabase könyvtárat a deploy/vendor-supabase.sh minden frissítéskor
+# TÖRLI és újra kicsomagolja, tehát az oda írt szabály elveszne. Ráadásul az
+# Envoy csak ennek a konténernek a címét látja, tehát ott minden ügyfél egy
+# vödörbe esne. A korlátok mértéke a .env-ből hangolható, lásd lentebb.
 # ============================================================================
 map $http_upgrade $connection_upgrade { default upgrade; '' close; }
 # Külső TLS-proxy mögött az eredeti protokollt adjuk tovább.
 map $http_x_forwarded_proto $fwd_proto { default $http_x_forwarded_proto; '' $scheme; }
+
+# ---- A sebességkorlát vödrének azonosítója --------------------------------
+# A kampusz NAT mögött sok száz felhasználó osztozik EGY nyilvános IP-n, ezért
+# a bejelentkezett forgalmat a MUNKAMENETRE korlátozzuk: a JWT aláírásának
+# vége munkamenetenként egyedi, állandó, és elég rövid vödör-kulcsnak.
+# Bejelentkezés előtt (és a WebSocketnél, ahol a böngésző nem tud fejlécet
+# küldeni) marad az IP. Az apikey-t SZÁNDÉKOSAN nem nézzük: az minden
+# látogatónál ugyanaz az anon kulcs.
+#
+# SZÁNDÉKOSAN $remote_addr és NEM $binary_remote_addr: a bináris alak nyers
+# bájtokat tartalmaz, és a 0x00 bájt (pl. a 10.0.0.1 címben) a map SZÖVEGES
+# értékét levágná — sok különböző IP ugyanabba a vödörbe esne.
+map $http_authorization $uniportal_bucket {
+    default                                            $remote_addr;
+    "~^Bearer [\w-]+\.[\w-]+\.(?<jwtsig>[\w-]{20,})$"  $jwtsig;
+}
+
+# ---- Vödrök ---------------------------------------------------------------
+# A mértékek a .env-ből állíthatók; alapértéket a deploy/web/Dockerfile ad.
+#   UNIPORTAL_RL_AUTH      bejelentkezés/regisztráció/jelszókérés, IP szerint
+#   UNIPORTAL_RL_AUTHGEN   a többi auth-hívás (/user, /verify), IP szerint
+#   UNIPORTAL_RL_API       a /rest/v1/ és /graphql/v1/, munkamenet szerint
+#   UNIPORTAL_RL_FN        a /functions/v1/, munkamenet szerint
+#   UNIPORTAL_RL_STORAGE   a /storage/v1/, munkamenet szerint
+#
+# FIGYELEM a hitelesítési korlátra: közös NAT mögött ez az EGÉSZ intézményre
+# vonatkozik, ezért az alapérték szándékosan bőkezű. Ha a telepítés nem közös
+# kimenő IP mögött van, nyugodtan húzd le (pl. 20r/m). A fiókonkénti védelmet
+# a GoTrue saját korlátja adja — lásd DEPLOY.md.
+limit_req_zone  $binary_remote_addr zone=uni_auth:10m    rate=${UNIPORTAL_RL_AUTH};
+limit_req_zone  $binary_remote_addr zone=uni_authgen:10m rate=${UNIPORTAL_RL_AUTHGEN};
+limit_req_zone  $uniportal_bucket   zone=uni_api:10m     rate=${UNIPORTAL_RL_API};
+limit_req_zone  $uniportal_bucket   zone=uni_fn:10m      rate=${UNIPORTAL_RL_FN};
+limit_req_zone  $uniportal_bucket   zone=uni_storage:10m rate=${UNIPORTAL_RL_STORAGE};
+limit_conn_zone $binary_remote_addr zone=uni_conn:10m;
+
+limit_req_status    429;
+limit_conn_status   429;
+limit_req_log_level warn;
 
 server {
     listen 8080;
@@ -14,6 +59,10 @@ server {
     server_tokens off;
     root /usr/share/nginx/html;
     index index.html;
+
+    # Megbízható proxy(k) és a valós ügyfél-IP — indításkor generálva
+    # (deploy/web/40-uniportal-config.sh, UNIPORTAL_TRUSTED_PROXY).
+    include /etc/nginx/uniportal/realip.conf;
 
     # A Docker belső DNS-e: az api-gw újraindulás után is feloldható marad.
     resolver 127.0.0.11 valid=30s ipv6=off;
@@ -25,11 +74,32 @@ server {
     proxy_buffers 4 256k;
     proxy_busy_buffers_size 256k;
 
+    # Lassú kapcsolatok kiéheztetése ellen (slowloris). A feltöltés hosszú
+    # lehet, ezért a törzsre bőkezűbb határ jut, mint a fejlécre.
+    client_header_timeout 15s;
+    client_body_timeout   60s;
+    send_timeout          60s;
+    keepalive_timeout     65s;
+    # A továbbítás alapértéke; a /realtime/v1/ (WebSocket) felülírja 3600s-re.
+    proxy_read_timeout    120s;
+    limit_conn uni_conn ${UNIPORTAL_CONN_LIMIT};
+
     gzip on;
     gzip_min_length 1024;
     gzip_types text/css application/javascript application/json image/svg+xml text/plain;
 
     include /etc/nginx/uniportal/headers.conf;
+
+    # A 429-hez a böngésző kapjon Retry-After-t: enélkül a felület azonnal
+    # újrapróbálkozik, és a korlát csak rontana a helyzeten.
+    error_page 429 = @tulsok_keres;
+    location @tulsok_keres {
+        include /etc/nginx/uniportal/headers.conf;
+        add_header Retry-After 10 always;
+        add_header Cache-Control "no-store" always;
+        default_type application/json;
+        return 429 "{\"error\":\"too_many_requests\",\"retry_after\":10}";
+    }
 
     location = /healthz { access_log off; default_type text/plain; return 200 "ok\n"; }
 
@@ -41,18 +111,61 @@ server {
     location = /app.bundle.js { include /etc/nginx/uniportal/headers.conf; add_header Cache-Control "public, max-age=604800" always; }
 
     # ---- Supabase API ----
-    location /auth/v1/      { include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw; }
-    location /rest/v1/      { include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw; }
-    location /graphql/v1/   { include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw; }
-    location /functions/v1/ { include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw; }
+    # A hitelesítési végpontok KÜLÖN, szigorúbb vödörben. A pontos egyezésű
+    # (location =) ágaknak ELŐBB kell állniuk, mint az /auth/v1/ előtagnak.
+    location = /auth/v1/token {
+        limit_req zone=uni_auth burst=${UNIPORTAL_RL_AUTH_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw;
+    }
+    location = /auth/v1/signup {
+        limit_req zone=uni_auth burst=${UNIPORTAL_RL_AUTH_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw;
+    }
+    location = /auth/v1/recover {
+        limit_req zone=uni_auth burst=${UNIPORTAL_RL_AUTH_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw;
+    }
+    location = /auth/v1/otp {
+        limit_req zone=uni_auth burst=${UNIPORTAL_RL_AUTH_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw;
+    }
+    location = /auth/v1/resend {
+        limit_req zone=uni_auth burst=${UNIPORTAL_RL_AUTH_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw;
+    }
+    # A többi auth-hívás (/user, /verify, /logout) a felület normál működése:
+    # bőkezűbb vödör, hogy a lapbetöltés soha ne akadjon el rajta.
+    location /auth/v1/ {
+        limit_req zone=uni_authgen burst=60;
+        include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw;
+    }
+    location /rest/v1/ {
+        limit_req zone=uni_api burst=${UNIPORTAL_RL_API_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw;
+    }
+    location /graphql/v1/ {
+        limit_req zone=uni_api burst=${UNIPORTAL_RL_API_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw;
+    }
+    # Az Edge Function-ök az egyetlen felület, amit a kapu HITELESÍTÉS NÉLKÜL
+    # enged át (FUNCTIONS_VERIFY_JWT=false, mert a Meta webhookja nem tud
+    # Supabase-tokent küldeni). A jogosultságot maguk a függvények nézik,
+    # a mennyiséget ez a vödör.
+    location /functions/v1/ {
+        limit_req zone=uni_fn burst=${UNIPORTAL_RL_FN_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf; proxy_pass $api_gw;
+    }
     location /realtime/v1/ {
         include /etc/nginx/uniportal/proxy.conf;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 3600s;
+        # SZÁNDÉKOSAN nincs limit_req: egyetlen, hosszan élő kapcsolat, nem
+        # kérésfolyam. A darabszámot a szerverszintű limit_conn uni_conn fogja.
         proxy_pass $api_gw;
     }
     location /storage/v1/ {
+        limit_req zone=uni_storage burst=${UNIPORTAL_RL_STORAGE_BURST};
         include /etc/nginx/uniportal/proxy.conf;
         proxy_buffering off;
         proxy_request_buffering off;

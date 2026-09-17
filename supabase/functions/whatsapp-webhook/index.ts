@@ -7,13 +7,25 @@
 //
 //   supabase functions deploy whatsapp-webhook --no-verify-jwt
 //
-// A hitelesítést helyette két dolog adja:
+// A saját szerveren (Docker) ez nem külön kapcsoló: ott a FUNCTIONS_VERIFY_JWT
+// az ÖSSZES függvényre vonatkozik, és épp emiatt a webhook miatt marad false.
+// A /functions/v1/ tehát hitelesítés nélkül elérhető — a mennyiséget a web
+// nginxe korlátozza (deploy/web/default.conf.template, uni_fn vödör), a
+// jogosultságot pedig maga a függvény nézi.
+//
+// A hitelesítést két dolog adja, és MINDKETTŐ KÖTELEZŐ:
 //   1. GET — a Meta verifikációs kihívása a saját WHATSAPP_VERIFY_TOKEN-eddel.
 //   2. POST — az X-Hub-Signature-256 fejléc HMAC-SHA256 ellenőrzése az app
 //      secrettel. Enélkül bárki hamis üzeneteket írhatna az inboxba.
 //
+// HA A WHATSAPP_APP_SECRET VAGY A WHATSAPP_VERIFY_TOKEN NINCS BEÁLLÍTVA,
+// A FÜGGVÉNY NEM ÜZEMEL (503). Korábban ilyenkor átengedte a kéréseket, csak
+// megjelölte őket "nem ellenőrzött"-ként — az alapértelmezett telepítésben
+// viszont ez a két érték ÜRES, tehát a webhook bárkitől fogadott üzenetet, és
+// service_role kulccsal írta az adatbázisba.
+//
 // A webhook URL, amit a Metánál be kell állítani:
-//   https://<projekt-ref>.supabase.co/functions/v1/whatsapp-webhook
+//   https://<domain>/functions/v1/whatsapp-webhook
 // ============================================================
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -21,6 +33,9 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const VERIFY_TOKEN = Deno.env.get('WHATSAPP_VERIFY_TOKEN') ?? '';
 const APP_SECRET = Deno.env.get('WHATSAPP_APP_SECRET') ?? '';
+
+// A Meta webhook-csomagjai jóval ez alatt vannak; a korlát a memória védelme.
+const MAX_BODY_BYTES = 1048576;
 
 const newId = () => 'WA-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 
@@ -32,8 +47,15 @@ function safeEqual(a: string, b: string) {
   return diff === 0;
 }
 
+// A HMAC-ellenőrzés KÖTELEZŐ. Korábban az APP_SECRET hiányában a függvény
+// átengedte a kérést (csak megjelölte "nem ellenőrzött"-ként) — az alapértelmezett
+// telepítésben viszont az APP_SECRET ÜRES, tehát a webhook bárkitől fogadott
+// üzenetet, és service_role kulccsal írta a wa_messages/wa_contacts táblába.
+// Azzal bárki hamis üzenetet tehetett az ügyintézői beérkezett mappába,
+// átírhatta korábbi üzenetek kézbesítési állapotát, és a last_inbound_at
+// hamisításával kinyithatta a 24 órás ablakot (lásd whatsapp-send).
+// Ezért most: nincs app secret → a webhook NEM üzemel.
 async function signatureValid(raw: string, header: string | null) {
-  if (!APP_SECRET) return null;              // nincs beállítva → a hívó dönt
   if (!header?.startsWith('sha256=')) return false;
   const key = await crypto.subtle.importKey(
     'raw', new TextEncoder().encode(APP_SECRET),
@@ -47,12 +69,20 @@ async function signatureValid(raw: string, header: string | null) {
 Deno.serve(async (req) => {
   const url = new URL(req.url);
 
+  // ---------- 0. üzemképesség ----------
+  // A titkok nélkül nincs mivel hitelesíteni a Metát, márpedig a függvény
+  // service_role kulccsal ír az adatbázisba. Ilyenkor NEM üzemelünk.
+  if (!APP_SECRET || !VERIFY_TOKEN) {
+    console.error('whatsapp-webhook: WHATSAPP_APP_SECRET vagy WHATSAPP_VERIFY_TOKEN nincs beállítva — a webhook nem üzemel.');
+    return new Response('not_configured', { status: 503 });
+  }
+
   // ---------- 1. Meta verifikáció (a webhook beállításakor, egyszer) ----------
   if (req.method === 'GET') {
     const mode = url.searchParams.get('hub.mode');
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge') ?? '';
-    if (mode === 'subscribe' && VERIFY_TOKEN && token === VERIFY_TOKEN) {
+    if (mode === 'subscribe' && safeEqual(token ?? '', VERIFY_TOKEN)) {
       return new Response(challenge, { status: 200, headers: { 'Content-Type': 'text/plain' } });
     }
     return new Response('verification_failed', { status: 403 });
@@ -60,13 +90,22 @@ Deno.serve(async (req) => {
 
   if (req.method !== 'POST') return new Response('method_not_allowed', { status: 405 });
 
-  // ---------- 2. aláírás-ellenőrzés ----------
+  // ---------- 2. méretkorlát ----------
+  // A törzset a HMAC miatt egészében be kell olvasni; korlát nélkül ez
+  // memóriából kifogyasztható. A Meta webhook-csomagjai jóval 1 MB alattiak.
+  const declaredLength = Number(req.headers.get('content-length') ?? '0');
+  if (declaredLength > MAX_BODY_BYTES) {
+    return new Response('payload_too_large', { status: 413 });
+  }
   const raw = await req.text();
-  const valid = await signatureValid(raw, req.headers.get('x-hub-signature-256'));
-  if (valid === false) return new Response('bad_signature', { status: 401 });
-  // valid === null → nincs APP_SECRET beállítva. Ilyenkor átengedjük, de
-  // megjelöljük, hogy az üzenet nem hitelesített forrásból jött.
-  const unverified = valid === null;
+  if (raw.length > MAX_BODY_BYTES) {
+    return new Response('payload_too_large', { status: 413 });
+  }
+
+  // ---------- 3. aláírás-ellenőrzés ----------
+  if (!await signatureValid(raw, req.headers.get('x-hub-signature-256'))) {
+    return new Response('bad_signature', { status: 401 });
+  }
 
   let body: any;
   try { body = JSON.parse(raw); } catch { return new Response('invalid_json', { status: 400 }); }
@@ -108,7 +147,7 @@ Deno.serve(async (req) => {
           msg_type: m.type ?? 'text',
           body: text,
           status: 'received',
-          error: unverified ? 'aláírás nem ellenőrizve (WHATSAPP_APP_SECRET hiányzik)' : null,
+          error: null,
         }, { onConflict: 'wa_message_id', ignoreDuplicates: true });
       }
 

@@ -32,7 +32,13 @@ const MSG_hiba = (e) => String((e && (e.message || e.details || e.error)) || e |
 async function MSG_rpc(name, args) {
   if (!window.sb) return { data: null, error: { message: 'Nincs adatbázis-kapcsolat.' }, hianyzik: false };
   try {
-    const { data, error } = await window.sb.rpc(name, args || {});
+    const valasz = await window.sb.rpc(name, args || {});
+    const { data, error } = valasz;
+    // Sebességkorlát: a háttérfrissítések álljanak le egy időre, különben a
+    // 429-re azonnal újabb kérésekkel válaszolnánk.
+    if (POLL_nezdKorlat(valasz)) {
+      return { data: null, error: { message: 'Túl sok kérés — néhány másodperc múlva újra.' }, hianyzik: false, korlat: true };
+    }
     if (error) return { data: null, error, hianyzik: MSG_nincsFuggveny(error) };
     return { data, error: null, hianyzik: false };
   } catch (e) {
@@ -78,7 +84,7 @@ function MSG_valtozott() { try { window.dispatchEvent(new Event('msg:valtozas'))
 function MSG_inditas() {
   if (MSG_STORE.fut) return;
   MSG_STORE.fut = true;
-  setInterval(MSG_frissitSzam, 30000);
+  POLL_idozit(MSG_frissitSzam, 30000);
   window.addEventListener('msg:valtozas', MSG_frissitSzam);
   try {
     if (window.sb && window.sb.channel) {
@@ -116,7 +122,7 @@ function MSG_useInboxTerkep() {
       setTerkep(t);
     };
     f();
-    const i = setInterval(f, 30000);
+    const i = POLL_idozit(f, 30000);
     window.addEventListener('msg:tavoli', f);
     window.addEventListener('msg:valtozas', f);
     return () => { el = false; clearInterval(i); window.removeEventListener('msg:tavoli', f); window.removeEventListener('msg:valtozas', f); };
@@ -130,9 +136,12 @@ async function MSG_feltolt(processId, file) {
   if (file.size > MSG_MAX_BYTES) throw new Error('A fájl túl nagy — legfeljebb 20 MB lehet.');
   const veletlen = Math.random().toString(36).slice(2, 10);
   const path = ['chat', processId, Date.now().toString(36) + '-' + veletlen + '-' + DOC_safeName(file.name)].join('/');
-  const { error } = await window.sb.storage.from(DOC_BUCKET).upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
+  // A típust nem a böngészőtől vesszük át vakon: az ismeretlen fájl
+  // letöltendő bájthalmazként megy fel, nem futtatható dokumentumként.
+  const tipus = FELT_dokumentumTipus(file);
+  const { error } = await window.sb.storage.from(DOC_BUCKET).upload(path, file, { upsert: false, contentType: tipus });
   if (error) throw error;
-  return { path, name: file.name, size: file.size, type: file.type || '' };
+  return { path, name: file.name, size: file.size, type: tipus };
 }
 async function MSG_megnyit(f, docs) {
   const bejegyzes = f.path ? { path: f.path } : (f.ref && docs ? docs[f.ref] : null);
@@ -222,7 +231,7 @@ function MSG_Thread({ processId, role, docs, hivatkozasok, onHivatkozasTorles, m
   useEffect(() => {
     setAdat(null); setAllapot('tolt'); setHiba('');
     betolt();
-    const t = setInterval(() => betolt(true), 20000);
+    const t = POLL_idozit(() => betolt(true), 20000);
     const f = () => betolt(true);
     window.addEventListener('msg:tavoli', f);
     return () => { clearInterval(t); window.removeEventListener('msg:tavoli', f); };
@@ -419,7 +428,7 @@ function MSG_Inbox({ role }) {
 
   useEffect(() => {
     betolt();
-    const t = setInterval(betolt, 30000);
+    const t = POLL_idozit(betolt, 30000);
     window.addEventListener('msg:tavoli', betolt);
     window.addEventListener('msg:valtozas', betolt);
     return () => { clearInterval(t); window.removeEventListener('msg:tavoli', betolt); window.removeEventListener('msg:valtozas', betolt); };

@@ -163,7 +163,7 @@ function NAP_Naptar({ user, onOpenApplications }) {
     });
   }, [email]);
 
-  useEffect(() => { betolt(); const t = setInterval(betolt, 60000); return () => clearInterval(t); }, [betolt]);
+  useEffect(() => { betolt(); const t = POLL_idozit(betolt, 60000); return () => clearInterval(t); }, [betolt]);
   useEffect(() => { try { localStorage.setItem('nap_szuro', JSON.stringify(szuro)); localStorage.setItem('nap_nezet', nezet); } catch (e) {} }, [szuro, nezet]);
 
   if (!adat) return <div className="h-72 rounded-3xl bg-white border border-slate-100 animate-pulse" data-nap-naptar="tolt" />;

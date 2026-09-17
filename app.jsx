@@ -753,6 +753,106 @@ function DOC_fmtSize(bytes) {
     : Math.max(1, Math.round(bytes / 1024)) + ' KB';
 }
 
+
+// ---------------------------------------------------------------------------
+// Háttérben futó frissítések ütemezése.
+//
+// A felület több nézete időzítővel frissül (üzenetek 20-30 mp, naptárak
+// 45-60 mp, munkaasztal 60 mp). Két baj volt ezzel:
+//   • a REJTETT fül ugyanúgy kérdezett, mint a látható — egy egész napra
+//     nyitva hagyott böngésző így is terhelte a szervert;
+//   • a szerver sebességkorlátjára (429) semmi nem reagált: a hívás csendben
+//     elbukott, a nézet a régi adatot mutatta, a következő ütem pedig
+//     ugyanúgy nekifutott.
+//
+// A POLL_idozit ugyanaz, mint a setInterval, két különbséggel: rejtett fülön
+// kihagyja az ütemet, 429 után pedig vár. A visszatérési értéke a setInterval
+// azonosítója, tehát a meglévő clearInterval(...) takarítás változatlan marad.
+// ---------------------------------------------------------------------------
+let POLL_szunetEddig = 0;
+
+// A szünet SZÁNDÉKOSAN globális: a korlát is az, tehát ha az egyik nézet
+// belefutott, a többinek sincs értelme tovább próbálkoznia.
+function POLL_jelezKorlat(retryAfterSec) {
+  const mp = Number(retryAfterSec) > 0 ? Number(retryAfterSec) : 30;
+  POLL_szunetEddig = Math.max(POLL_szunetEddig, Date.now() + mp * 1000);
+}
+
+// Igaz, ha épp sebességkorlát miatt várunk.
+function POLL_szunetel() { return Date.now() < POLL_szunetEddig; }
+
+// A Supabase-válaszból kiolvassa a 429-et. A web nginxe Retry-After fejlécet
+// is küld, de azt a fetch-válaszból a supabase-js nem adja tovább, ezért a
+// törzsbe is beleírja (retry_after).
+function POLL_nezdKorlat(valasz) {
+  if (!valasz) return false;
+  if (valasz.status !== 429) return false;
+  let mp = 0;
+  try {
+    const t = valasz.error && (valasz.error.retry_after || valasz.error.message);
+    const m = String(t || '').match(/(\d+)/);
+    if (m) mp = Number(m[1]);
+  } catch (e) {}
+  POLL_jelezKorlat(mp);
+  return true;
+}
+
+function POLL_idozit(fn, ms) {
+  return setInterval(() => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    if (POLL_szunetel()) return;
+    try { fn(); } catch (e) { /* egy hibás ütem ne állítsa le az időzítőt */ }
+  }, ms);
+}
+
+// ---------------------------------------------------------------------------
+// Feltöltés: a fájl típusát a BÖNGÉSZŐ mondja meg, és szabadon hamisítható.
+// A /storage/v1/ a felülettel AZONOS címről szolgál ki (deploy/web nginx),
+// ezért egy text/html vagy image/svg+xml típusú feltöltés azonos originről
+// futó JavaScript lenne, és kiolvashatná a munkamenetet a localStorage-ból —
+// aki megnyitja a linket, annak a fiókja elveszett.
+//
+// Amit nem ismerünk fel, azt application/octet-stream-ként adjuk fel: azt a
+// böngésző LETÖLTI, sosem jeleníti meg, tehát scriptet nem futtathat. Képnél
+// ez nem járható út (a kép megjelenítendő), ezért ott elutasítunk.
+//
+// Ugyanez a szűrés a tároló oldalán is megvan (69-es migráció) — ez itt azért
+// kell, hogy a felhasználó azonnali, érthető hibaüzenetet kapjon.
+const FELT_KEPTIPUSOK = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const FELT_DOKTIPUSOK = [
+  'application/pdf',
+  'image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/tiff',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain',
+];
+
+function FELT_tipus(file) {
+  return String((file && file.type) || '').toLowerCase().split(';')[0].trim();
+}
+
+// Dokumentum/csatolmány: ismeretlen típus → letöltendő bájthalmaz.
+function FELT_dokumentumTipus(file) {
+  const t = FELT_tipus(file);
+  return FELT_DOKTIPUSOK.indexOf(t) >= 0 ? t : 'application/octet-stream';
+}
+
+// Kép (avatar, kollégiumi fotó): ismeretlen típus → nincs feltöltés.
+// Visszatérés: a típus, vagy null.
+function FELT_kepTipus(file) {
+  const t = FELT_tipus(file);
+  return FELT_KEPTIPUSOK.indexOf(t) >= 0 ? t : null;
+}
+
+// A tárolókulcs kiterjesztése SOHA ne a felhasználó fájlnevéből jöjjön.
+function FELT_kiterjesztes(mime) {
+  const m = {
+    'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
+  };
+  return m[mime] || 'bin';
+}
 // Keep object keys ASCII-safe: Storage rejects some characters in keys.
 function DOC_safeName(name) {
   return String(name || 'file')
@@ -766,7 +866,7 @@ async function DOC_upload(file, ownerId, processId, docId) {
   const path = [ownerId, processId || 'draft', docId + '-' + Date.now().toString(36) + '-' + DOC_safeName(file.name)].join('/');
   const { error } = await sb.storage.from(DOC_BUCKET).upload(path, file, {
     upsert: true,
-    contentType: file.type || 'application/octet-stream',
+    contentType: FELT_dokumentumTipus(file),
   });
   if (error) throw error;
   return path;
@@ -3223,7 +3323,7 @@ const AdmissionsCore = ({ user }) => {
     // Realtime (migration 04) already pushes every change, so this is only a
       // safety net for a dropped websocket — 12 s meant a needless round-trip
       // five times a minute for every open tab.
-      const poll = setInterval(refetch, 60000);
+      const poll = POLL_idozit(refetch, 60000);
     let channel = null;
     try {
       if (window.sb && sb.channel) {
@@ -8885,7 +8985,7 @@ const AdmissionsHub = (() => {
       // Realtime (migration 04) already pushes every change, so this is only a
       // safety net for a dropped websocket — 12 s meant a needless round-trip
       // five times a minute for every open tab.
-      const poll = setInterval(refetch, 60000);
+      const poll = POLL_idozit(refetch, 60000);
       let channel = null;
       try {
         if (window.sb && sb.channel) {
@@ -11959,11 +12059,18 @@ const AccountPage = ({ user, onUpdate, onClose }) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
     setUploading(true);
+    // A kiterjesztés a FELISMERT típusból jön, nem a felhasználó fájlnevéből:
+    // egy "kep.html" nevű, image/png tartalmú fájl így sem lesz html.
+    const kepTipus = FELT_kepTipus(f);
+    if (!kepTipus) {
+      setUploading(false);
+      alert('Csak PNG, JPEG, WebP vagy GIF kép tölthető fel profilképnek.');
+      return;
+    }
     try {
       if (window.sb && user.id) {
-        const ext = (f.name.split('.').pop() || 'png').toLowerCase();
-        const path = user.id + '/avatar_' + Date.now() + '.' + ext;
-        const { error: upErr } = await sb.storage.from('avatars').upload(path, f, { upsert: true, contentType: f.type });
+        const path = user.id + '/avatar_' + Date.now() + '.' + FELT_kiterjesztes(kepTipus);
+        const { error: upErr } = await sb.storage.from('avatars').upload(path, f, { upsert: true, contentType: kepTipus });
         if (!upErr) {
           const { data: pub } = sb.storage.from('avatars').getPublicUrl(path);
           const url = pub.publicUrl;
@@ -12131,6 +12238,8 @@ const App: React.FC = () => {
   // minden token-frissítéskor lefut; ez a ref választja el a "más lépett be"
   // esetet a "ugyanaz a fiók frissült" esettől, hogy a nézet ne ugorjon vissza.
   const landedForRef = useRef(null);
+  // Mikor töltöttük be utoljára a profilt (ms). A TOKEN_REFRESHED fésülésére.
+  const profilBetoltveRef = useRef(0);
   const [loginEmail, setLoginEmail] = useState('');
   /* Elfelejtett jelszó: a Supabase egyszer használható linket küld, ami a
      reset-password.html-re visz. A válasz szándékosan ugyanaz, akár létezik a
@@ -12160,6 +12269,7 @@ const App: React.FC = () => {
 
   // Build the app user from the Supabase session + profiles row.
   const loadProfile = async (authUser) => {
+    profilBetoltveRef.current = Date.now();
     let profile = null;
     try {
       const { data } = await sb.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
@@ -12304,9 +12414,21 @@ const App: React.FC = () => {
       } finally {
         setIsLoading(false);
       }
-      const { data } = sb.auth.onAuthStateChange((_event, session) => {
-        if (session && session.user) loadProfile(session.user);
-        else { landedForRef.current = null; setCurrentUser(null); }
+      // A supabase-js a TOKEN_REFRESHED eseményt a token megújításakor ÉS a
+      // fülre visszatéréskor is kiadja, a loadProfile pedig 5 RPC-t indít
+      // (profil, echo-szerepek, jog-listák, kollégiumi szerepek) — gyors
+      // fülváltogatással ez könnyen a sebességkorlátba futott.
+      //
+      // NEM tiltjuk le a frissítést, csak FÉSÜLJÜK: a fülre visszatéréskori
+      // újratöltés az, ami egy frissen jóváhagyott fiók új szerepkörét
+      // átveszi, tehát ezt megtartjuk — percenként legfeljebb egyszer.
+      const { data } = sb.auth.onAuthStateChange((event, session) => {
+        if (session && session.user) {
+          if (event === 'TOKEN_REFRESHED'
+              && landedForRef.current === session.user.id
+              && Date.now() - profilBetoltveRef.current < 60000) return;
+          loadProfile(session.user);
+        } else { landedForRef.current = null; profilBetoltveRef.current = 0; setCurrentUser(null); }
       });
       sub = data && data.subscription;
     })();

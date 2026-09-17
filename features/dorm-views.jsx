@@ -305,17 +305,21 @@ async function DORMV_uploadPhotos(files, prefix) {
   const out = [];
   if (!files || !files.length || !window.sb) return out;
   for (const f of files) {
+    // Fotótár: csak valódi kép mehet fel. A típust a böngésző mondja, ezért
+    // itt is szűrünk (a tároló oldalán a 69-es migráció zárja le).
+    const kepTipus = FELT_kepTipus(f);
+    if (!kepTipus) continue;
     const path = [prefix || 'dorm', Date.now().toString(36) + '-' + DORMV_safeName(f.name)].join('/');
     let stored = null;
     for (const bucket of DORMV_BUCKETS) {
       try {
         const { error } = await window.sb.storage.from(bucket).upload(path, f, {
-          upsert: true, contentType: f.type || 'application/octet-stream',
+          upsert: true, contentType: kepTipus,
         });
         if (!error) { stored = { bucket, path }; break; }
       } catch (e) { /* következő bucket */ }
     }
-    if (stored) out.push({ ...stored, name: f.name, size: f.size, type: f.type });
+    if (stored) out.push({ ...stored, name: f.name, size: f.size, type: kepTipus });
   }
   return out;
 }

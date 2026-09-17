@@ -150,7 +150,7 @@ function IV_Calendar({ ctx, processes, programName, programCode, historyFor, onC
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const t = setInterval(() => { if (!dragRef.current) load(); }, 60000);
+    const t = POLL_idozit(() => { if (!dragRef.current) load(); }, 60000);
     return () => clearInterval(t);
   }, [load]);
   useEffect(() => {
@@ -1198,7 +1198,7 @@ function IV_ProcessInterview({ processId, readOnly, fallback, onState }) {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 45000);
+    const t = POLL_idozit(load, 45000);
     return () => clearInterval(t);
   }, [load]);
 

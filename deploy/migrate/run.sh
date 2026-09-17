@@ -21,6 +21,22 @@ case "${UNIPORTAL_SECRET_CHECK:-x}" in
   *CHANGE_ME*|"||") echo "[migrate] HIBA: a .env titkai nincsenek kitöltve. Futtasd egyszer: ./init-env.sh  — utána: docker compose up -d --build"; exit 1 ;;
 esac
 
+
+# ---- A UniPortal compose-réteg betöltődött-e? ----
+# A deploy/compose.uniportal.yml az EGYETLEN dolog, ami az api-gw-t (Studio +
+# nyers API) és a Supavisort a 127.0.0.1-re szorítja. A réteget a .env
+# COMPOSE_FILE sora tölti be; enélkül a Studio és a Postgres-pooler MINDEN
+# interfészen kinyílik. Csak figyelmeztetünk: a migráció maga ettől még helyes.
+if [ "${UNIPORTAL_LAYER:-}" != "on" ]; then
+  echo "[migrate] ============================================================"
+  echo "[migrate] FIGYELEM: a UniPortal compose-réteg NEM töltődött be."
+  echo "[migrate] Ilyenkor a Studio (:8000) és a Postgres-pooler (:5432, :6543)"
+  echo "[migrate] MINDEN interfészen elérhető, nem csak a szerverről."
+  echo "[migrate] Ellenőrizd a .env-ben:"
+  echo "[migrate]   COMPOSE_FILE=docker-compose.yml:deploy/compose.uniportal.yml"
+  echo "[migrate] és indítsd sima 'docker compose up -d --build' paranccsal."
+  echo "[migrate] ============================================================"
+fi
 echo "[migrate] várakozás az adatbázisra és a Supabase-sémákra (auth, storage)…"
 i=0
 until [ "$(q "select (to_regclass('auth.users') is not null and to_regclass('storage.buckets') is not null)::text" 2>/dev/null || true)" = "true" ]; do
@@ -84,6 +100,28 @@ else
     exit 1
   fi
   sed -n 's/^.*NOTICE:  /[migrate] /p' /tmp/harden.log
+fi
+
+# ---- Éles védelem: függvény-jogosultságok lezárása ----
+# MINDEN indításkor lefut, a migrációk után — ezért NEM a manifest része.
+# A PostgreSQL minden új függvényre ad EXECUTE-ot a PUBLIC-nak, a Supabase
+# pedig külön az anonnak; e nélkül minden új migráció újranyitná a felületet.
+# Részletek: supabase/99_harden_grants.sql fejléce.
+if ! psql -X -v ON_ERROR_STOP=1 -q -f "$MIG_DIR/99_harden_grants.sql" >/tmp/grants.log 2>&1; then
+  cat /tmp/grants.log
+  echo "[migrate] HIBA a függvény-jogosultságok lezárásakor (supabase/99_harden_grants.sql)."
+  exit 1
+fi
+sed -n 's/^.*NOTICE:  /[migrate] /p' /tmp/grants.log
+sed -n 's/^.*WARNING:  /[migrate] FIGYELEM: /p' /tmp/grants.log
+
+# ---- Biztonsági önellenőrzés (nem állítja meg az indulást) ----
+if ! psql -X -q -f "$(dirname "$0")/verify.sql" >/tmp/verify.log 2>&1; then
+  echo "[migrate] FIGYELEM: a biztonsági önellenőrzés nem futott le."
+  cat /tmp/verify.log
+else
+  sed -n 's/^.*NOTICE:  /[migrate] /p'  /tmp/verify.log
+  sed -n 's/^.*WARNING:  /[migrate] FIGYELEM: /p' /tmp/verify.log
 fi
 
 # A PostgREST a migrációk előtt indult: töltse újra a sémát (új táblák, függvények).

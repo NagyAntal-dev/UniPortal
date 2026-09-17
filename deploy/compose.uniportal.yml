@@ -17,6 +17,12 @@
 # 3) Edge Functions: a UniPortal függvényei közvetlenül a supabase/functions
 #    könyvtárból, csak olvasásra csatolva — nincs másolat, ami elavulhatna.
 #    Új függvénynél ide kell egy újabb sor. A titkaik a .env WHATSAPP_* soraiból.
+#
+# 4) Tároló és képátalakítás: mennyiségi korlátok. A /storage/v1/render/image/
+#    útvonal alapból korlátlan, és ez a verem legolcsóbb túlterhelési pontja.
+#
+# 5) A mintafüggvény (hello) kitakarása: a hivatalos csomag példája
+#    hitelesítés nélkül elérhető lenne.
 # ============================================================================
 services:
   api-gw:
@@ -41,3 +47,39 @@ services:
       WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v21.0}
       WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
       WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      # Percenként ennyi WhatsApp-üzenetet küldhet EGY ügyintéző (0 = nincs korlát).
+      WHATSAPP_MAX_SENDS_PER_MINUTE: ${WHATSAPP_MAX_SENDS_PER_MINUTE:-20}
+    # A hivatalos csomag mintafüggvénye (hello) hitelesítés nélkül elérhető
+    # lenne a /functions/v1/hello címen. A vendorolt fát nem szerkesztjük,
+    # ezért üres tmpfs-t borítunk rá: a futtató így nem találja meg.
+    tmpfs:
+      - /home/deno/functions/hello
+
+  # 4) Tároló: a képátalakító útvonal (/storage/v1/render/image/…) alapból
+  #    korlátlan, és ez a verem legolcsóbb túlterhelési pontja — egy kérés
+  #    valódi CPU-t éget az imgproxyban. A beépített, memóriás számlálót
+  #    kapcsoljuk be; nem kell hozzá Redis.
+  storage:
+    environment:
+      RATE_LIMITER_ENABLED: "true"
+      RATE_LIMITER_DRIVER: memory
+      RATE_LIMITER_RENDER_PATH_MAX_REQ_SEC: ${STORAGE_RENDER_MAX_REQ_SEC:-5}
+      RATE_LIMITER_SKIP_ON_ERROR: "true"
+
+  # 5) Az imgproxy erőforrás-korlátai: egy óriási vagy sokkockás kép se tudja
+  #    lefoglalni az egész gépet.
+  imgproxy:
+    environment:
+      IMGPROXY_MAX_SRC_FILE_SIZE: ${IMGPROXY_MAX_SRC_FILE_SIZE:-20971520}
+      IMGPROXY_CONCURRENCY: ${IMGPROXY_CONCURRENCY:-4}
+      IMGPROXY_MAX_ANIMATION_FRAMES: ${IMGPROXY_MAX_ANIMATION_FRAMES:-1}
+      IMGPROXY_DOWNLOAD_TIMEOUT: ${IMGPROXY_DOWNLOAD_TIMEOUT:-10}
+
+  # 6) Jelzés a migrate szolgáltatásnak, hogy EZ A RÉTEG betöltődött. A fenti
+  #    1) pont (a 127.0.0.1-re szűkített portok) KIZÁRÓLAG ezen a rétegen múlik,
+  #    és a réteget a .env COMPOSE_FILE sora tölti be. Aki `docker compose -f
+  #    docker-compose.yml up -d`-t ír, vagy elrontja azt a sort, észrevétlenül
+  #    kinyitja a Studiót és a Postgres-poolert minden interfészen.
+  migrate:
+    environment:
+      UNIPORTAL_LAYER: "on"
