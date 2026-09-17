@@ -77,3 +77,4 @@
 64_letter_pdf_message.sql
 65_echo_results_questions.sql
 66_interview_scoring.sql
+67_echo_campaign_students_status.sql

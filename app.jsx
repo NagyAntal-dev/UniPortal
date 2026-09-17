@@ -13547,6 +13547,14 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// Jogosult hallgatók — névtelen kitöltöttségi összesítő (67).
+Object.entries({
+  'Még nem kezdte el': 'Not started', 'Elkezdte': 'Started', 'Kész': 'Done',
+  'jegyet kért vagy van piszkozata': 'requested a ticket or has a draft',
+  'a kampány lezárásakor derül ki': 'known when the campaign closes', 'a feldolgozáskor derül ki': 'known after processing',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push([/^Kurzusértékelésenként számolva \((\d+) hallgató × kurzus\)\. Névenként szándékosan nem jelöljük: a kérdőív névtelen, és a beküldés nem köthető hallgatóhoz\.$/,
+  'Counted per course evaluation ($1 student × course). Deliberately not shown per name: the questionnaire is anonymous and submissions cannot be linked to students.']);
 // Kurzusértékelés hibajelentés (2026-09-16): törlés-megerősítés, feltétel, hibajelölés.
 Object.entries({
   'Biztosan törlöd?': 'Delete this?', 'Törlés': 'Delete', 'Opció törlése': 'Delete option', 'Kérdés törlése': 'Delete question', 'Szakasz törlése': 'Delete section',

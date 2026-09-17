@@ -2697,6 +2697,36 @@ function ECHO_StudentListModal({ open, cim, alcim, betolt, betoltKurzus, onClose
         </p>
       )}
 
+      {/* KITÖLTÖTTSÉG — névtelen összesítő (67_echo_campaign_students_status.sql).
+          Névenként SZÁNDÉKOSAN nem jelöljük: a beküldés névtelen jeggyel megy, a
+          „kész” egyenként nem is ismerhető, és ki mikor töltött ki, azt nem adjuk ki.
+          A migráció előtt a 'statusz' kulcs hiányzik — ilyenkor nincs összesítő. */}
+      {d && d.statusz && (() => {
+        const st = d.statusz;
+        const nyitott = st.kampany_allapot === 'draft' || st.kampany_allapot === 'open';
+        const keszIsmert = !nyitott && (Number(st.kesz) > 0 || st.kampany_allapot !== 'closed');
+        const doboz = (szin, ikon, cim, ertek, megj, kulcs) => (
+          <div className={'rounded-2xl border px-3 py-2.5 ' + szin} data-echo-statusz={kulcs}>
+            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider">{ikon}{cim}</div>
+            <div className="text-xl font-black tabular-nums mt-0.5">{ertek}</div>
+            {megj && <div className="text-[10px] font-bold opacity-80 leading-snug">{megj}</div>}
+          </div>
+        );
+        return (
+          <div className="mb-3" data-echo-statusz-sav="1">
+            <div className="grid grid-cols-3 gap-2">
+              {doboz('bg-slate-50 border-slate-200 text-slate-600', <Lucide.Circle size={12} />, 'Még nem kezdte el', st.nem_kezdte, null, 'nem_kezdte')}
+              {doboz('bg-amber-50 border-amber-200 text-amber-700', <Lucide.Clock size={12} />, 'Elkezdte', st.elkezdte, 'jegyet kért vagy van piszkozata', 'elkezdte')}
+              {doboz('bg-emerald-50 border-emerald-200 text-emerald-700', <Lucide.CheckCircle2 size={12} />, 'Kész',
+                keszIsmert ? st.kesz : '—', keszIsmert ? null : (nyitott ? 'a kampány lezárásakor derül ki' : 'a feldolgozáskor derül ki'), 'kesz')}
+            </div>
+            <p className="text-[10px] text-slate-400 font-bold mt-1.5 leading-relaxed">
+              {'Kurzusértékelésenként számolva (' + st.egyseg + ' hallgató × kurzus). Névenként szándékosan nem jelöljük: a kérdőív névtelen, és a beküldés nem köthető hallgatóhoz.'}
+            </p>
+          </div>
+        );
+      })()}
+
       {d === null ? <SkeletonRows n={6} /> : sorok.length === 0 ? (
         <UEmpty icon={<Lucide.UserX size={22} />} title="Nincs találat"
           text={q ? 'Ezzel a szűréssel senki.' : 'Ez a beállítás egyetlen hallgatót sem ér el.'} />
