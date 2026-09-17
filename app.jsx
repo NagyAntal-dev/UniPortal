@@ -13547,6 +13547,17 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// Kérdőív-kitöltés: kérdésfajtánkénti lépések, üres kérdőív/beküldés, szerkesztői figyelmeztetések.
+Object.entries({
+  'Vissza a kurzusokhoz': 'Back to courses', 'Ebben a kérdőívben most nincs neked szóló kérdés': 'This questionnaire has no questions for you right now',
+  'A kérdőív kérdései olyan feltételhez kötöttek, ami rád most nem illik (például a félév elején megadott célokhoz). Üres értékelést nem küldünk be. Ha szerinted ez hiba, jelezd a Nemzetközi Irodának.':
+    'The questions are tied to a condition that does not apply to you right now (for example goals set at the start of the semester). An empty evaluation is not submitted. If you think this is a mistake, contact the International Office.',
+  'Egyetlen kérdésre sem válaszoltál — üres értékelést nem küldünk be. Lépj vissza, és töltsd ki a kérdéseket.': 'You have not answered any question — an empty evaluation is not submitted. Go back and fill in the questions.',
+  'Érvénytelen érték ennél a feltételnél — így a kérdés senkinek nem jelenik meg. Válassz a listából.': 'Invalid value for this condition — the question would not appear for anyone. Choose from the list.',
+  'A kihagyási kapu csak „oktatónként” ismétlődve működik: azt jelzi, hogy a kitöltő egy adott oktatót nem tud értékelni. Állítsd az Ismétlődést oktatónkéntire, vagy válassz másik kérdéstípust.':
+    'The skip gate only works when repeated “per teacher”: it marks that the respondent cannot evaluate a given teacher. Set Repetition to per teacher, or choose another question type.',
+  'Célonként ismétlődő kérdés: csak azok látják, akik a félév elején célt adtak meg — célonként egyszer.': 'Repeated per goal: only respondents who set goals at the start of the semester see it — once per goal.',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
 // Jogosult hallgatók — névtelen kitöltöttségi összesítő (67).
 Object.entries({
   'Még nem kezdte el': 'Not started', 'Elkezdte': 'Started', 'Kész': 'Done',

@@ -829,15 +829,20 @@ function ECHO_buildSteps(form, teachers, goalItems) {
   sections.forEach((sec) => {
     if (sec.part && sec.part !== 'part2') return;   // a part1 a célmeghatározó, nem itt van
     const qs = Array.isArray(sec.questions) ? sec.questions : [];
-    const perTeacher = qs.some(q => q.repeat === 'teacher');
-    const perGoal    = qs.some(q => q.repeat === 'goal');
-    if (perTeacher) {
+    /* KÉRDÉSFAJTÁNKÉNT. Korábban egyetlen oktatónként vagy célonként ismétlődő
+       kérdés az EGÉSZ szakaszt átfordította: a szakasz többi kérdése eltűnt, és
+       ha nem volt oktató vagy cél, a szakaszból egy lépés sem lett — a kitöltő
+       rögtön az összegzést mutatta, mintha kész lenne (hibajelentés, 2026-09-17).
+       Most: az ismétlődés nélküli kérdések egy lépés, utána oktatónként, majd
+       célonként külön lépések — mindegyik csak a saját fajtájú kérdéseit mutatja
+       (visibleQs). */
+    if (qs.some(q => !q.repeat)) steps.push({ kind: 'section', section: sec });
+    if (qs.some(q => q.repeat === 'teacher')) {
       (teachers || []).forEach((t) => steps.push({ kind: 'teacher', section: sec, teacher: t }));
-    } else if (perGoal) {
-      // Nincs cél → nincs lépés. A szakasz teljesen kimarad.
+    }
+    if (qs.some(q => q.repeat === 'goal')) {
+      // Nincs cél → nincs célonkénti lépés; a szakasz többi kérdése ettől még megjelenik.
       items.forEach((it) => steps.push({ kind: 'goal', section: sec, goal: it }));
-    } else {
-      steps.push({ kind: 'section', section: sec });
     }
   });
   steps.push({ kind: 'review', section: null });
@@ -1778,6 +1783,14 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
   };
 
   const submit = async () => {
+    // Teljesen üres értékelést nem küldünk be: az egy elköltött jegy tartalom nélkül.
+    const ertekes = (v) => !(v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length));
+    const vanValasz = Object.keys(ans || {}).some(k => ertekes(ans[k]))
+      || Object.keys(tans || {}).some(t => Object.keys(tans[t] || {}).some(k => ertekes(tans[t][k])));
+    if (!vanValasz) {
+      setErr('Egyetlen kérdésre sem válaszoltál — üres értékelést nem küldünk be. Lépj vissza, és töltsd ki a kérdéseket.');
+      return;
+    }
     // Végső ellenőrzés a teljes kitöltésen — lásd ECHO_otherGaps.
     const gaps = ECHO_otherGaps(compiled, teachers, ans, tans, hasGoals, goalItems);
     if (gaps.length) {
@@ -1862,6 +1875,27 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
           <button onClick={onBack} className={U_btnPrimary + ' mt-7'}>
             <Lucide.ArrowLeft size={16} /> Vissza a kurzusokhoz
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* NINCS NEKI SZÓLÓ KÉRDÉS. Ha a kérdőívből egyetlen kérdéslépés sem lesz (pl. csak
+     célonként ismétlődő kérdés van, és a hallgatónak nincs célja), az összegzés
+     üresen, beküldhetőnek látszana. Helyette megmondjuk, mi a helyzet. */
+  if (steps.every(s => s.kind === 'review')) {
+    return (
+      <div className="p-4 sm:p-8 max-w-3xl mx-auto" data-echo-ures-kerdoiv="1">
+        <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-primary mb-4 transition-colors">
+          <Lucide.ArrowLeft size={16} /> Vissza a kurzusokhoz
+        </button>
+        <div className="bg-white rounded-3xl border border-slate-100 p-8 text-center">
+          <Lucide.FileQuestion size={28} className="text-slate-300 mx-auto mb-3" />
+          <h2 className="text-lg font-black text-slate-900">Ebben a kérdőívben most nincs neked szóló kérdés</h2>
+          <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+            A kérdőív kérdései olyan feltételhez kötöttek, ami rád most nem illik (például a félév elején megadott célokhoz).
+            Üres értékelést nem küldünk be. Ha szerinted ez hiba, jelezd a Nemzetközi Irodának.
+          </p>
         </div>
       </div>
     );
@@ -5704,6 +5738,19 @@ function ECHO_QuestionPanel({ q, allIds, allQs, ro, onPatch, lang }) {
         </UField>
       </div>
 
+      {/* A kitöltőben nem működő kombinációk — élesítés előtt látszódjon. */}
+      {q.type === 'skip' && q.repeat !== 'teacher' && (
+        <div className="rounded-2xl bg-red-50 border border-red-100 px-3 py-2.5 text-[11px] font-bold text-red-700 leading-relaxed" data-echo-szerk-hiba="skip">
+          A kihagyási kapu csak „oktatónként” ismétlődve működik: azt jelzi, hogy a kitöltő egy adott oktatót nem tud értékelni.
+          Állítsd az Ismétlődést oktatónkéntire, vagy válassz másik kérdéstípust.
+        </div>
+      )}
+      {q.repeat === 'goal' && (
+        <div className="rounded-2xl bg-amber-50 border border-amber-100 px-3 py-2.5 text-[11px] font-bold text-amber-800 leading-relaxed" data-echo-szerk-figy="goal">
+          Célonként ismétlődő kérdés: csak azok látják, akik a félév elején célt adtak meg — célonként egyszer.
+        </div>
+      )}
+
       {/* megjelenítési feltétel — emberi nyelven */}
       <div className="pt-5 border-t border-slate-100" data-echo-feltetel="1">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Megjelenítési feltétel</span>
@@ -5711,7 +5758,7 @@ function ECHO_QuestionPanel({ q, allIds, allQs, ro, onPatch, lang }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <UField label="Mitől függjön?">
             <select className={U_input} value={condKey} disabled={ro}
-              onChange={e => { const k = e.target.value; onPatch({ cond: k ? { [k]: true } : null }); }}>
+              onChange={e => { const k = e.target.value; const elso = ECHO_COND_CTX_ERTEK[k] && ECHO_COND_CTX_ERTEK[k][0]; onPatch({ cond: k ? { [k]: elso ? elso.v : true } : null }); }}>
               <option value="">Mindig jelenjen meg</option>
               <optgroup label="Egy korábbi kérdés válaszától">
                 {kerdesek.map(x => <option key={x.id} value={x.id}>{ECHO_rovid(x.hu || x.id, 60)}</option>)}
@@ -5738,6 +5785,11 @@ function ECHO_QuestionPanel({ q, allIds, allQs, ro, onPatch, lang }) {
         {condKey && (
           <p className="mt-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-[11px] font-semibold text-amber-900 leading-relaxed" data-echo-feltetel-mondat="1">
             {feltetelMondat}
+          </p>
+        )}
+        {condKey && !refQ && ECHO_COND_CTX_ERTEK[condKey] && !talalt && (
+          <p className="text-[11px] font-black text-red-500 mt-1.5" data-echo-feltetel-hiba="1">
+            Érvénytelen érték ennél a feltételnél — így a kérdés senkinek nem jelenik meg. Válassz a listából.
           </p>
         )}
         {condKey && !refQ && ECHO_COND_CTX.indexOf(condKey) < 0 && (
