@@ -298,14 +298,25 @@ function FEED_EchoTeendok({ onNavigate }) {
     return false;
   };
 
-  const teendo = sor
+  /* KÉT FAJTA TEENDŐ
+       ertekeles — a félév végi, névtelen kitöltés (nyitott kitöltési ablak);
+       celok     — a félév eleji célmeghatározás, amíg a hallgató még nem adott
+                   meg célt (nyitott célmeghatározási ablak, goals_saved = hamis).
+     A célmeghatározás határideje a goals_close_at (68-as migráció); ha még
+     nincs meg, a teendő határidő nélkül jelenik meg. */
+  const ertekeles = sor
     .filter(c => c.is_open && !bekuldve(c) &&
       (c.allapot === 'kitoltheto' || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott'))
+    .map(c => ({ ...c, _mod: 'fill', _zar: c.closes_at }));
+  const celok = sor
+    .filter(c => c.is_goals_open && !c.goals_saved)
+    .map(c => ({ ...c, _mod: 'goals', _zar: c.goals_close_at || null }));
+  const teendo = ertekeles.concat(celok)
     .sort((a, b) => {
       // Ugyanaz a rangsor, mint a Kurzusértékelés listáján: elkezdett előbb,
       // aztán a közelebbi határidő. A kettő ne mondjon mást ugyanarról.
-      const s = (x) => (x.has_draft || x.allapot === 'folyamatban' || x.allapot === 'felbehagyott') ? 0 : 1;
-      const h = (x) => { const t = Date.parse(x.closes_at || ''); return isNaN(t) ? Number.MAX_SAFE_INTEGER : t; };
+      const s = (x) => (x._mod === 'fill' && (x.has_draft || x.allapot === 'folyamatban' || x.allapot === 'felbehagyott')) ? 0 : 1;
+      const h = (x) => { const t = Date.parse(x._zar || ''); return isNaN(t) ? Number.MAX_SAFE_INTEGER : t; };
       return (s(a) - s(b)) || (h(a) - h(b));
     });
 
@@ -314,13 +325,13 @@ function FEED_EchoTeendok({ onNavigate }) {
   const indit = (c) => {
     try {
       sessionStorage.setItem('echo_megnyitando',
-        JSON.stringify({ campaign_id: c.campaign_id, course_id: c.course_id }));
+        JSON.stringify({ campaign_id: c.campaign_id, course_id: c.course_id, mod: c._mod }));
     } catch (e) { /* privát ablakban is működjön — ilyenkor csak a listáig visz */ }
     onNavigate && onNavigate(AppView.ECHO_STUDENT);
   };
 
   const napokMulva = (c) => {
-    const t = Date.parse(c.closes_at || '');
+    const t = Date.parse(c._zar || '');
     if (isNaN(t)) return null;
     return Math.ceil((t - Date.now()) / 86400000);
   };
@@ -333,10 +344,14 @@ function FEED_EchoTeendok({ onNavigate }) {
         </span>
         <div>
           <h3 className="text-[15px] font-black text-slate-900">
-            {teendo.length === 1 ? 'Egy kérdőív vár rád' : teendo.length + ' kérdőív vár rád'}
+            {celok.length === 0
+              ? (teendo.length === 1 ? 'Egy kérdőív vár rád' : teendo.length + ' kérdőív vár rád')
+              : (teendo.length === 1 ? 'Egy teendő vár rád' : teendo.length + ' teendő vár rád')}
           </h3>
           <p className="text-[12px] text-slate-500 mt-0.5">
-            Oktatói munka véleményezése · a kitöltés névtelen, a válaszaid nem köthetők vissza hozzád
+            {ertekeles.length === 0
+              ? 'Oktatói munka véleményezése · a félév eleji céljaidat csak te látod'
+              : 'Oktatói munka véleményezése · a kitöltés névtelen, a válaszaid nem köthetők vissza hozzád'}
           </p>
         </div>
       </div>
@@ -344,15 +359,20 @@ function FEED_EchoTeendok({ onNavigate }) {
       <div className="divide-y divide-slate-50">
         {teendo.slice(0, 5).map(c => {
           const nap = napokMulva(c);
-          const elkezdte = c.has_draft || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott';
+          const celMod = c._mod === 'goals';
+          const elkezdte = !celMod && (c.has_draft || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott');
           return (
-            <div key={c.campaign_id + '|' + c.course_id}
+            <div key={c.campaign_id + '|' + c.course_id + '|' + c._mod} data-feed-echo-teendo={c._mod}
               className="flex items-center justify-between gap-4 px-5 sm:px-6 py-3.5 flex-wrap">
               <div className="min-w-0">
                 <span className="block text-sm font-bold text-slate-800 truncate">
                   {c.course_name}
                 </span>
                 <span className="block text-[11px] text-slate-400 mt-0.5">
+                  <span className={'inline-flex items-center gap-1 font-bold mr-1.5 ' + (celMod ? 'text-sky-600' : 'text-primary')}>
+                    {celMod ? <Lucide.Target size={11} /> : <Lucide.ClipboardList size={11} />}
+                    {celMod ? 'Célmeghatározás' : 'Értékelés'}
+                  </span>
                   {c.campaign_name}
                   {(c.campaign_ref_no || c.campaign_code) && typeof ECHO_KampanyId === 'function' ? <span className="ml-1.5"><ECHO_KampanyId sorszam={c.campaign_ref_no} kod={c.campaign_code} kicsi /></span> : null}
                   {nap != null && nap >= 0 && (
@@ -364,7 +384,7 @@ function FEED_EchoTeendok({ onNavigate }) {
               </div>
               <button onClick={() => indit(c)}
                 className={U_btnPrimary + ' flex-none py-2 px-4 text-[13px]'}>
-                {elkezdte ? 'Folytatás' : 'Kitöltés'}
+                {celMod ? 'Célok megadása' : elkezdte ? 'Folytatás' : 'Kitöltés'}
                 <Lucide.ArrowRight size={15} />
               </button>
             </div>
@@ -375,7 +395,7 @@ function FEED_EchoTeendok({ onNavigate }) {
       {teendo.length > 5 && (
         <button onClick={() => onNavigate && onNavigate(AppView.ECHO_STUDENT)}
           className="w-full px-6 py-3 text-[12px] font-bold text-primary hover:bg-primary/5 transition-colors border-t border-slate-50">
-          + még {teendo.length - 5} kérdőív — mutasd mind
+          + még {teendo.length - 5} {celok.length ? 'teendő' : 'kérdőív'} — mutasd mind
         </button>
       )}
     </div>

@@ -13593,6 +13593,9 @@ Object.entries({
   'Nem lett kitöltve — legalább egy célt adj meg (e nélkül a félév végén nincs mit értékelni).': 'Not filled in — add at least one goal (otherwise there is nothing to evaluate at the end of the term).',
   'A hiányzó válaszokat pirossal jelöltük a kérdéseknél.': 'Missing answers are marked in red at the questions.',
   'Célmeghatározás/Értékelés': 'Goal setting/Evaluation',
+  'Egy teendő vár rád': 'One task is waiting for you',
+  'Oktatói munka véleményezése · a félév eleji céljaidat csak te látod': 'Teaching evaluation · only you can see your start-of-term goals',
+  'Célmeghatározás': 'Goal setting', 'Értékelés': 'Evaluation', 'Célok megadása': 'Set goals',
 }).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
 HU_EN_PHRASES.push(
   [/^Még (\d+) kötelező kérdés vár válaszra — pirossal jelöltük\.$/, '$1 required question(s) still need an answer — marked in red.'],
@@ -14087,6 +14090,8 @@ HU_EN_PHRASES.push(
   [/(\d+) nap múlva zár/g, 'closes in $1 days'],
   [/\bma zár\b/g, 'closes today'],
   [/\+ még (\d+) kérdőív — mutasd mind/g, '+ $1 more — show all'],
+  [/^(\d+) teendő vár rád$/g, '$1 tasks are waiting for you'],
+  [/\+ még (\d+) teendő — mutasd mind/g, '+ $1 more — show all'],
   [/·\s*(\d+)\s*fő\b/g, '· $1 students'],
 );
 

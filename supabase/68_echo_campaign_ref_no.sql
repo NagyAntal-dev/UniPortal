@@ -15,7 +15,8 @@
 --
 -- FÜGGVÉNYEK: az echo_campaigns() (15) és az echo_my_courses() (22, a legutóbbi
 --   definíció) törzse BETŰRE VÁLTOZATLAN, csak a 'ref_no' / 'campaign_ref_no'
---   kulcs új. A felület a migráció előtt is működik (a régi kódot mutatja).
+--   kulcs új, az echo_my_courses()-ban pedig a 'goals_close_at' is (a hírfolyam
+--   célmeghatározási teendőjének határidejéhez). A felület a migráció előtt is működik (a régi kódot mutatja).
 --
 -- IDEMPOTENS: igen (kétszer futtatva is hibátlan).
 -- UTÁNA: a 21_echo_harden_submit.sql újrafuttatása (a szokásos szabály szerint).
@@ -121,6 +122,7 @@ begin
              'term',           c.term,
              'opens_at',       c.opens_at,
              'closes_at',      c.closes_at,
+             'goals_close_at', c.goals_close_at,
              'is_open',        echo.is_open(c.id),
              'is_goals_open',  echo.is_goals_open(c.id),
              'course_id',      k.id,

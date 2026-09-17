@@ -2277,6 +2277,11 @@ function ECHO_StudentView({ user }) {
     const c = rows.find(x => x.campaign_id === cel.campaign_id && x.course_id === cel.course_id);
     // Csak akkor nyitjuk, ha TÉNYLEG kitölthető — a kártya és a kattintás közt
     // lejárhatott a kampány, és akkor a listát kell mutatni, nem egy hibát.
+    if (cel.mod === 'goals') {
+      // A hírfolyam célmeghatározási teendője: a célmegadó nézetet nyitjuk.
+      if (c && c.is_goals_open) setMode({ kind: 'goals', course: c });
+      return;
+    }
     if (c && c.is_open &&
         (c.allapot === 'kitoltheto' || c.allapot === 'folyamatban' || c.allapot === 'felbehagyott')) {
       setMode({ kind: 'fill', course: c });
