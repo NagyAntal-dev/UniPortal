@@ -354,6 +354,7 @@ function FEED_EchoTeendok({ onNavigate }) {
                 </span>
                 <span className="block text-[11px] text-slate-400 mt-0.5">
                   {c.campaign_name}
+                  {c.campaign_code && typeof ECHO_KampanyId === 'function' ? <span className="ml-1.5"><ECHO_KampanyId kod={c.campaign_code} kicsi /></span> : null}
                   {nap != null && nap >= 0 && (
                     <span className={nap <= 3 ? ' text-amber-600 font-bold' : ''}>
                       {' · '}{nap === 0 ? 'ma zár' : nap + ' nap múlva zár'}

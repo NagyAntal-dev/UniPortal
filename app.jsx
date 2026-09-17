@@ -13547,6 +13547,8 @@ HU_EN_PHRASES.push(
   [/^Már van lefoglalt interjú-időpontod \((.+)\)\. Előbb mondd le, utána választhatsz másikat\.$/g, 'You already have a booked interview ($1). Cancel it first, then you can choose another.'],
   [/^Ennek a jelentkezőnek már van interjú-időpontja \((.+)\)\. Azt helyezd át, vagy előbb mondd le\.$/g, 'This applicant already has an interview ($1). Move it, or cancel it first.'],
 );
+// Kampányazonosító címke.
+Object.entries({ 'Kampányazonosító': 'Campaign ID' }).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
 // Kérdőív-kitöltés: kérdésfajtánkénti lépések, üres kérdőív/beküldés, szerkesztői figyelmeztetések.
 Object.entries({
   'Vissza a kurzusokhoz': 'Back to courses', 'Ebben a kérdőívben most nincs neked szóló kérdés': 'This questionnaire has no questions for you right now',

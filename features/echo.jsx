@@ -822,6 +822,20 @@ function ECHO_goalsMerge(values) {
    SORREND: ha egy szakasz egyszerre tartalmaz oktatónkénti és célonkénti
    kérdést, az OKTATÓNKÉNTI bontás nyer (a két bontás nem szorozható össze).
    Ilyen szakaszt a validátor ma nem tilt, de a kérdőív nem is használ. */
+/* KAMPÁNYAZONOSÍTÓ — a kampány egyedi kódja (echo.campaign.code, egyedi index +
+   zárral generálva, pl. OMHV-2026-27-1-14). Ugyanaz a címke jelenik meg az admin és a
+   hallgatói felületen, így egy hibajelzésnél egyértelmű, melyik kampányról van szó. */
+function ECHO_KampanyId({ kod, kicsi }) {
+  if (!kod) return null;
+  return (
+    <span title="Kampányazonosító" data-echo-kampany-id={kod} data-echo-noi18n="1"
+      className={'inline-flex items-center gap-1 rounded-md bg-slate-100 text-slate-600 font-mono font-bold align-middle whitespace-nowrap ' +
+                 (kicsi ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-[11px]')}>
+      <Lucide.Hash size={kicsi ? 10 : 11} className="flex-none" />{kod}
+    </span>
+  );
+}
+
 function ECHO_buildSteps(form, teachers, goalItems) {
   const sections = (form && Array.isArray(form.sections)) ? form.sections : [];
   const items = Array.isArray(goalItems) ? goalItems : [];
@@ -1346,7 +1360,7 @@ function ECHO_GoalsView({ course, onBack, onSaved }) {
               {part1 ? <ECHO_Src>{ECHO_txt(part1, lang)}</ECHO_Src> : 'Célmeghatározás'}
             </h2>
             <p className="text-sm text-slate-400 font-medium mt-0.5">
-              <ECHO_Src>{course.course_code} · {course.course_name}</ECHO_Src>
+              <ECHO_Src>{course.course_code} · {course.course_name}</ECHO_Src>{course.campaign_code ? <span className="ml-2 align-middle"><ECHO_KampanyId kod={course.campaign_code} kicsi /></span> : null}
             </p>
             {langFellBack && (
               <p className="mt-1.5 text-[11px] font-bold text-amber-700 inline-flex items-start gap-1.5">
@@ -1915,7 +1929,7 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
       {/* fejléc + lépésjelző */}
       <div className="bg-white rounded-3xl border border-slate-100 p-5 sm:p-6 mb-4">
         <p className="text-xs font-bold text-slate-400 mb-1">
-          <ECHO_Src>{course.course_code} · {course.course_name}</ECHO_Src>
+          <ECHO_Src>{course.course_code} · {course.course_name}</ECHO_Src>{course.campaign_code ? <span className="ml-2 align-middle"><ECHO_KampanyId kod={course.campaign_code} kicsi /></span> : null}
         </p>
         <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
           {cur.kind === 'review' ? title : <ECHO_Src>{title}</ECHO_Src>}
@@ -2339,7 +2353,7 @@ function ECHO_StudentView({ user }) {
       <div className="bg-white rounded-3xl border border-slate-100 p-5 hover:border-slate-200 transition-all">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-black text-slate-400 tracking-wider"><ECHO_Src>{c.course_code}</ECHO_Src></p>
+            <p className="text-[11px] font-black text-slate-400 tracking-wider flex flex-wrap items-center gap-x-2 gap-y-1"><ECHO_Src>{c.course_code}</ECHO_Src><ECHO_KampanyId kod={c.campaign_code} kicsi /></p>
             <h3 className="font-black text-slate-900 leading-snug mt-0.5"><ECHO_Src>{c.course_name}</ECHO_Src></h3>
           </div>
           <ECHO_StateBadge allapot={allapot} />
@@ -3683,7 +3697,7 @@ function ECHO_CampaignsPanel({ user }) {
                       className={'border-b border-slate-50 last:border-0 cursor-pointer transition-colors ' + (on ? 'bg-primary/5' : 'hover:bg-slate-50')}>
                       <td className="px-6 py-4">
                         <p className="font-black text-slate-900 text-sm"><ECHO_Src>{c.name}</ECHO_Src></p>
-                        <p className="text-[11px] font-bold text-slate-400 mt-0.5"><ECHO_Src>{c.code} · {c.term}</ECHO_Src></p>
+                        <p className="text-[11px] font-bold text-slate-400 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1"><ECHO_KampanyId kod={c.code} kicsi /><ECHO_Src>{c.term}</ECHO_Src></p>
                       </td>
                       <td className="px-6 py-4">
                         <UBadge tone={st.tone}>{st.label}</UBadge>
@@ -3723,7 +3737,7 @@ function ECHO_CampaignsPanel({ user }) {
             <div className="bg-white rounded-3xl border border-slate-100 p-6">
               <div className="flex items-start justify-between gap-3 mb-5">
                 <div>
-                  <h3 className="font-black text-slate-900"><ECHO_Src>{sel.name}</ECHO_Src></h3>
+                  <h3 className="font-black text-slate-900 flex flex-wrap items-center gap-2"><ECHO_Src>{sel.name}</ECHO_Src><ECHO_KampanyId kod={sel.code} /></h3>
                   <p className="text-xs text-slate-400 font-bold mt-0.5">
                     {ECHO_dateTime(sel.opens_at)} — {ECHO_dateTime(sel.closes_at)}
                   </p>
@@ -4011,7 +4025,7 @@ function ECHO_CampaignsPanel({ user }) {
 
       <ECHO_StudentListModal open={jogOpen} onClose={() => setJogOpen(false)}
         cim="Jogosult hallgatók"
-        alcim={sel ? (sel.name + ' · az alkalmassági lista szerint') : ''}
+        alcim={sel ? ((sel.code ? sel.code + ' · ' : '') + sel.name + ' · az alkalmassági lista szerint') : ''}
         betolt={(q) => ECHO_api.campaignStudents(sel.id, q)}
         betoltKurzus={(pid) => ECHO_api.studentCourses(sel.id, pid, null)} />
 
