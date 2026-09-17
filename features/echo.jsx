@@ -3398,16 +3398,6 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
             )}
           </UField>
 
-          <UField label="Kitöltési ablak"
-            hint="Üresen hagyható, de akkor a kampány nem indítható el. Két vége csak együtt értelmes.">
-            <div className="grid grid-cols-2 gap-2">
-              <input type="datetime-local" className={U_input} value={op} disabled={ro}
-                onChange={e => setOp(e.target.value)} />
-              <input type="datetime-local" className={U_input} value={cl} disabled={ro}
-                onChange={e => setCl(e.target.value)} />
-            </div>
-          </UField>
-
           <UField label="Célmeghatározási ablak (Part 1)"
             hint="A félév ELEJI, NEM névtelen szakasz ablaka. Ha üres, a célmeghatározás nem nyílik meg.">
             <div className="grid grid-cols-2 gap-2">
@@ -3415,6 +3405,16 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
                 onChange={e => setGop(e.target.value)} />
               <input type="datetime-local" className={U_input} value={gcl} disabled={ro}
                 onChange={e => setGcl(e.target.value)} />
+            </div>
+          </UField>
+
+          <UField label="Kitöltési ablak"
+            hint="Üresen hagyható, de akkor a kampány nem indítható el. Két vége csak együtt értelmes.">
+            <div className="grid grid-cols-2 gap-2">
+              <input type="datetime-local" className={U_input} value={op} disabled={ro}
+                onChange={e => setOp(e.target.value)} />
+              <input type="datetime-local" className={U_input} value={cl} disabled={ro}
+                onChange={e => setCl(e.target.value)} />
             </div>
           </UField>
 
@@ -6330,7 +6330,7 @@ function ECHO_Editor({ user }) {
                             időzítést sugallta, ami a kampány dolga. */}
                         <div>
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            Hova kerül a válasz
+                            Célmeghatározás/Értékelés
                           </label>
                           <select className={U_input + ' py-2 text-sm mt-1'} value={s.part || 'part2'} disabled={ro}
                             onChange={e => patchSection(i, { part: e.target.value })}>

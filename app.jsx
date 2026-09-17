@@ -13592,6 +13592,7 @@ Object.entries({
   'Az „Egyéb” mellé hiányzik a szöveg — írd le, mi volt az, és add hozzá a + gombbal.': 'The text next to “Other” is missing — write what it was and add it with the + button.',
   'Nem lett kitöltve — legalább egy célt adj meg (e nélkül a félév végén nincs mit értékelni).': 'Not filled in — add at least one goal (otherwise there is nothing to evaluate at the end of the term).',
   'A hiányzó válaszokat pirossal jelöltük a kérdéseknél.': 'Missing answers are marked in red at the questions.',
+  'Célmeghatározás/Értékelés': 'Goal setting/Evaluation',
 }).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
 HU_EN_PHRASES.push(
   [/^Még (\d+) kötelező kérdés vár válaszra — pirossal jelöltük\.$/, '$1 required question(s) still need an answer — marked in red.'],
