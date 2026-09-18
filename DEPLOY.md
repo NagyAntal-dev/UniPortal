@@ -31,7 +31,6 @@ A csomag helyett a nyilvános tárolóból is dolgozhatsz: `git clone https://gi
 | `api-gw` | A Supabase belső API-átjárója |
 | `studio`, `meta` | Supabase Studio adminfelület (csak a szerverről érhető el) |
 | `supavisor` | Adatbázis-kapcsolatkezelő (pooler) |
-| `keycloak`, `keycloak-db-init` | *Opcionális* (`deploy/compose.keycloak.yml`): SAML-közvetítő az NJE IdP és a Supabase Auth között, az „NJE azonosítóval” belépéshez. Lásd [docs/keycloak-saml.md](docs/keycloak-saml.md). |
 
 A Supabase-szolgáltatások a hivatalos self-host csomagból jönnek, **rögzített verzióval** (`deploy/supabase`; a forrást a `deploy/supabase/UNIPORTAL_VENDOR.txt` rögzíti). A UniPortal saját módosításai külön rétegben vannak (`deploy/compose.uniportal.yml`), a hivatalos fájlokhoz nem kell nyúlni.
 
@@ -90,7 +89,6 @@ A felület címe `http://<szerver>:8080`, vagy a domain, ha a proxy már áll.
 | `8080` (`UNIPORTAL_HTTP_PORT`) | web: felület + API | kívülről; élesben a HTTPS-proxy mögül |
 | `127.0.0.1:8000` | api-gw: Studio és nyers API | csak a szerverről |
 | `127.0.0.1:5432`, `127.0.0.1:6543` | supavisor: PostgreSQL | csak a szerverről |
-| `127.0.0.1:8180` (`KEYCLOAK_ADMIN_PORT`) | Keycloak admin konzol (ha a Keycloak-réteg be van kapcsolva) | csak a szerverről; a Keycloak nyilvános része a web `/keycloak/` útvonalán megy |
 
 A többi szolgáltatás csak a belső Docker-hálózaton látszik. A Studio távolról SSH-alagúttal érhető el:
 
@@ -182,8 +180,6 @@ server {
 - `ADDITIONAL_REDIRECT_URLS` (`<cím>/**`)
 - `SUPABASE_PUBLIC_URL`
 - `API_EXTERNAL_URL` (`<cím>/auth/v1`)
-
-**NJE SSO (SAML).** Az „NJE azonosítóval” belépés egy Keycloak-közvetítőn át működik. Ez külön compose-réteg, telepítése és beállítása: [docs/keycloak-saml.md](docs/keycloak-saml.md).
 
 ## 6. E-mail (SMTP)
 
@@ -380,7 +376,6 @@ Az áthozott mentés személyes adatokat tartalmaz: kezeld a GDPR szerint.
 - [ ] `WHATSAPP_APP_SECRET` és `WHATSAPP_VERIFY_TOKEN` ki van töltve — különben a webhook szándékosan nem üzemel (503).
 - [ ] Néhány perc valódi használat után a `docker compose logs web | grep limiting` üres (a korlát nem akadályozza a normál munkát).
 - [ ] A szerver és a Docker frissítései ütemezve vannak.
-- [ ] NJE SSO esetén: a `https://<domain>/keycloak/admin/` kívülről 404-et ad, a Keycloak admin csak a `127.0.0.1:8180`-on figyel, és a `docs/keycloak-saml.md` 11. pontjának tesztjei lefutottak.
 
 ## 12. Ismert korlátok
 

@@ -47,8 +47,6 @@ limit_req_zone  $binary_remote_addr zone=uni_authgen:10m rate=${UNIPORTAL_RL_AUT
 limit_req_zone  $uniportal_bucket   zone=uni_api:10m     rate=${UNIPORTAL_RL_API};
 limit_req_zone  $uniportal_bucket   zone=uni_fn:10m      rate=${UNIPORTAL_RL_FN};
 limit_req_zone  $uniportal_bucket   zone=uni_storage:10m rate=${UNIPORTAL_RL_STORAGE};
-# Keycloak (NJE SSO-közvetítő) oldalai és SAML-végpontjai, IP szerint.
-limit_req_zone  $binary_remote_addr zone=uni_kc:10m      rate=${UNIPORTAL_RL_KEYCLOAK};
 limit_conn_zone $binary_remote_addr zone=uni_conn:10m;
 
 limit_req_status    429;
@@ -69,9 +67,6 @@ server {
     # A Docker belső DNS-e: az api-gw újraindulás után is feloldható marad.
     resolver 127.0.0.11 valid=30s ipv6=off;
     set $api_gw http://${API_GW_UPSTREAM};
-    # Futásidőben oldódik fel: Keycloak-réteg nélkül a web is elindul, csak a
-    # /keycloak/ ad 502-t (deploy/compose.keycloak.yml, docs/keycloak-saml.md).
-    set $keycloak http://${KEYCLOAK_UPSTREAM};
 
     client_max_body_size 50m;
     large_client_header_buffers 4 16k;
@@ -176,29 +171,6 @@ server {
         proxy_request_buffering off;
         client_max_body_size 50m;
         proxy_pass $api_gw;
-    }
-
-    # ---- Keycloak (NJE SSO-közvetítő) ----
-    # Kifelé CSAK a uniportal realm (SAML-végpontok, NJE-visszatérés, statikus
-    # erőforrások). Az admin konzol és a master realm innen NEM érhető el — az
-    # adminisztráció a szerverről megy: 127.0.0.1:8180 (SSH-alagút).
-    # ^~: a regex-locationök (pl. \.html$) nem vehetik el ezeket az útvonalakat.
-    location ^~ /keycloak/admin/         { return 404; }
-    location ^~ /keycloak/realms/master/ { return 404; }
-    # A fejléceket a keycloak-proxy.conf adja (NEM a proxy.conf): ott az
-    # X-Forwarded-For a valós ügyfél EGYETLEN címe, nem a hamisítható lánc.
-    # Egy saját add_header leállítja a szerverszintű fejlécek öröklését: a
-    # Keycloak a saját (szigorúbb) CSP / Referrer / XFO fejléceit küldi.
-    location ^~ /keycloak/resources/ {
-        include /etc/nginx/uniportal/keycloak-proxy.conf;
-        add_header X-Robots-Tag "noindex, nofollow" always;
-        proxy_pass $keycloak;
-    }
-    location ^~ /keycloak/ {
-        limit_req zone=uni_kc burst=${UNIPORTAL_RL_KEYCLOAK_BURST} nodelay;
-        include /etc/nginx/uniportal/keycloak-proxy.conf;
-        add_header X-Robots-Tag "noindex, nofollow" always;
-        proxy_pass $keycloak;
     }
 
     location / { try_files $uri =404; }

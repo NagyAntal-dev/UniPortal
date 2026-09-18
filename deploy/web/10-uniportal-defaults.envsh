@@ -45,12 +45,6 @@
 : "${UNIPORTAL_RL_STORAGE:=10r/s}"
 : "${UNIPORTAL_RL_STORAGE_BURST:=40}"
 
-# Keycloak (NJE SSO-közvetítő, /keycloak/), IP szerint. Egy belépés ~10-15
-# kérés (átirányítások + a statikus erőforrások külön, korlát nélkül mennek);
-# közös NAT mögött a reggeli csúcsban is bírnia kell.
-: "${UNIPORTAL_RL_KEYCLOAK:=300r/m}"
-: "${UNIPORTAL_RL_KEYCLOAK_BURST:=100}"
-
 # Egyidejű kapcsolatok egy IP-ről. A valós idejű (WebSocket) kapcsolatokat is
 # ez fogja, és közös NAT mögött egy kampusz sok száz kapcsolatot nyit, ezért
 # magas az alapérték.
@@ -61,5 +55,4 @@ export UNIPORTAL_TRUSTED_PROXY \
        UNIPORTAL_RL_API UNIPORTAL_RL_API_BURST \
        UNIPORTAL_RL_FN UNIPORTAL_RL_FN_BURST \
        UNIPORTAL_RL_STORAGE UNIPORTAL_RL_STORAGE_BURST \
-       UNIPORTAL_RL_KEYCLOAK UNIPORTAL_RL_KEYCLOAK_BURST \
        UNIPORTAL_CONN_LIMIT

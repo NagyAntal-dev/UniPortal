@@ -65,19 +65,6 @@ set_kv S3_PROTOCOL_ACCESS_KEY_ID     "$(openssl rand -hex 16)"
 set_kv S3_PROTOCOL_ACCESS_KEY_SECRET "$(openssl rand -hex 32)"
 set_kv MINIO_ROOT_PASSWORD         "$(openssl rand -hex 16)"
 set_kv POOLER_TENANT_ID            "uniportal-$(openssl rand -hex 4)"
-# NJE SSO: a Keycloak titkai és a Supabase SP aláíró kulcsa (SAML_ENABLED marad
-# false, amíg a docs/keycloak-saml.md szerint be nem kapcsolod).
-set_kv KEYCLOAK_PUBLIC_URL         "$PUBLIC_URL/keycloak"
-set_kv KEYCLOAK_ADMIN_PASSWORD     "$(openssl rand -hex 24)"
-set_kv KEYCLOAK_DB_PASSWORD        "$(openssl rand -hex 24)"
-# A GoTrue PKCS#1 (hagyományos) RSA-kulcsot vár; az OpenSSL 3 alapból PKCS#8-at
-# írna, ezért -traditional (az 1.1-es OpenSSL-nek nincs ilyen kapcsolója, de
-# ott eleve PKCS#1 az alapértelmezés).
-SAML_PEM=$(openssl genrsa 2048 2>/dev/null)
-SAML_KEY=$(printf '%s\n' "$SAML_PEM" | openssl rsa -traditional -outform DER 2>/dev/null | openssl enc -base64 -A)
-[ -n "$SAML_KEY" ] || SAML_KEY=$(printf '%s\n' "$SAML_PEM" | openssl rsa -outform DER 2>/dev/null | openssl enc -base64 -A)
-unset SAML_PEM
-set_kv SAML_PRIVATE_KEY            "$SAML_KEY"
 mv .env.tmp .env
 chmod 600 .env
 
