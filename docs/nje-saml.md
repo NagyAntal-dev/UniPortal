@@ -46,6 +46,16 @@ Az adatok a `public.saml_identities` táblában vannak (`supabase/76_saml_sso.sq
 - **Aláírás:** az assertion legyen aláírva (SimpleSAMLphp-ben ez az alapértelmezés). A kéréseinket (AuthnRequest, LogoutRequest) mi is aláírjuk.
 - **NameID:** bármi lehet (transient is jó). A felhasználót az ePPN azonosítja.
 
+### Ha az IT-nál a korábbi (GoTrue-s) címek vannak bejegyezve
+
+Ez az NJE-nél a helyzet: az IT-nak a `https://uniportal.nje.hu/auth/v1/sso/saml/{metadata,acs,slo}` címeket adtuk meg. Hogy az IT-nál ne kelljen semmit módosítani, a `saml-sp` ugyanezeken a címeken válaszol. A `.env`-ben:
+
+```
+SAML_SP_PATH=/auth/v1/sso/saml
+```
+
+Ekkor az entityID `https://uniportal.nje.hu/auth/v1/sso/saml/metadata`, az ACS `…/auth/v1/sso/saml/acs`, az SLO `…/auth/v1/sso/saml/slo`. Az nginx ezt az útvonalat a `saml-sp`-hez viszi, nem a GoTrue-hoz, mert a GoTrue saját SAML-je ki van kapcsolva. A metaadat a `/saml/metadata` címen is elérhető, ugyanazzal a tartalommal. A felület gombjai továbbra is a `/saml/login` és a `/saml/logout` címet hívják.
+
 ## Telepítés
 
 **Új szerver:** az `./init-env.sh <cím>` a SAML-kulcsokat is elkészíti.

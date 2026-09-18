@@ -101,6 +101,7 @@ services:
       GOTRUE_URL: http://auth:9999
       POSTGREST_URL: http://rest:3000
       SAML_SP_ENTITY_ID: ${SAML_SP_ENTITY_ID:-}
+      SAML_SP_PATH: ${SAML_SP_PATH:-/saml}
       SAML_SP_PRIVATE_KEY: ${SAML_SP_PRIVATE_KEY:-}
       SAML_SP_CERT: ${SAML_SP_CERT:-}
       SAML_COOKIE_SECRET: ${SAML_COOKIE_SECRET:-}

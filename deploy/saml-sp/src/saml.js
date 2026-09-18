@@ -157,6 +157,9 @@ export function createSaml(cfg, certStore, overrides = {}) {
     // A kéréseinket aláírjuk (AuthnRequest, LogoutRequest/Response).
     privateKey: cfg.spKey,
     publicCert: cfg.spCert,
+    // Ha az IdP titkosítja az assertiont (egy korábbi bejegyzés alapján a
+    // tanúsítványunkkal), ugyanezzel a kulccsal fejtjük vissza.
+    decryptionPvk: cfg.spKey,
     signatureAlgorithm: 'sha256',
     digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
     // Az ASSERTION aláírása kötelező — ez hordozza a személyazonosságot. A

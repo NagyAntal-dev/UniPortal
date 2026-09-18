@@ -173,6 +173,15 @@ server {
         include /etc/nginx/uniportal/proxy.conf;
         proxy_pass $saml_sp;
     }
+    # Az NJE IT-nál a korábbi (GoTrue-s) címek vannak bejegyezve: ezeket is a
+    # saml-sp szolgálja ki (.env: SAML_SP_PATH=/auth/v1/sso/saml). A GoTrue
+    # saját SAML-je ki van kapcsolva, tehát itt nincs mit elvennünk tőle. Az
+    # /auth/v1/ előtagnál hosszabb, így ez nyer.
+    location ^~ /auth/v1/sso/saml/ {
+        limit_req zone=uni_auth burst=${UNIPORTAL_RL_AUTH_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf;
+        proxy_pass $saml_sp;
+    }
 
     location /storage/v1/ {
         limit_req zone=uni_storage burst=${UNIPORTAL_RL_STORAGE_BURST};

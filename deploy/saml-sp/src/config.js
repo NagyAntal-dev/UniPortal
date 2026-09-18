@@ -69,12 +69,22 @@ export function loadConfig(env = process.env) {
 
   const idpEntityId = String(env.SAML_IDP_ENTITY_ID || NJE_IDP).trim();
 
+  // Az IdP felé hirdetett útvonal (metadata, acs, slo). Alapból /saml; ha az
+  // IT-nál egy korábbi bejegyzés él (pl. a GoTrue-s /auth/v1/sso/saml), a
+  // SAML_SP_PATH-szal ugyanazokon a címeken válaszolunk. A /saml/login és a
+  // /saml/logout mindig /saml alatt marad (azokat a felület hívja).
+  const spPath = `/${String(env.SAML_SP_PATH || '/saml').trim().replace(/^\/+|\/+$/g, '')}`;
+  if (!/^\/[A-Za-z0-9._~/-]+$/.test(spPath)) {
+    throw new Error(`Érvénytelen SAML_SP_PATH: ${spPath}`);
+  }
+
   return {
     port: Number(env.PORT) || 3000,
     publicUrl,
-    entityId: String(env.SAML_SP_ENTITY_ID || `${publicUrl}/saml/metadata`).trim(),
-    acsUrl: `${publicUrl}/saml/acs`,
-    sloUrl: `${publicUrl}/saml/slo`,
+    spPath,
+    entityId: String(env.SAML_SP_ENTITY_ID || `${publicUrl}${spPath}/metadata`).trim(),
+    acsUrl: `${publicUrl}${spPath}/acs`,
+    sloUrl: `${publicUrl}${spPath}/slo`,
     spKey,
     spCert,
     idpEntityId,

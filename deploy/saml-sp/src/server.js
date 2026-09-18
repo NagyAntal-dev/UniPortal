@@ -34,12 +34,17 @@ export function createApp(cfg, { saml, provisioner, log = console }) {
     next();
   });
 
+  // Az IdP-nek szóló végpontok a /saml alatt ÉS a SAML_SP_PATH alatt is
+  // elérhetők (pl. /auth/v1/sso/saml — lásd config.js).
+  const spPath = cfg.spPath || '/saml';
+  const idp = (name) => [...new Set([`/saml/${name}`, `${spPath}/${name}`])];
+
   const form = express.urlencoded({ extended: false, limit: '512kb', parameterLimit: 20 });
 
   app.get('/saml/healthz', (req, res) => res.type('text/plain').send('ok\n'));
 
-  app.get('/saml/metadata', (req, res) => {
-    res.type('application/xml').send(saml.generateServiceProviderMetadata(null, cfg.spCert));
+  app.get(idp('metadata'), (req, res) => {
+    res.type('application/xml').send(saml.generateServiceProviderMetadata(cfg.spCert, cfg.spCert));
   });
 
   app.get('/saml/login', async (req, res) => {
@@ -52,7 +57,7 @@ export function createApp(cfg, { saml, provisioner, log = console }) {
     }
   });
 
-  app.post('/saml/acs', form, async (req, res) => {
+  app.post(idp('acs'), form, async (req, res) => {
     let profile;
     try {
       profile = await validateLoginResponse(saml, cfg, req.body);
@@ -148,12 +153,12 @@ location.replace(${JSON.stringify(url).replace(/</g, '\\u003c')});
     }
   };
 
-  app.get('/saml/slo', (req, res) => handleSlo(req, res, () => {
+  app.get(idp('slo'), (req, res) => handleSlo(req, res, () => {
     const originalQuery = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?') + 1) : '';
     return saml.validateRedirectAsync(req.query, originalQuery);
   }));
 
-  app.post('/saml/slo', form, (req, res) => handleSlo(req, res, () => (
+  app.post(idp('slo'), form, (req, res) => handleSlo(req, res, () => (
     req.body && req.body.SAMLRequest
       ? saml.validatePostRequestAsync(req.body)
       : saml.validatePostResponseAsync(req.body || {})
@@ -163,7 +168,7 @@ location.replace(${JSON.stringify(url).replace(/</g, '\\u003c')});
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
     log.error(`[saml] ${req.method} ${req.path}: ${err.message}`);
-    if (req.path === '/saml/acs') return fail(res, 'invalid_response');
+    if (req.path.endsWith('/acs')) return fail(res, 'invalid_response');
     res.status(err.status && err.status < 500 ? err.status : 500).type('text/plain').send('error\n');
   });
 

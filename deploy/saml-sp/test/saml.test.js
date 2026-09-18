@@ -147,3 +147,20 @@ test('tanúsítvány nélkül (metaadat még nem jött meg) nincs belépés', as
   const id = await freshRequestId(saml);
   await assert.rejects(saml.validatePostResponseAsync({ SAMLResponse: buildResponse({ inResponseTo: id }) }));
 });
+
+test('titkosított (EncryptedAssertion) válasz visszafejtve', async () => {
+  const { encrypt } = await import('xml-encryption');
+  const { SP_CERT } = await import('./helpers.js');
+  const { saml } = setup();
+  const id = await freshRequestId(saml);
+  const xml = Buffer.from(buildResponse({ inResponseTo: id }), 'base64').toString('utf8');
+  const m = /<saml:Assertion[\s\S]*<\/saml:Assertion>/.exec(xml);
+  const enc = await new Promise((resolve, reject) => encrypt(m[0], {
+    rsa_pub: SP_CERT, pem: SP_CERT,
+    encryptionAlgorithm: 'http://www.w3.org/2009/xmlenc11#aes256-gcm',
+    keyEncryptionAlgorithm: 'http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p',
+  }, (e, r) => (e ? reject(e) : resolve(r))));
+  const wrapped = xml.replace(m[0], `<saml:EncryptedAssertion>${enc}</saml:EncryptedAssertion>`);
+  const { profile } = await saml.validatePostResponseAsync({ SAMLResponse: Buffer.from(wrapped).toString('base64') });
+  assert.equal(mapAttributes(profile).eppn, 'kiss.anna@nje.hu');
+});
