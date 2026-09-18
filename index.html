@@ -95,6 +95,8 @@
       <div class="flex items-center gap-2">
         <button id="langToggle" type="button" data-noi18n onclick="njeNyelvValtas()" title="Language / Nyelv" aria-label="Language / Nyelv" class="px-3 py-2.5 rounded-xl text-[11px] font-black tracking-wide text-slate-500 hover:bg-slate-100 transition-colors">EN</button>
         <button onclick="openAuth('login')" class="px-4 py-2.5 rounded-xl text-sm font-bold text-ink hover:bg-slate-100 transition-colors">Sign in</button>
+        <span aria-hidden="true" class="text-slate-300">|</span>
+        <button type="button" id="njeSsoBtn" data-noi18n onclick="doNjeSso()" class="px-4 py-2.5 rounded-xl text-sm font-bold text-ink hover:bg-slate-100 transition-colors disabled:opacity-60">NJE Login</button>
         <button onclick="openAuth('register')" class="px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Sign up</button>
       </div>
     </div>
@@ -489,7 +491,6 @@
         </div>
         <div id="loginError" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
         <button id="loginBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Sign in</button>
-        <button type="button" id="njeSsoBtn" onclick="doNjeSso()" class="w-full py-3.5 rounded-2xl text-sm font-bold text-primary-600 border border-primary-300 hover:bg-primary-50 transition-all disabled:opacity-60 inline-flex items-center justify-center gap-2"><i data-lucide="building-2" class="w-4 h-4"></i><span>Sign in with NJE ID</span></button>
         <p class="text-center text-[11px] text-slate-400"><a href="privacy.html" target="_blank" rel="noopener" class="hover:text-primary-600">Privacy Notice</a> · <a href="terms.html" target="_blank" rel="noopener" class="hover:text-primary-600">Terms of Use</a></p>
       </form>
 
