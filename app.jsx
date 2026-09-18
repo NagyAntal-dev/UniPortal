@@ -12613,7 +12613,7 @@ const App: React.FC = () => {
     try {
       const { data, error } = await sb.auth.signInWithSSO({
         domain: 'nje.hu',
-        options: { redirectTo: new URL('app.html', window.location.href).href },
+        options: { redirectTo: 'https://uniportal.nje.hu/' },
       });
       if (error || !data?.url) {
         setLoginError(error?.message || 'Az NJE bejelentkezés nem indítható el.');
