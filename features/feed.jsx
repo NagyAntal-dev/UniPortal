@@ -43,8 +43,25 @@ const FEED_loadPosts = (seedOk) => dlSelect(FEED_TABLE, FEED_LS, seedOk ? FEED_s
    sorszintű szabálya végzi (feed_post_visible) — a felület csak összeállítja. */
 /* Ki kezeli a hírfolyamot: a SUPERADMIN is (az isAdmin csak a pontos 'ADMIN'
    szerepkört ismeri). Ki látja a célközönség-jelölést: minden ügyintéző. */
-const FEED_szerkeszto = (user) => !!(user && ['SUPERADMIN', 'ADMIN'].includes(user.role));
-const FEED_ugyintezo = (user) => !!(user && ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(user.role));
+/* SZERKESZTŐ: bejegyzést ír és töröl. A hírfolyam a `feed` modul CREATE/DELETE
+   joga. A `regi` paraméter a MAI viselkedés — ha a 72-es migráció még nem
+   futott le, az dönt (lásd features/perm.jsx).
+
+   FIGYELEM, a két predikátum NEM ugyanarra jó, és ezért két külön művelet:
+     FEED_szerkeszto — bejegyzést tesz közzé és töröl  -> CREATE
+     FEED_ugyintezo  — a célközönség-jelölést látja, a
+                       jelentkezéseket (event_rsvps) kezeli -> USE
+   A mai kódba égetett listák szerint a szerkesztő szűkebb kör (SUPERADMIN,
+   ADMIN), az ügyintéző bővebb (a négy belső szerepkör). A 72-es backfill
+   pontosan ezt rögzítette: feed CREATE/EDIT/DELETE az ADMISSIONS-nak is jár
+   (rbac_feed_posts_* = is_admissions()), a USE mindenkinek, aki látja a modult. */
+const FEED_szerkeszto = (user) => PERM_can(user, 'feed', 'CREATE',
+  !!(user && ['SUPERADMIN', 'ADMIN'].includes(user.role)));
+const FEED_ugyintezo = (user) => PERM_can(user, 'feed', 'USE',
+  !!(user && ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(user.role)));
+/* Törlés külön: egy bejegyzés eltüntetése visszafordíthatatlan. */
+const FEED_torolhet = (user) => PERM_can(user, 'feed', 'DELETE',
+  !!(user && ['SUPERADMIN', 'ADMIN'].includes(user.role)));
 const FEED_CEL_LISTAK = ['szerep', 'tagozat', 'kepzesi_szint', 'kar', 'szak'];
 const FEED_CEL_TETELEK = ['kurzus', 'csoport', 'szemely'];
 const FEED_SZEREPEK = [['STUDENT', 'Hallgatók és jelentkezők'], ['TEACHER', 'Oktatók'], ['AGENT', 'Ügynökök']];
@@ -278,7 +295,15 @@ function FeedComposer({ open, onClose, onPublished, authorName }) {
         return;
       }
     } else {
-      await dlInsert(FEED_TABLE, row, FEED_LS);
+      // A dlInsert a 72/73-as óta DOBHAT: egy megtagadott írás nem eshet
+      // vissza helyi tárolóra, különben a szerző azt hinné, közzétette.
+      try {
+        await dlInsert(FEED_TABLE, row, FEED_LS);
+      } catch (e) {
+        setHiba('A közzététel nem sikerült: ' + ((e && e.message) || 'ismeretlen hiba'));
+        setBusy(false);
+        return;
+      }
     }
     setBusy(false); onPublished && onPublished(); onClose();
   };
@@ -352,20 +377,30 @@ function FeedCard({ post, user, rsvps, tix, onChange, onDelete }) {
   const meta = FEED_TYPES[post.type] || FEED_TYPES.news;
   const I = meta.icon;
   const [copied, setCopied] = useState(false);
+  // Jogosultsági megtagadás a kártyán (jelentkezés, jegyigénylés).
+  const [kartyaHiba, setKartyaHiba] = useState('');
   const myEmail = user && user.email;
   const attendees = rsvps.filter(r => r.post_id === post.id);
   const iRsvped = attendees.some(r => r.email === myEmail);
   const myTix = tix.find(t => t.post_id === post.id && t.email === myEmail);
 
   const copy = (txt) => { try { navigator.clipboard.writeText(txt); } catch (e) {} setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  /* A dlDelete / dlInsert megtagadás esetén DOB (lásd data-layer.jsx). Enélkül
+     egy elutasított jelentkezés a felületen sikeresnek látszana. */
   const toggleRsvp = async () => {
-    if (iRsvped) { const mine = attendees.find(r => r.email === myEmail); if (mine) await dlDelete(RSVP_TABLE, mine.id, RSVP_LS); }
-    else { await dlInsert(RSVP_TABLE, { id: uid('RS'), post_id: post.id, email: myEmail, name: user.name, created_at: new Date().toISOString() }, RSVP_LS); }
+    try {
+      if (iRsvped) { const mine = attendees.find(r => r.email === myEmail); if (mine) await dlDelete(RSVP_TABLE, mine.id, RSVP_LS); }
+      else { await dlInsert(RSVP_TABLE, { id: uid('RS'), post_id: post.id, email: myEmail, name: user.name, created_at: new Date().toISOString() }, RSVP_LS); }
+      setKartyaHiba('');
+    } catch (e) { setKartyaHiba((e && e.message) || 'A művelet nem sikerült.'); }
     onChange && onChange();
   };
   const claim = async () => {
     if (myTix) return;
-    await dlInsert(TIX_TABLE, { id: uid('TX'), post_id: post.id, email: myEmail, code: post.ticket_code || ('NJE-' + Math.random().toString(36).slice(2, 8).toUpperCase()), created_at: new Date().toISOString() }, TIX_LS);
+    try {
+      await dlInsert(TIX_TABLE, { id: uid('TX'), post_id: post.id, email: myEmail, code: post.ticket_code || ('NJE-' + Math.random().toString(36).slice(2, 8).toUpperCase()), created_at: new Date().toISOString() }, TIX_LS);
+      setKartyaHiba('');
+    } catch (e) { setKartyaHiba((e && e.message) || 'A jegyigénylés nem sikerült.'); }
     onChange && onChange();
   };
   const dleft = DL_daysLeft(post.event_date);
@@ -394,9 +429,17 @@ function FeedCard({ post, user, rsvps, tix, onChange, onDelete }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-slate-400 font-bold">{DL_date(post.created_at)}</span>
-            {FEED_szerkeszto(user) && <button onClick={() => onDelete(post)} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors" title="Törlés"><Lucide.Trash2 size={14} /></button>}
+            {FEED_torolhet(user) && <button onClick={() => onDelete(post)} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors" title="Törlés"><Lucide.Trash2 size={14} /></button>}
           </div>
         </div>
+
+        {kartyaHiba && (
+          <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-[13px] font-semibold">
+            <Lucide.AlertCircle size={14} className="mt-0.5 flex-none" />
+            <span className="flex-1">{kartyaHiba}</span>
+            <button onClick={() => setKartyaHiba('')} className="text-red-400 hover:text-red-700"><Lucide.X size={13} /></button>
+          </div>
+        )}
 
         <h3 className="text-xl font-black text-slate-900 tracking-tight leading-snug">{post.title}</h3>
         {post.body && <p className="text-sm text-slate-500 leading-relaxed mt-2 whitespace-pre-line max-w-[70ch]">{post.body}</p>}
@@ -631,10 +674,17 @@ const FeedView = ({ user, onNavigate }) => {
   const [filter, setFilter] = useState('all');
   const [composer, setComposer] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
+  // A törlés megtagadható (72/73-as jogosultsági réteg) — ilyenkor a
+  // párbeszéd nyitva marad, és kiírja, miért nem sikerült.
+  const [torlesHiba, setTorlesHiba] = useState('');
+  const [betoltesHiba, setBetoltesHiba] = useState('');
 
   const refetch = async () => {
+    try {
     const [p, r, t] = await Promise.all([FEED_loadPosts(FEED_ugyintezo(user)), FEED_loadRsvps(), FEED_loadTix()]);
     setPosts(p); setRsvps(r); setTix(t);
+    setBetoltesHiba('');
+    } catch (e) { setBetoltesHiba(e.message || 'A betöltés nem sikerült.'); }
   };
   useEffect(() => { refetch(); }, []);
 
@@ -646,6 +696,7 @@ const FeedView = ({ user, onNavigate }) => {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 animate-in fade-in duration-500">
+      {betoltesHiba && <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-red-700">{betoltesHiba}</div>}
       {/* hero */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
         <div>
@@ -680,9 +731,22 @@ const FeedView = ({ user, onNavigate }) => {
       <FeedComposer open={composer} onClose={() => setComposer(false)} onPublished={refetch} authorName={user && user.name} />
       <UModal open={!!confirmDel} onClose={() => setConfirmDel(null)} title="Törlöd a bejegyzést?" icon={<Lucide.Trash2 size={20} />} max="max-w-md">
         <p className="text-sm text-slate-500">Ezzel a(z) „{confirmDel && confirmDel.title}” bejegyzés mindenki hírfolyamából eltűnik.</p>
+        {torlesHiba && (
+          <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-[13px] font-semibold">
+            <Lucide.AlertCircle size={14} className="mt-0.5 flex-none" />
+            <span className="flex-1">{torlesHiba}</span>
+          </div>
+        )}
         <div className="flex justify-end gap-3 mt-6">
-          <button className={U_btnGhost} onClick={() => setConfirmDel(null)}>Mégse</button>
-          <button className={U_btn + ' bg-red-500 text-white px-5 py-3 hover:bg-red-600'} onClick={async () => { await dlDelete(FEED_TABLE, confirmDel.id, FEED_LS); setConfirmDel(null); refetch(); }}>Törlés</button>
+          <button className={U_btnGhost} onClick={() => { setTorlesHiba(''); setConfirmDel(null); }}>Mégse</button>
+          <button className={U_btn + ' bg-red-500 text-white px-5 py-3 hover:bg-red-600'}
+            onClick={async () => {
+              // A dlDelete megtagadás esetén dob: a párbeszéd maradjon nyitva,
+              // és mondja meg, mi történt — ne tűnjön el „sikeresen".
+              try { await dlDelete(FEED_TABLE, confirmDel.id, FEED_LS); }
+              catch (e) { setTorlesHiba((e && e.message) || 'A törlés nem sikerült.'); return; }
+              setTorlesHiba(''); setConfirmDel(null); refetch();
+            }}>Törlés</button>
         </div>
       </UModal>
     </div>

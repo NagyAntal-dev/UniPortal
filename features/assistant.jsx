@@ -76,13 +76,14 @@ function ASSIST_rich(text) {
 function ASSIST_Chat({ user, compact }) {
   const lsKey = 'uni_chat_' + ((user && user.email) || 'anon');
   const [docs, setDocs] = useState([]);
+  const [betoltesHiba, setBetoltesHiba] = useState('');
   const [msgs, setMsgs] = useState(() => { try { return JSON.parse(localStorage.getItem(lsKey)) || []; } catch (e) { return []; } });
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef(null);
   const noAI = !(typeof window !== 'undefined' && window.claude && window.claude.complete);
 
-  useEffect(() => { KB_load().then(setDocs); }, []);
+  useEffect(() => { KB_load().then(setDocs).catch(e => setBetoltesHiba(e.message || 'A betöltés nem sikerült.')); }, []);
   useEffect(() => { try { localStorage.setItem(lsKey, JSON.stringify(msgs.slice(-30))); } catch (e) {} if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs, busy]);
 
   const send = async (q) => {
@@ -109,6 +110,7 @@ function ASSIST_Chat({ user, compact }) {
        700px magas ablaknál már 130px hiányzott. Fix magasság helyett a chat
        most a panelhez igazodik. */
     <div className={'flex flex-col min-h-0 ' + (compact ? 'h-full' : 'h-[calc(100vh-220px)] min-h-[440px]')}>
+      {betoltesHiba && <div role="alert" className="rounded-xl bg-red-50 p-3 text-red-700">{betoltesHiba}</div>}
       {/* messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar px-1 space-y-4">
         {msgs.length === 0 && (
@@ -152,29 +154,63 @@ function ASSIST_Chat({ user, compact }) {
 }
 
 /* ---------- admin: knowledge base manager ---------- */
-function ASSIST_KB({ onChange }) {
+function ASSIST_KB({ user, onChange }) {
+  const jog = PERM_of(user, 'assistant', { create: isAdmin(user), del: isAdmin(user) });
   const [docs, setDocs] = useState(null);
   const [adding, setAdding] = useState(false);
   const [nt, setNt] = useState({ title: '', content: '', url: '' });
   const [busy, setBusy] = useState(false);
-  const refetch = async () => setDocs(await KB_load());
+  const refetch = async () => {
+    try { setDocs(await KB_load()); }
+    catch (e) { setKbHiba(e.message || 'A betöltés nem sikerült.'); }
+  };
   useEffect(() => { refetch(); }, []);
 
-  const addText = async () => { if (!nt.title.trim() || !nt.content.trim()) return; setBusy(true); await KB_add({ title: nt.title.trim(), content: nt.content.trim(), url: nt.url.trim(), source: 'upload' }); setNt({ title: '', content: '', url: '' }); setAdding(false); setBusy(false); refetch(); onChange && onChange(); };
-  const upload = async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; setBusy(true); const r = await KB_ingestFile(file); if (r.ok) await KB_add({ title: r.title, content: r.content, source: 'upload' }); setBusy(false); e.target.value = ''; refetch(); onChange && onChange(); };
-  const remove = async (id) => { await KB_remove(id); refetch(); onChange && onChange(); };
+  /* A tudásbázis írása megtagadható (72/73-as jogosultsági réteg): a KB_add /
+     KB_remove a dlInsert/dlDelete-en át DOB. Enélkül a feltöltés a felületen
+     sikeresnek látszana, és a dokumentum csak a helyi tárolóba kerülne. */
+  const [kbHiba, setKbHiba] = useState('');
+  const addText = async () => {
+    if (!jog.create || busy) return;
+    if (!nt.title.trim() || !nt.content.trim()) return;
+    setBusy(true);
+    try { await KB_add({ title: nt.title.trim(), content: nt.content.trim(), url: nt.url.trim(), source: 'upload' }); setKbHiba(''); }
+    catch (e) { setKbHiba((e && e.message) || 'A mentés nem sikerült.'); setBusy(false); return; }
+    setNt({ title: '', content: '', url: '' }); setAdding(false); setBusy(false); refetch(); onChange && onChange();
+  };
+  const upload = async (e) => {
+    if (!jog.create || busy) return;
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    setBusy(true);
+    try { const r = await KB_ingestFile(file); if (r.ok) await KB_add({ title: r.title, content: r.content, source: 'upload' }); setKbHiba(''); }
+    catch (err) { setKbHiba((err && err.message) || 'A feltöltés nem sikerült.'); setBusy(false); e.target.value = ''; return; }
+    setBusy(false); e.target.value = ''; refetch(); onChange && onChange();
+  };
+  const remove = async (id) => {
+    if (!jog.del || busy) return;
+    try { await KB_remove(id); setKbHiba(''); }
+    catch (e) { setKbHiba((e && e.message) || 'A törlés nem sikerült.'); return; }
+    refetch(); onChange && onChange();
+  };
 
   return (
     <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+      {kbHiba && (
+        <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-semibold">
+          <Lucide.AlertCircle size={16} className="mt-0.5 flex-none" />
+          <span className="flex-1">{kbHiba}</span>
+          <button onClick={() => setKbHiba('')} className="text-red-400 hover:text-red-700"><Lucide.X size={14} /></button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2"><Lucide.Database size={18} className="text-primary" /><h3 className="font-black text-slate-800">Tudásbázis</h3><UBadge tone="slate">{(docs ? docs.length : '…') + ' dokumentum'}</UBadge></div>
-        <div className="flex items-center gap-2">
+        {jog.create && <div className="flex items-center gap-2">
           <label className={U_btnGhost + ' cursor-pointer text-[13px] py-2 px-4'}><Lucide.Upload size={15} /> Feltöltés<input type="file" accept=".pdf,.txt,.md,.csv,.json" className="hidden" onChange={upload} /></label>
           <button className={U_btnPrimary + ' text-[13px] py-2 px-4'} onClick={() => setAdding(a => !a)}><Lucide.Plus size={15} /> Szöveg hozzáadása</button>
-        </div>
+        </div>}
       </div>
       <p className="text-[12px] text-slate-400 mb-4">Az itt tárolt tartalom adja az asszisztens válaszainak alapját. Az NJE angol nyelvű honlapjáról indul; PDF-ekkel vagy szöveggel (díjtáblázat, GYIK, képzési kiadványok) bővíthető.</p>
-      {adding && (
+      {adding && jog.create && (
         <div className="space-y-3 p-4 rounded-2xl bg-slate-50 mb-4">
           <input className={U_input} placeholder="Cím (pl. Tandíjak 2026)" value={nt.title} onChange={e => setNt(p => ({ ...p, title: e.target.value }))} />
           <input className={U_input} placeholder="Forrás URL (opcionális)" value={nt.url} onChange={e => setNt(p => ({ ...p, url: e.target.value }))} />
@@ -189,7 +225,7 @@ function ASSIST_KB({ onChange }) {
             <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center flex-none">{d.source === 'website' ? <Lucide.Globe size={16} /> : <Lucide.FileText size={16} />}</div>
             <div className="min-w-0 flex-1"><div className="text-sm font-bold text-slate-700 truncate">{d.title}</div><div className="text-[11px] text-slate-400 truncate">{d.url || (d.content || '').slice(0, 60) + '…'}</div></div>
             <UBadge tone={d.source === 'website' ? 'blue' : 'green'}>{d.source}</UBadge>
-            <button onClick={() => remove(d.id)} className="w-8 h-8 rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 flex items-center justify-center transition-colors"><Lucide.Trash2 size={15} /></button>
+            {jog.del && <button onClick={() => remove(d.id)} className="w-8 h-8 rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 flex items-center justify-center transition-colors"><Lucide.Trash2 size={15} /></button>}
           </div>
         ))}
         {docs && docs.length === 0 && <div className="text-sm text-slate-400 py-6 text-center">A tudásbázis üres.</div>}
@@ -201,7 +237,11 @@ function ASSIST_KB({ onChange }) {
 /* ---------- dedicated view ---------- */
 const AssistantView = ({ user }) => {
   const [tab, setTab] = useState('chat');
-  const admin = isAdmin(user);
+  /* A tudásbázis szerkesztése az `assistant` modul CREATE/EDIT joga.
+     A `regi` érték a mai viselkedés: isAdmin() — azaz ADMIN (és a 72-es
+     óta a SUPERADMIN is, lásd data-layer.jsx). */
+  const jog = PERM_of(user, 'assistant', { create: isAdmin(user), edit: isAdmin(user), del: isAdmin(user) });
+  const admin = jog.create || jog.edit || jog.del;
   return (
     <div className="max-w-4xl 2xl:max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
@@ -217,9 +257,9 @@ const AssistantView = ({ user }) => {
           </div>
         )}
       </div>
-      {tab === 'chat'
+      {tab === 'chat' || !admin
         ? <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6"><ASSIST_Chat user={user} compact={false} /></div>
-        : <ASSIST_KB />}
+        : <ASSIST_KB user={user} />}
     </div>
   );
 };

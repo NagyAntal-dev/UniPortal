@@ -421,7 +421,17 @@ function CRS_Tab({ user }) {
         <span className="text-[11px] font-black text-slate-400">
           {rows === null ? '' : rows.length + ' kurzus'}
         </span>
+        {/* ÚJ KURZUS: a `courses` modul CREATE joga (72_rbac_actions.sql).
+            A `regi` érték `true`, mert eddig a nyilvántartás megnyitása maga
+            volt a jog: aki idejutott, az fel is vihetett kurzust. A szerveroldali
+            pár az echo_course_save(), ami is_staff()-ot kér — a 72-es backfill
+            ezért adta meg a courses CREATE-et az ADMISSIONS-nak és a FINANCE-nak is.
+            A SZERKESZTÉS gombjai SZÁNDÉKOSAN nem innen dőlnek el: azokat a
+            szerver adja meg soronként (det.szerkesztheto), ami pontosabb, mint
+            bármilyen kliensoldali szabály. */}
         <button onClick={() => { setFormKurzus(null); setFormOpen(true); }}
+          disabled={!PERM_can(user, 'courses', 'CREATE', true)}
+          title={PERM_can(user, 'courses', 'CREATE', true) ? '' : PERM_cim('CREATE')}
           className={U_btnPrimary + ' py-2.5 px-4 text-sm'}>
           <Lucide.Plus size={15} /> Új kurzus
         </button>

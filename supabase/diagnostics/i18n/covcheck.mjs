@@ -1,7 +1,7 @@
 // A2 lefedettség-mérés: a felületen megjelenő magyar szövegek közül hánynak
 // van fordítása. A kommenteket kilexeljük, a szótár-blokkot kihagyjuk.
 import {readFileSync} from 'node:fs';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {dirname} from 'node:path';
 // a projekt gyökere: .../supabase/diagnostics/i18n -> három szinttel feljebb
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -10,7 +10,9 @@ const ROOT = HERE + '/../../../';
 // pillanatképet mérjünk, ha az app.jsx közben változott.
 await import('node:child_process').then(cp =>
   cp.execFileSync(process.execPath, [HERE + '/mkdict.mjs'], {stdio: 'ignore'}));
-const m=await import(HERE+'/.dicteval.mjs?t=' + Date.now());
+// Windowson a csupasz abszolút út ('C:\...') nem érvényes ESM-URL: a
+// betűjelet a loader sémának nézi (ERR_UNSUPPORTED_ESM_URL_SCHEME).
+const m=await import(pathToFileURL(HERE+'/.dicteval.mjs').href + '?t=' + Date.now());
 const dict=m.HU_EN, rxs=m.HU_EN_PHRASES.map(p=>p[0]);
 function stripComments(src){let out='',i=0,n=src.length;
  while(i<n){const c=src[i];
@@ -23,7 +25,9 @@ const raw=readFileSync(ROOT+'app.jsx','utf8').split('\n');
 const dictFrom=raw.findIndex(l=>/^const HU_EN = \{/.test(l))+1;
 const dictTo=raw.findIndex(l=>/^\(function setupI18n\(\)\{/.test(l));
 const statFrom=raw.findIndex(l=>/^const STATUS_I18N = \{/.test(l))+1;
-const FILES=['app.jsx','features/programs.jsx','features/feed.jsx','features/assistant.jsx','features/registrations.jsx','features/knowledge-base.jsx'];
+// A 72-es jogosultsági mátrix két új fájlt hozott; a mérésnek látnia kell
+// őket, különben a lefedettség jobbnak látszik, mint amilyen.
+const FILES=['app.jsx','features/programs.jsx','features/feed.jsx','features/assistant.jsx','features/registrations.jsx','features/knowledge-base.jsx','features/roles.jsx','features/perm.jsx'];
 let gt=0,gc=0;const miss=[];
 for(const f of FILES){
   const src=stripComments(readFileSync(ROOT+f,'utf8'));

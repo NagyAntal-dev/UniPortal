@@ -717,8 +717,12 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
   const nyom  = d.nyomok || {};
   const vanNyom = ['jogosultsag','valasz','kizaras','jegyzokonyv','eszrevetel']
                     .some(k => Number(nyom[k] || 0) > 0);
+  /* TÖRÖLHETŐ: a `teachers` modul DELETE joga. A `regi` paraméter a mai lista;
+     a szerveroldali pár az echo_teacher_delete(), ami is_admin()-t kér — ezért
+     a 72-es backfill a teachers DELETE-et csak az ADMIN-nak adta meg. */
   const torolheto = !vanNyom && Number(nyom.kurzus || 0) === 0
-                    && ['SUPERADMIN','ADMIN'].includes(user.role);
+                    && PERM_can(user, 'teachers', 'DELETE',
+                                ['SUPERADMIN','ADMIN'].includes(user.role));
 
   const allapotValt = async () => {
     setBusy(true); setUzenet(''); setErr('');
@@ -829,6 +833,11 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
               végigvezetné a keresésen, és csak a végén közölné, hogy nem
               szabad — ezért nála meg sem jelenik, hanem megmondjuk, kitől
               kérje. */}
+          {/* A fiók-kötés ECHO-grantot is kioszt (echo_teacher_link -> 'OKTATO'),
+              tehát NEM modul-mátrix kérdése: az ECHO saját, hatókörös
+              jogosultsági dimenziója dönt róla (19_echo_roles.sql). A 19-es
+              fejléce kimondja: „AZ ECHO-JOG SOHA NEM SZÁRMAZIK A UniPortal
+              SUPERADMIN-BÓL." Ezért ez a lista SZÁNDÉKOSAN kódba égetett marad. */}
           {['SUPERADMIN','ADMIN'].includes(user.role) ? (
             <button className={U_btnGhost} onClick={() => setLink(true)} disabled={busy}>
               <Lucide.UserCheck size={15} /> {d.fiok ? 'Kötés bontása' : 'Összeköt'}
@@ -912,7 +921,7 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
           ))}
         </div>
 
-        {['SUPERADMIN','ADMIN'].includes(user.role) && (
+        {PERM_can(user, 'teachers', 'DELETE', ['SUPERADMIN','ADMIN'].includes(user.role)) && (
           <div className="mt-5 pt-5 border-t border-slate-100 flex items-center justify-between gap-4 flex-wrap">
             <span className="text-[12px] text-slate-500">
               {torolheto
@@ -929,7 +938,7 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
 
         {/* A szerver a törlésnél PONTOSAN megmondja, mi tartozik az oktatóhoz —
             ez a magyarázat a gomb mellett ér valamit, nem a lap tetején. */}
-        {err && ['SUPERADMIN','ADMIN'].includes(user.role) && (
+        {err && PERM_can(user, 'teachers', 'DELETE', ['SUPERADMIN','ADMIN'].includes(user.role)) && (
           <div className="mt-3 text-[13px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
             {err}
           </div>

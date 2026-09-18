@@ -16,8 +16,12 @@ async function dlEnsure(table) {
   if (window.sb) {
     try {
       const { error } = await window.sb.from(table).select('id').limit(1);
+      if (error && !dlNincsTabla(error)) throw dlTiltasHiba(error, 'betöltés');
       DL_PROBE[table] = error ? 'ls' : 'sb';
-    } catch (e) { DL_PROBE[table] = 'ls'; }
+    } catch (e) {
+      if (!dlNincsTabla(e)) throw dlTiltasHiba(e, 'betöltés');
+      DL_PROBE[table] = 'ls';
+    }
   } else {
     DL_PROBE[table] = 'ls';
   }
@@ -57,19 +61,90 @@ async function dlSelect(table, lsKey, seedFn, orderCol, ascending = true) {
         dlLocalSave(lsKey, data);
         return data;
       }
-    } catch (e) {}
-    DL_PROBE[table] = 'ls';
+      if (error) throw error;
+      throw new Error('A betöltés nem sikerült.');
+    } catch (e) {
+      // Olvasási hiba sem állíthatja át a következő írást helyi mentésre.
+      if (!dlNincsTabla(e)) throw dlTiltasHiba(e, 'betöltés');
+      DL_PROBE[table] = 'ls';
+    }
   }
   return dlLocalLoad(lsKey, seedFn);
+}
+
+/* ===========================================================================
+   ÍRÁS — és a „csendes siker" hiba megszüntetése
+
+   MI VOLT A BAJ (a 11_rbac_additive.sql fejléce, D pont, szó szerint):
+     „A features/data-layer.jsx dlInsert/dlUpdate minden hibát elkap és
+      localStorage-ra vált: egy megtagadott írás a felületen SIKERESNEK
+      látszik."
+   A dlDelete ennél is tovább ment: a hibát meg sem nézte.
+
+   MIÉRT KRITIKUS EZ MOST: a 72/73-as migrációval a jogosultság-megtagadás
+   NORMÁLIS, várható válasz lesz — nem ritka hiba. Ha a felület ilyenkor
+   „elmentve"-t mutat, a felhasználó abban a hitben megy tovább, hogy a munkája
+   megvan, pedig az adatbázisban nincs semmi. Ez rosszabb, mint egy hibaüzenet.
+
+   A MEGKÜLÖNBÖZTETÉS, amin az egész múlik:
+     • HIÁNYZÓ TÁBLA (42P01 / PGRST205) — a migráció még nem futott le.
+       Itt a localStorage-tartalék a HELYES viselkedés: a funkció működjön
+       előnézetben is. Ez volt az eredeti cél, és ez marad.
+     • MEGTAGADOTT ÍRÁS (42501, RLS, 0 érintett sor) — az adatbázis ELUTASÍTOTTA.
+       Itt DOBUNK. Nem váltunk localStorage-ra, és a DL_PROBE-ot sem állítjuk
+       át: egy megtagadás nem jelenti azt, hogy a tábla nem létezik, és nem
+       szabad az egész munkamenetre helyi másolatra váltani miatta.
+   =========================================================================== */
+
+/* Igaz, ha a hiba JOGOSULTSÁGI megtagadás (nem hiányzó tábla, nem hálózat). */
+function dlMegtagadva(error) {
+  if (!error) return false;
+  const kod = String(error.code || '');
+  const uzenet = String(error.message || error.details || error.hint || '');
+  if (kod === '42501' || kod === 'PGRST301') return true;
+  return /permission denied|row-level security|violates row-level|insufficient privilege/i.test(uzenet);
+}
+
+/* Igaz, ha a tábla maga hiányzik — ilyenkor a helyi tartalék a helyes válasz. */
+function dlNincsTabla(error) {
+  if (!error) return false;
+  const kod = String(error.code || '');
+  if (kod === '42P01' || kod === 'PGRST205') return true;
+  return !kod && /Could not find the table\b/i.test(String(error.message || ''));
+}
+
+/* A megtagadásból a felület által megjeleníthető hiba. A kódot MEGTARTJUK,
+   hogy a modulok saját PGERR-fordítói (ROLE_PGERR és társai) felismerjék. */
+function dlTiltasHiba(error, muvelet) {
+  const e = new Error(
+    (error && error.message) ||
+    ('Ehhez a művelethez nincs jogosultsága (' + muvelet + ').'));
+  e.code = error && error.code;
+  e.dlDenied = dlMegtagadva(error) || e.code === 'PGRST116';
+  return e;
 }
 
 async function dlInsert(table, row, lsKey) {
   const mode = await dlEnsure(table);
   if (mode === 'sb') {
+    let valasz;
     try {
-      const { data, error } = await window.sb.from(table).insert(row).select().single();
+      valasz = await window.sb.from(table).insert(row).select().single();
+    } catch (e) {
+      if (!dlNincsTabla(e)) throw dlTiltasHiba(e, 'létrehozás');
+      valasz = { error: e };
+    }
+    if (valasz) {
+      const { data, error } = valasz;
       if (!error && data) return data;
-    } catch (e) {}
+      // MEGTAGADÁS: dobunk. Se tartalék, se DL_PROBE-váltás.
+      if (dlMegtagadva(error)) throw dlTiltasHiba(error, 'létrehozás');
+      // Bármi más, ami NEM hiányzó tábla: szintén dobunk. Egy megsértett
+      // megszorítás vagy egy elírt oszlopnév se látsszon sikeres mentésnek.
+      if (error && !dlNincsTabla(error)) throw dlTiltasHiba(error, 'létrehozás');
+      if (!error) throw new Error('A létrehozás nem igazolható.');
+    }
+    if (!valasz) throw new Error('A létrehozás nem igazolható.');
     DL_PROBE[table] = 'ls';
   }
   const arr = dlLocalLoad(lsKey, () => []);
@@ -81,10 +156,32 @@ async function dlInsert(table, row, lsKey) {
 async function dlUpdate(table, id, patch, lsKey) {
   const mode = await dlEnsure(table);
   if (mode === 'sb') {
+    let valasz;
     try {
-      const { data, error } = await window.sb.from(table).update(patch).eq('id', id).select().single();
-      if (!error && data) return data;
-    } catch (e) {}
+      valasz = await window.sb.from(table).update(patch).eq('id', id).select();
+    } catch (e) {
+      if (!dlNincsTabla(e)) throw dlTiltasHiba(e, 'szerkesztés');
+      valasz = { error: e };
+    }
+    if (valasz) {
+      const { data, error } = valasz;
+      if (!error && Array.isArray(data) && data.length) return data[0];
+      if (dlMegtagadva(error)) throw dlTiltasHiba(error, 'szerkesztés');
+      if (error && !dlNincsTabla(error)) throw dlTiltasHiba(error, 'szerkesztés');
+      // NULLA ÉRINTETT SOR, hiba nélkül. Ez a restriktív RLS TIPIKUS válasza:
+      // a PostgREST ilyenkor nem hibát ad, hanem üres eredményt — a sor vagy
+      // nem létezik, vagy a szabály nem engedte írni. A kettőt a kliens nem
+      // tudja megkülönböztetni, de MINDKETTŐ azt jelenti, hogy a mentés NEM
+      // történt meg. A régi kód itt esett vissza localStorage-ra, és ettől
+      // látszott sikeresnek egy megtagadott írás.
+      if (!error) {
+        throw dlTiltasHiba(
+          { code: '42501',
+            message: 'A módosítás nem történt meg: vagy nincs rá jogosultsága, '
+                   + 'vagy a rekord időközben megszűnt.' }, 'szerkesztés');
+      }
+    }
+    if (!valasz) throw new Error('A módosítás nem igazolható.');
     DL_PROBE[table] = 'ls';
   }
   const arr = dlLocalLoad(lsKey, () => []);
@@ -96,7 +193,28 @@ async function dlUpdate(table, id, patch, lsKey) {
 async function dlDelete(table, id, lsKey) {
   const mode = await dlEnsure(table);
   if (mode === 'sb') {
-    try { await window.sb.from(table).delete().eq('id', id); return true; } catch (e) {}
+    let valasz;
+    try {
+      // A .select() nélkül a PostgREST nem mondja meg, hány sort törölt —
+      // a régi kód ezért nem is tudta, hogy a törlés megtörtént-e.
+      valasz = await window.sb.from(table).delete().eq('id', id).select();
+    } catch (e) {
+      if (!dlNincsTabla(e)) throw dlTiltasHiba(e, 'törlés');
+      valasz = { error: e };
+    }
+    if (valasz) {
+      const { data, error } = valasz;
+      if (!error && Array.isArray(data) && data.length) return true;
+      if (dlMegtagadva(error)) throw dlTiltasHiba(error, 'törlés');
+      if (error && !dlNincsTabla(error)) throw dlTiltasHiba(error, 'törlés');
+      if (!error) {
+        throw dlTiltasHiba(
+          { code: '42501',
+            message: 'A törlés nem történt meg: vagy nincs rá jogosultsága, '
+                   + 'vagy a rekord már nem létezik.' }, 'törlés');
+      }
+    }
+    if (!valasz) throw new Error('A törlés nem igazolható.');
     DL_PROBE[table] = 'ls';
   }
   const arr = dlLocalLoad(lsKey, () => []).filter(x => x.id !== id);
@@ -199,6 +317,21 @@ function UToast({ msg, onDone }) {
   );
 }
 
-/* who can author feed / manage programs & KB */
-const isAdmin = (user) => user && user.role === 'ADMIN';
-const isStaff = (user) => user && ['ADMIN', 'ADMISSIONS', 'FINANCE'].includes(user.role);
+/* ---------------------------------------------------------------------------
+   Ki szerkeszthet hírfolyamot, programot, tudásbázist
+
+   MI VOLT A BAJ, KÉT DOLOG:
+     1. Kódba égetett szerepkör-lista — egy szerepkör átszabásához kód kellett.
+     2. EGYIK SEM TARTALMAZTA A SUPERADMIN-T. Ez latens hiba volt: a
+        programs.jsx:1684 kommentje már ki is mondta, hogy „a közös isAdmin()
+        csak az ADMIN szerepkört nézi, ezért a SUPERADMIN eddig a hallgatói
+        katalógust kapta kezelőtábla helyett", és külön ágban javította.
+        A PERM_can elsőként a SUPERADMIN-t engedi át, tehát ez megszűnik.
+
+   A HARMADIK PARAMÉTER a MAI érték: ha a 72-es migráció még nem futott le, az
+   dönt — így a bevezetés nem vesz el semmit (lásd features/perm.jsx).
+   --------------------------------------------------------------------------- */
+const isAdmin = (user) => PERM_can(user, 'system_admin', 'EDIT',
+  !!(user && user.role === 'ADMIN'));
+const isStaff = (user) => PERM_can(user, 'admissions_core', 'EDIT',
+  !!(user && ['ADMIN', 'ADMISSIONS', 'FINANCE'].includes(user.role)));

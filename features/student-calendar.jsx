@@ -150,9 +150,11 @@ function NAP_Naptar({ user, onOpenApplications }) {
   const [szuro, setSzuro] = useState(() => { try { return { ...NAP_ALAP_SZURO, ...JSON.parse(localStorage.getItem('nap_szuro') || '{}') }; } catch (e) { return { ...NAP_ALAP_SZURO }; } });
   const [korabbiak, setKorabbiak] = useState(false);
   const [busy, setBusy] = useState('');
+  // Jogosultsági megtagadás a jelentkezésnél (72/73-as réteg).
+  const [hiba, setHiba] = useState('');
 
   const betolt = React.useCallback(async () => {
-    const biztos = (p) => Promise.resolve(p).catch(() => []);
+    const biztos = (p) => Promise.resolve(p).catch(e => { setHiba(e.message || 'A betöltés nem sikerült.'); return []; });
     const [programs, apps, posts, rsvps, tix] = await Promise.all([
       biztos(PROG_loadPrograms()), biztos(PROG_loadApps()), biztos(FEED_loadPosts()), biztos(FEED_loadRsvps()), biztos(FEED_loadTix()),
     ]);
@@ -187,7 +189,12 @@ function NAP_Naptar({ user, onOpenApplications }) {
       } else {
         await dlInsert(RSVP_TABLE, { id: uid('RS'), post_id: t.post.id, email: user.email, name: user.name, created_at: new Date().toISOString() }, RSVP_LS);
       }
+      setHiba('');
       await betolt();
+    } catch (e) {
+      // A dlInsert/dlDelete megtagadáskor dob (data-layer.jsx). Enélkül a
+      // jelentkezés a felületen sikeresnek látszana.
+      setHiba((e && e.message) || 'A jelentkezés nem sikerült.');
     } finally { setBusy(''); }
   };
 
@@ -202,6 +209,13 @@ function NAP_Naptar({ user, onOpenApplications }) {
 
   return (
     <div className="space-y-5" data-nap-naptar="1">
+      {hiba && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-semibold">
+          <Lucide.AlertCircle size={16} className="mt-0.5 flex-none" />
+          <span className="flex-1">{hiba}</span>
+          <button onClick={() => setHiba('')} className="text-red-400 hover:text-red-700"><Lucide.X size={14} /></button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h3 className="text-2xl font-black text-slate-900 tracking-tight">Naptáram</h3>

@@ -87,3 +87,6 @@
 69_storage_limits.sql
 70_rpc_authz_fixes.sql
 71_profiles_privacy.sql
+72_rbac_actions.sql
+74_rbac_enforce_rpc.sql
+73_rbac_enforce_rls.sql

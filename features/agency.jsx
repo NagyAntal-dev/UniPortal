@@ -252,7 +252,10 @@ const AgencyRegistrations = ({ user, agencies, onChanged }) => {
   const [reason, setReason]   = useState('');
   const [rate, setRate]       = useState('');
 
-  const canDecide = ['SUPERADMIN', 'ADMIN'].indexOf(user.role) >= 0;
+  /* Az ügynökségi regisztráció elbírálása az `agent_portal` modul USE joga.
+     A `regi` paraméter a MAI lista: ha a 72-es migráció nem futott le, az dönt. */
+  const canDecide = PERM_can(user, 'agent_portal', 'USE',
+    ['SUPERADMIN', 'ADMIN'].indexOf(user.role) >= 0);
 
   const rows = (agencies || []).filter(a => {
     const st = a.approval_status || 'approved';
@@ -477,8 +480,14 @@ const AgencyRegistrations = ({ user, agencies, onChanged }) => {
      nem a felvett vagy fizetett jelentkezőkből.
    ============================================================ */
 const AgencyBilling = ({ user, agencies, myAgencyId, onChanged }) => {
+  /* isAgent / isFinance: „KI VAGYOK" — melyik PERSPEKTÍVÁT kapja a képernyő
+     (ügynöki vagy pénzügyi nézet). Ezek SZÁNDÉKOSAN maradnak szerepkör-
+     ellenőrzések: nem azt döntik el, hogy szabad-e, hanem hogy mit lát.
+     isAdmin: „MIT TEHETEK" — a periódus zárása és a számlaigénylés kiküldése
+     írás, tehát az `agent_portal` modul EDIT joga dönti el. */
   const isAgent   = user.role === 'AGENT';
-  const isAdmin   = ['SUPERADMIN', 'ADMIN'].indexOf(user.role) >= 0;
+  const isAdmin   = PERM_can(user, 'agent_portal', 'EDIT',
+    ['SUPERADMIN', 'ADMIN'].indexOf(user.role) >= 0);
   const isFinance = user.role === 'FINANCE';
 
   const [periods, setPeriods]   = useState([]);
@@ -804,7 +813,11 @@ const AgencyBilling = ({ user, agencies, myAgencyId, onChanged }) => {
 /* ---------- Egy számlasor: állapot, tételek, csatolás, döntés ------------- */
 const AgencyInvoiceRow = ({ inv, agency, period, user, items, open, busy, onToggle, onDecide, onAttached }) => {
   const isAgent   = user.role === 'AGENT';
-  const canDecide = ['SUPERADMIN', 'ADMIN', 'FINANCE'].indexOf(user.role) >= 0;
+  /* A partnerszámla elbírálása: az `agent_portal` modul USE joga. A mai lista a
+     FINANCE-t is tartalmazza — a 72-es backfill ezt megtartotta, mert a FINANCE
+     role_permission sorai között ott van az agent_portal. */
+  const canDecide = PERM_can(user, 'agent_portal', 'USE',
+    ['SUPERADMIN', 'ADMIN', 'FINANCE'].indexOf(user.role) >= 0);
   const canAttach = isAgent && ['requested', 'rejected', 'submitted'].indexOf(inv.status) >= 0;
 
   const [form, setForm]     = useState({ number: '', issuedOn: '', note: '' });

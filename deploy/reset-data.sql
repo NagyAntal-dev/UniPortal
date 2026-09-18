@@ -9,6 +9,15 @@ create temporary table reset_keep (name text primary key) on commit drop;
 insert into reset_keep values
   ('public.users'), ('public.profiles'), ('public.student_attributes'),
   ('public.role_definition'), ('public.role_permission'),
+  -- Action-level RBAC (72_rbac_actions.sql). Without these lines a data reset
+  -- would silently empty the permission matrix and the enforcement kill
+  -- switch: this file truncates every public/echo/dorm table NOT listed here,
+  -- and role_module_permission would go even though its parent role_definition
+  -- stays. Keep this list in step with any new RBAC table.
+  ('public.rbac_action'), ('public.module_definition'),
+  ('public.role_module_permission'), ('public.rbac_permission_audit'),
+  ('public.rbac_setting'), ('public.rbac_rpc_guard'),
+  ('public.rbacx_table_module'),
   ('public.user_group'), ('public.user_group_member'), ('public.group_permission'),
   ('echo.role_grant'), ('dorm.role_grant'),
   -- Scoped grants need these referenced records; unused rows are removed below.
@@ -67,6 +76,8 @@ select 'auth.users' as preserved, count(*) as rows from auth.users
 union all select 'public.profiles', count(*) from public.profiles
 union all select 'public.role_definition', count(*) from public.role_definition
 union all select 'public.role_permission', count(*) from public.role_permission
+union all select 'public.role_module_permission', count(*) from public.role_module_permission
+union all select 'public.module_definition', count(*) from public.module_definition
 union all select 'echo.role_grant', count(*) from echo.role_grant
 union all select 'dorm.role_grant', count(*) from dorm.role_grant
 union all select 'echo.org_unit (RBAC scopes)', count(*) from echo.org_unit

@@ -279,6 +279,24 @@ Utána: **Settings → Pages → Source: GitHub Actions**.
 
 ---
 
+## Műveleti jogosultságok (RBAC)
+
+A szerepkör–modul mátrix öt műveletet kezel: VIEW, USE, CREATE, EDIT, DELETE.
+A SUPERADMIN hozzáférése nem vonható el. A felület a mátrix alapján tiltja a
+műveleteket; a szerver a meglévő sor- és szerepkörszabályokon felül ellenőriz.
+Saját szerepkörnek adott moduljog ezért önmagában nem bővíti a régi RLS/RPC kapukat.
+Az ECHO és a kollégium saját hatókörös jogosultságai megmaradnak.
+
+Telepítési sorrend: **72 → 74 → 73**, a migrációs manifest szerint. A 73-as
+49 restriktív policy-t ad 20 táblára; az önkiszolgáló utak változatlanok.
+A `programs` tábla képzési sorain a `trainings`, a többi során a `programs`
+műveleti joga érvényesül. A data-layer hiányzó tábla esetén használ helyi
+előnézetet; jogosultsági és hálózati hibából nem csinál sikeres mentést.
+
+A telepítést és a háromlépcsős visszaállítást a [DEPLOY.md](DEPLOY.md#muveleti-rbac)
+írja le. A [helyi mérési jelentés](supabase/diagnostics/72_meresi_jelentes.md)
+tartalmazza a tesztparancsokat, eredményeket és a még szükséges élő ellenőrzéseket.
+
 ## Adatvédelem
 
 - A repóban és a seed adatokban **nincs valós személyes adat**. A korábbi

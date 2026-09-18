@@ -216,6 +216,48 @@ A csomagban nincs `.env`, adatbázis, feltöltött fájl és mentés, ezért a k
 
 A `migrate` csak az új migrációkat futtatja; a nyilvántartás az `uniportal_meta.migrations` táblában van. Egy már lefutott, de utólag módosított migrációt nem futtat újra, csak figyelmeztet.
 
+<a id="muveleti-rbac"></a>
+
+### Műveleti RBAC telepítése és visszaállítása
+
+A manifest sorrendje **72_rbac_actions.sql → 74_rbac_enforce_rpc.sql →
+73_rbac_enforce_rls.sql**. A 72-es a mátrixot és kompatibilis RPC-ket hozza létre,
+a 74-es 26 RPC-t őriz, a 73-as 49 restriktív policy-t ad 20 táblához.
+A 73-as megszakítja a telepítést hiányzó backfill, kikapcsolt RLS vagy nem
+igazolt ügyintézői permisszív kapu esetén. Ilyenkor a megnevezett eltérést kell
+ellenőrizni; az előfeltételt ne kerüld meg. A data reset az RBAC-mátrixot,
+beállításokat, auditnaplót és mindkét leképezési táblát megőrzi.
+
+Az alkalmazásos ellenőrzés SUPERADMIN munkamenetben `rbac_enforce_state()`;
+a deploy linter a kapukat és policy-ket is ellenőrzi. Az élő környezetben
+külön szükséges a hat alap- és egy saját szerepkörös bejelentkezési/mentési
+próba, valamint a `reset-data.sh` előnézet. A helyi tesztparancsok és az eddigi
+bizonyítékok a [mérési jelentésben](supabase/diagnostics/72_meresi_jelentes.md) vannak.
+
+Visszaállítási sorrend:
+
+1. **Vészkapcsoló, SUPERADMIN alkalmazásos munkamenetből:**
+   `rbac_enforce_set(false)`. A régi RLS és RPC szerepkörkapuk továbbra is élnek.
+   Visszakapcsolás: `rbac_enforce_set(true)`. A SQL Editor adatbázis-tulajdonosa
+   nem automatikusan alkalmazásos SUPERADMIN; a függvény profilazonosítót kér.
+2. **A kikényszerítési rétegek bontása:** adatbázis-tulajdonosként futtasd a
+   teljes `supabase/75_rbac_actions_rollback.sql` fájlt. Ez egy tranzakcióban
+   eldobja az `rbacx_` policy-ket és kiveszi a 74-es pontosan azonosított
+   RPC-őrblokkjait. A mátrix és napló megmarad. Ismeretlenül módosított őrnél
+   az egész bontás visszagördül. A fájl kétszer is futtatható, és **nem része
+   a manifestnek**.
+3. **Az alapréteg teljes eltávolítása, csak ha szükséges:** SUPERADMIN
+   munkamenetből `rbac_actions_rollback()`. Ez megtagadja a futást élő policy
+   vagy RPC-őr mellett; máskülönben visszaállítja a korábbi menü-RPC-ket és
+   elbontja a 72-es mátrixot. A jogosultsági auditnaplót megőrzi.
+
+A 75-ös kézi futtatása nem változtatja meg a migrációs nyilvántartást.
+Visszatelepítéshez ezért a 74-es és a 73-as fájlt kell kézzel újrafuttatni,
+nem elegendő a konténerek újraindítása. Ha a 72-est is elbontottad, előbb az
+is szükséges. A 72-es első backfilljét jelölő beállítás megakadályozza, hogy
+egy újrafuttatás visszaadja az azóta szándékosan elvett jogokat. Újratelepítés
+után ellenőrizd a vészkapcsoló állását és futtasd a deploy verifikációt.
+
 A Supabase-verziót nem a szerveren kell frissíteni: a fejlesztő emeli a `deploy/vendor-supabase.sh`-val, kipróbálja, és a tárolóban adja tovább.
 
 ## 8. Mentés és visszaállítás

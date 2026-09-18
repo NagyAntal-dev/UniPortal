@@ -31,6 +31,11 @@ const root = dirname(fileURLToPath(import.meta.url));
 
 const FEATURE_FILES = [
   'features/data-layer.jsx',
+  // Akció-szintű jogosultság (72_rbac_actions.sql): PERM_can / PERM_of /
+  // PERM_Gate / PERM_Denied. A data-layer UTÁN kell állnia: onnan veszi a
+  // UEmpty atomot. Minden más modul hivatkozik rá, de csak függvényként,
+  // tehát a kiértékelés sorrendje azokhoz képest közömbös.
+  'features/perm.jsx',
   // Zászlós országválasztó (CTRY_Select) — a programs.jsx és az app.jsx
   // jelentkezési űrlapjai használják; zászlók: assets/flags/*.svg.
   'features/countries.jsx',

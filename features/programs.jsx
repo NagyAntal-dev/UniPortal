@@ -584,6 +584,11 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
   const lepes = Math.max(0, Math.min(idx, rail.length - 1));
   const hallgatoiNezet = lepes < steps.length;
   const [saving, setSaving] = useState(false);
+  /* A mentés a 72/73-as jogosultsági réteg óta MEGTAGADHATÓ. A dlUpdate
+     ilyenkor dob (lásd data-layer.jsx): a hibát ki kell írni, nem szabad
+     sikeresnek látszania. A persist ilyenkor null-t ad vissza, amit a
+     hívók már ma is kezelnek (`if (saved)`). */
+  const [mentesHiba, setMentesHiba] = useState('');
   // Üzenetváltás a felvételi irodával (features/messages.jsx, 62) — a jelentkezés nézetéből is.
   const [uzenetNyitva, setUzenetNyitva] = useState(false);
   const msgTerkep = MSG_useInboxTerkep();
@@ -593,12 +598,20 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
     setSaving(true);
     const ids = PROG_appIds({ data: cur.data || {} });
     const patch = { student_step: Math.min(lepes, steps.length - 1), data: cur.data || {}, updated_at: new Date().toISOString(), ...(isDeg && ids.length ? { program_id: ids[0] } : {}), ...extra };
-    const saved = await dlUpdate(APP_TABLE, cur.id, patch, APP_LS);
+    let saved = null;
+    try {
+      saved = await dlUpdate(APP_TABLE, cur.id, patch, APP_LS);
+      setMentesHiba('');
+    } catch (e) {
+      setMentesHiba((e && e.message) || 'A mentés nem sikerült.');
+      setSaving(false);
+      return null;
+    }
     setSaving(false);
     if (saved) { const m = PROG_fromRow(saved); setCur(m); onSaved && onSaved(m); }
     return saved;
   };
-  const goNext = async () => { const n = Math.min(lepes + 1, steps.length - 1); setIdx(n); await persist({ student_step: n }); };
+  const goNext = async () => { const n = Math.min(lepes + 1, steps.length - 1); if (await persist({ student_step: n })) setIdx(n); };
   const goPrev = () => setIdx(Math.max(0, lepes - 1));
   const stepKey = hallgatoiNezet ? steps[lepes] : null;
   const statusz = PROG_STATUS[cur.status] || null;
@@ -665,17 +678,26 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
             onSubmit={async () => {
               /* Előbb mentünk (hogy az utolsó lépés adatai is bent legyenek),
                  utána a szerver fordítja át a sort az irodai szakaszba. */
-              await persist({ student_step: lepes });
+              if (!(await persist({ student_step: lepes }))) return;
               if (!window.sb) return;
+              try {
               const { error } = await window.sb.rpc('application_submit', { p_id: cur.id });
               if (error) { alert(error.message || 'A beadás nem sikerült. Próbáld újra.'); return; }
               setCur(c => ({ ...c, status: 'submitted' }));
               onSaved && onSaved({ ...cur, status: 'submitted' });
+              } catch (e) { setMentesHiba(e.message || 'A mentés nem sikerült.'); }
             }} /> : <PROG_IrodaiLepes lepes={rail[lepes]} cur={cur} data={data} program={virt} />}
+          {mentesHiba && (
+            <div className="mt-6 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-semibold">
+              <Lucide.AlertCircle size={16} className="mt-0.5 flex-none" />
+              <span className="flex-1">{mentesHiba}</span>
+              <button onClick={() => setMentesHiba('')} className="text-red-400 hover:text-red-700"><Lucide.X size={14} /></button>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-3 mt-8 pt-5 border-t border-slate-100">
             <button onClick={goPrev} disabled={lepes === 0} className={U_btnGhost + (lepes === 0 ? ' opacity-0 pointer-events-none' : '')}><Lucide.ArrowLeft size={15} /> Vissza</button>
             <div className="flex items-center gap-3">
-              <button onClick={async () => { await persist(); onExit && onExit(); }} disabled={saving} className="text-sm font-bold text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50">{saving ? 'Mentés…' : 'Mentés és kilépés'}</button>
+              <button onClick={async () => { const ok = await persist(); if (ok) onExit && onExit(); }} disabled={saving} className="text-sm font-bold text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50">{saving ? 'Mentés…' : 'Mentés és kilépés'}</button>
               {hallgatoiNezet && lepes < steps.length - 1 && <button onClick={goNext} className={U_btnPrimary} disabled={!PROG_canAdvance(stepKey, virt, data)}>Folytatás <Lucide.ArrowRight size={15} /></button>}
             </div>
           </div>
@@ -1098,12 +1120,17 @@ function PROG_IrodaiLepes({ lepes, cur, data, program }) {
    jelentkezés: ugyanaz a nézet (ProgramApply), mint a Képzési kínálatból. */
 function PROG_FolyamatMegnyitas({ processId, user, onExit, kezdoLepes }) {
   const [allapot, setAllapot] = useState(null);
+  const [hiba, setHiba] = useState('');
   const betolt = async () => {
+    try {
     const [programs, apps] = await Promise.all([PROG_loadPrograms(), PROG_loadApps(), PROG_loadDocTypes()]);
     setAllapot({ programs: programs || [], app: (apps || []).find(a => a.id === processId) || null });
+    setHiba('');
+    } catch (e) { setHiba(e.message || 'A betöltés nem sikerült.'); }
   };
   useEffect(() => { betolt(); }, [processId]);
   const vissza = <button className={U_btnGhost} onClick={onExit}><Lucide.ArrowLeft size={15} /> Vissza a felvételi folyamatokhoz</button>;
+  if (hiba) return <div role="alert" className="space-y-4 rounded-xl bg-red-50 p-6 text-red-700"><p>{hiba}</p>{vissza}</div>;
   if (!allapot) return <div className="h-64 rounded-3xl bg-white border border-slate-100 animate-pulse" />;
   if (!allapot.app) return <div className="bg-white rounded-3xl border border-slate-100 p-8 text-center space-y-4"><p className="text-slate-500 font-semibold">A jelentkezés nem található.</p>{vissza}</div>;
   const program = allapot.programs.find(x => x.id === PROG_appIds(allapot.app)[0]);
@@ -1393,12 +1420,15 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg, felev, setF
 }
 
 /* ---------- admin: program editor (incl. per-program flow editor) ---------- */
-function PROG_Editor({ open, program, onClose, onSaved, scope }) {
+function PROG_Editor({ open, program, onClose, onSaved, scope, user }) {
   const isDeg = scope === 'degrees';
   const levelOpts = isDeg ? PROG_DEGREE_LEVELS : PROG_PROGRAM_LEVELS;
   const blank = { id: '', code: '', name: '', level: isDeg ? 'bachelor' : 'course', faculty: '', degree: isDeg ? 'BSc' : 'Short course', duration_semesters: isDeg ? 7 : 2, ects: isDeg ? 210 : 30, tuition: isDeg ? 2500 : 400, currency: 'EUR', language: 'English', deadline: '2026-06-30', capacity: 30, seats_taken: 0, is_open: true, summary: '', image_url: '', required_docs: isDeg ? ['passport', 'hs_diploma', 'english'] : ['passport'], steps: isDeg ? ['personal', 'documents', 'interview', 'fee', 'review'] : ['personal', 'fee', 'review'], tags: [], intakes: ['autumn', 'spring'] };
   const [f, setF] = useState(blank);
   const [busy, setBusy] = useState(false);
+  // A mentés megtagadható (72/73-as jogosultsági réteg) — a modál ilyenkor
+  // nyitva marad a beírt adatokkal, és kiírja, miért nem sikerült.
+  const [mentesHiba, setMentesHiba] = useState('');
   // Egyedi dokumentumtípusok: minden megnyitáskor frissen, hogy a más admin
   // által közben felvett típus is látsszon.
   const DOK_URES = { open: false, hu: '', en: '', active: true, szerk: null, busy: false, hiba: '' };
@@ -1440,18 +1470,35 @@ function PROG_Editor({ open, program, onClose, onSaved, scope }) {
   const uploadImg = async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; const dataUrl = await KB_readFileAsDataUrl(file); set('image_url', dataUrl); };
 
   const save = async () => {
+    if (!PERM_can(user, isDeg ? 'trainings' : 'programs', program ? 'EDIT' : 'CREATE',
+      !!user && ['ADMIN', 'SUPERADMIN'].includes(user.role))) return;
     if (!f.name.trim()) return; setBusy(true);
     const row = { ...f, tuition: Number(f.tuition) || 0, ects: Number(f.ects) || 0, duration_semesters: Number(f.duration_semesters) || 0, capacity: Number(f.capacity) || 0, tags: typeof f.tags === 'string' ? f.tags.split(',').map(s => s.trim()).filter(Boolean) : f.tags };
     // A 60-as migráció előtt nincs intakes oszlop: a mezőt nem küldjük, különben az egész mentés elbukna.
     if (!PROG_INTAKE_COL) delete row.intakes; else row.intakes = PROG_intakesOf(f);
-    if (program) { await dlUpdate(PROG_TABLE, program.id, row, PROG_LS); }
-    else { row.id = uid('prog'); row.created_at = todayStr(); await dlInsert(PROG_TABLE, row, PROG_LS); }
+    // A dlUpdate/dlInsert megtagadás esetén dob (data-layer.jsx): a modál
+    // maradjon nyitva a beírt adatokkal, és mondja meg, miért nem mentett.
+    try {
+      if (program) { await dlUpdate(PROG_TABLE, program.id, row, PROG_LS); }
+      else { row.id = uid('prog'); row.created_at = todayStr(); await dlInsert(PROG_TABLE, row, PROG_LS); }
+    } catch (e) {
+      setMentesHiba((e && e.message) || 'A mentés nem sikerült.');
+      setBusy(false);
+      return;
+    }
     setBusy(false); onSaved && onSaved(); onClose();
   };
 
   return (
     <UModal open={open} onClose={onClose} max="max-w-3xl" title={(program ? 'Szerkesztés — ' : 'Új ') + (isDeg ? 'képzés' : 'program')} subtitle={isDeg ? 'Az adatok és a képzés felvételi folyamatának beállítása' : 'Az adatok és a program jelentkezési folyamatának beállítása'} icon={<Lucide.GraduationCap size={20} />}>
       <div className="space-y-6">
+        {mentesHiba && (
+          <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-semibold">
+            <Lucide.AlertCircle size={16} className="mt-0.5 flex-none" />
+            <span className="flex-1">{mentesHiba}</span>
+            <button onClick={() => setMentesHiba('')} className="text-red-400 hover:text-red-700"><Lucide.X size={14} /></button>
+          </div>
+        )}
         <div className="grid sm:grid-cols-2 gap-4">
           <UField label={isDeg ? 'Képzés neve' : 'Program neve'}><input className={U_input} value={f.name} onChange={e => set('name', e.target.value)} /></UField>
           <UField label="Kar"><input className={U_input} value={f.faculty} onChange={e => set('faculty', e.target.value)} /></UField>
@@ -1590,7 +1637,12 @@ function PROG_Applicants({ programs, apps, onChange }) {
         return;
       }
     } else {
-      await dlUpdate(APP_TABLE, a.id, { updated_at: new Date().toISOString() }, APP_LS);
+      try {
+        await dlUpdate(APP_TABLE, a.id, { updated_at: new Date().toISOString() }, APP_LS);
+      } catch (e) {
+        alert((e && e.message) || 'A művelet nem sikerült.');
+        return;
+      }
     }
     onChange && onChange();
   };
@@ -1634,18 +1686,29 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
   const isDeg = scope === 'degrees';
   const keret = embedded ? 'animate-in fade-in duration-500' : 'max-w-6xl xl:max-w-[1360px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 animate-in fade-in duration-500';
   const [programs, setPrograms] = useState(null);
+  const [betoltesHiba, setBetoltesHiba] = useState('');
   const [apps, setApps] = useState([]);
   const [detail, setDetail] = useState(null);
   const [applying, setApplying] = useState(null); // {program, app}
   const [editor, setEditor] = useState({ open: false, program: null });
-  /* A közös isAdmin() csak az ADMIN szerepkört nézi, ezért a SUPERADMIN eddig
-     a hallgatói katalógust kapta kezelőtábla helyett. Itt mindkettő kezelő. */
-  const kezelo = !!user && (isAdmin(user) || user.role === 'SUPERADMIN');
+  /* KEZELŐI NÉZET: a katalógus szerkesztése. A 72-es óta a `programs` modul
+     EDIT joga dönti el, nem szerepkör-lista.
+     A `regi` érték a MAI viselkedés — beleértve a SUPERADMIN külön ágát, amit
+     azért kellett ideírni, mert a régi isAdmin() csak az ADMIN-t nézte, és a
+     szuperadmin a hallgatói katalógust kapta kezelőtábla helyett. */
+  const regiKezelo = !!user && (user.role === 'ADMIN' || user.role === 'SUPERADMIN');
+  const jog = PERM_of(user, isDeg ? 'trainings' : 'programs', { create: regiKezelo, edit: regiKezelo });
+  const kezelo = jog.create || jog.edit;
   const [tab, setTab] = useState(kezelo && !embedded ? 'manage' : 'explore');
 
   // A dokumentumtípusok is itt töltődnek, hogy a hallgató feltöltési lépése és a
   // részletező ablak az egyedi típusok NEVÉT mutassa, ne a kulcsát.
-  const refetch = async () => { const [p, a] = await Promise.all([PROG_loadPrograms(), PROG_loadApps(), PROG_loadDocTypes()]); setPrograms(p); setApps(a); };
+  const refetch = async () => {
+    try {
+      const [p, a] = await Promise.all([PROG_loadPrograms(), PROG_loadApps(), PROG_loadDocTypes()]);
+      setPrograms(p); setApps(a); setBetoltesHiba('');
+    } catch (e) { setBetoltesHiba(e.message || 'A betöltés nem sikerült.'); }
+  };
   useEffect(() => { refetch(); }, []);
 
   /* Kis-nagybetű független egyezés: a beszúrás kisbetűsít (owner_email), itt
@@ -1663,7 +1726,14 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
         stage: 'student', student_step: 0, step: 0, max_reached: 0, done: false,
         data: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       };
-      app = PROG_fromRow(await dlInsert(APP_TABLE, sor, APP_LS) || sor);
+      // A dlInsert megtagadáskor dob (data-layer.jsx). Enélkül a piszkozat
+      // csak a helyi tárolóba kerülne, és a jelentkező azt hinné, elindult.
+      try {
+        app = PROG_fromRow(await dlInsert(APP_TABLE, sor, APP_LS) || sor);
+      } catch (e) {
+        alert((e && e.message) || 'A jelentkezés nem indítható el.');
+        return;
+      }
       await refetch();
     }
     setDetail(null); setApplying({ program, app });
@@ -1692,7 +1762,11 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
   const zarolva = async (fn) => {
     if (inditasRef.current) return;
     inditasRef.current = true; setInditasBusy(true);
-    try { await fn(); } finally { inditasRef.current = false; setInditasBusy(false); }
+    // A dlInsert/dlUpdate a 72/73-as óta dobhat megtagadáskor. Enélkül a hiba
+    // néma elutasított ígéret lenne: a gomb visszaállna, és semmi nem történne.
+    try { await fn(); }
+    catch (e) { alert((e && e.message) || 'A művelet nem sikerült.'); }
+    finally { inditasRef.current = false; setInditasBusy(false); }
   };
   const keresProg = (id) => (programs || []).find(x => x.id === id);
   const kepzesApp = (a) => PROG_appIds(a).some(id => { const x = keresProg(id); return x && PROG_kind(x) === 'degree'; });
@@ -1732,6 +1806,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
     setInditas({ ids, term });
   };
 
+  if (programs === null && betoltesHiba) return <div role="alert" className={keret + ' text-red-700'}>{betoltesHiba}</div>;
   if (programs === null) return <div className={keret}><div className="grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">{[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="h-56 rounded-3xl bg-white border border-slate-100 animate-pulse" />)}</div></div>;
 
   if (applying) {
@@ -1746,6 +1821,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
   const scopedApps = apps.filter(a => scopedPrograms.some(p => PROG_appIds(a).includes(p.id)));
   return (
     <div className={keret}>
+      {betoltesHiba && <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-red-700">{betoltesHiba}</div>}
       {inditas && (
         <PROG_InditasValaszto ids={inditas.ids} term={inditas.term} programs={programs} myApps={myApps} busy={inditasBusy}
           onClose={() => setInditas(null)}
@@ -1763,7 +1839,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
         </div>
         <div className="flex items-center gap-2">
           {staff && <button className={U_btnGhost} onClick={() => setTab(tab === 'manage' ? 'applicants' : 'manage')}>{tab === 'manage' ? <><Lucide.Users size={16} /> Jelentkezők</> : <><Lucide.GraduationCap size={16} /> {isDeg ? 'Képzések' : 'Programok'}</>}</button>}
-          {staff && tab === 'manage' && <button className={U_btnPrimary} onClick={() => setEditor({ open: true, program: null })}><Lucide.Plus size={16} /> Új {isDeg ? 'képzés' : 'program'}</button>}
+          {staff && jog.create && tab === 'manage' && <button className={U_btnPrimary} onClick={() => setEditor({ open: true, program: null })}><Lucide.Plus size={16} /> Új {isDeg ? 'képzés' : 'program'}</button>}
         </div>
       </div>}
 
@@ -1824,7 +1900,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
       )}
 
       {staff && tab === 'manage' && scopedPrograms.length === 0 && (
-        <div className="bg-white rounded-3xl border border-slate-100"><UEmpty icon={<Lucide.GraduationCap size={26} />} title={isDeg ? 'Még nincs képzés' : 'Még nincs program'} subtitle={isDeg ? 'Vedd fel az első képzést (BSc, MSc, MA, MBA vagy PhD).' : 'Vegyél fel egy céglátogatást, továbbképzést, eseti kurzust vagy tanulmányi kirándulást.'} action={<button className={U_btnPrimary} onClick={() => setEditor({ open: true, program: null })}><Lucide.Plus size={16} /> Új {isDeg ? 'képzés' : 'program'}</button>} /></div>
+        <div className="bg-white rounded-3xl border border-slate-100"><UEmpty icon={<Lucide.GraduationCap size={26} />} title={isDeg ? 'Még nincs képzés' : 'Még nincs program'} subtitle={isDeg ? 'Vedd fel az első képzést (BSc, MSc, MA, MBA vagy PhD).' : 'Vegyél fel egy céglátogatást, továbbképzést, eseti kurzust vagy tanulmányi kirándulást.'} action={jog.create && <button className={U_btnPrimary} onClick={() => setEditor({ open: true, program: null })}><Lucide.Plus size={16} /> Új {isDeg ? 'képzés' : 'program'}</button>} /></div>
       )}
       {staff && tab === 'manage' && scopedPrograms.length > 0 && (
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
@@ -1840,7 +1916,9 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
                   <td className="px-5 py-3 text-[12px] font-bold text-slate-400">{(p.steps || []).length + ' lépés'}</td>
                   <td className="px-5 py-3 text-[12px] font-semibold text-slate-500">{DL_date(p.deadline)}</td>
                   <td className="px-5 py-3">{p.is_open ? <UBadge tone="green">Nyitva</UBadge> : <UBadge tone="red">Lezárva</UBadge>}</td>
-                  <td className="px-5 py-3 text-right"><div className="flex items-center gap-1 justify-end"><button onClick={() => dlUpdate(PROG_TABLE, p.id, { is_open: !p.is_open }, PROG_LS).then(refetch)} className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 flex items-center justify-center" title={p.is_open ? 'Jelentkezés lezárása' : 'Jelentkezés megnyitása'}>{p.is_open ? <Lucide.Lock size={15} /> : <Lucide.LockOpen size={15} />}</button><button onClick={() => setEditor({ open: true, program: p })} className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 flex items-center justify-center" title="Szerkesztés"><Lucide.Pencil size={15} /></button></div></td>
+                  <td className="px-5 py-3 text-right"><div className="flex items-center gap-1 justify-end"><button disabled={!jog.edit} onClick={() => dlUpdate(PROG_TABLE, p.id, { is_open: !p.is_open }, PROG_LS)
+                      .then(refetch)
+                      .catch(e => alert((e && e.message) || 'A módosítás nem sikerült.'))} className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 flex items-center justify-center disabled:opacity-40" title={p.is_open ? 'Jelentkezés lezárása' : 'Jelentkezés megnyitása'}>{p.is_open ? <Lucide.Lock size={15} /> : <Lucide.LockOpen size={15} />}</button><button disabled={!jog.edit} onClick={() => setEditor({ open: true, program: p })} className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 flex items-center justify-center disabled:opacity-40" title="Szerkesztés"><Lucide.Pencil size={15} /></button></div></td>
                 </tr>
               ); })}
             </tbody>
@@ -1851,7 +1929,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
       {staff && tab === 'applicants' && <PROG_Applicants programs={scopedPrograms} apps={scopedApps} onChange={refetch} />}
 
       <PROG_Detail program={detail} myApp={detail ? myApps.find(a => PROG_appIds(a).includes(detail.id)) : null} onClose={() => setDetail(null)} onApply={isDeg ? (x) => startDegreeApply([x.id], felev) : openApply} />
-      <PROG_Editor open={editor.open} program={editor.program} scope={scope} onClose={() => setEditor({ open: false, program: null })} onSaved={refetch} />
+      <PROG_Editor user={user} open={editor.open && (editor.program ? jog.edit : jog.create)} program={editor.program} scope={scope} onClose={() => setEditor({ open: false, program: null })} onSaved={refetch} />
     </div>
   );
 };
