@@ -23,14 +23,15 @@ COPY --from=build /src/app.html /src/app.bundle.js /usr/share/nginx/html/
 # Az auth szolgáltatás innen tölti le a jelszó-visszaállító levél sablonját.
 COPY deploy/web/email/ /usr/share/nginx/html/email/
 COPY deploy/web/default.conf.template /etc/nginx/templates/default.conf.template
-COPY deploy/web/headers.conf deploy/web/proxy.conf /etc/nginx/uniportal/
+COPY deploy/web/headers.conf deploy/web/proxy.conf deploy/web/keycloak-proxy.conf /etc/nginx/uniportal/
 COPY --chmod=755 deploy/web/10-uniportal-defaults.envsh /docker-entrypoint.d/10-uniportal-defaults.envsh
 COPY --chmod=755 deploy/web/40-uniportal-config.sh   /docker-entrypoint.d/40-uniportal-config.sh
 # A config.js-t és a realip.conf-ot induláskor a nem-root nginx felhasználó írja.
 RUN chown -R 101:0 /usr/share/nginx/html /etc/nginx/uniportal \
  && chmod -R g+w /usr/share/nginx/html /etc/nginx/uniportal
 USER 101
-ENV API_GW_UPSTREAM=api-gw:8000
+ENV API_GW_UPSTREAM=api-gw:8000 \
+    KEYCLOAK_UPSTREAM=keycloak:8080
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1

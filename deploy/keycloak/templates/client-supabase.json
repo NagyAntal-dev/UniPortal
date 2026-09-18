@@ -1,0 +1,143 @@
+{
+  "protocol": "saml",
+  "name": "UniPortal Supabase Auth",
+  "description": "Supabase Auth (GoTrue) SAML SP. A clientId, az ACS es az SP-tanusitvany a Supabase metadatabol jon (provision.sh).",
+  "enabled": true,
+  "frontchannelLogout": true,
+  "fullScopeAllowed": false,
+  "consentRequired": false,
+  "defaultClientScopes": [],
+  "optionalClientScopes": [],
+  "attributes": {
+    "saml_name_id_format": "persistent",
+    "saml_force_name_id_format": "true",
+    "saml.server.signature": "true",
+    "saml.assertion.signature": "true",
+    "saml.signature.algorithm": "RSA_SHA256",
+    "saml_signature_canonicalization_method": "http://www.w3.org/2001/10/xml-exc-c14n#",
+    "saml.server.signature.keyinfo.ext": "false",
+    "saml.server.signature.keyinfo.xmlSigKeyInfoKeyNameTransformer": "KEY_ID",
+    "saml.encrypt": "false",
+    "saml.force.post.binding": "true",
+    "saml.authnstatement": "true",
+    "saml.onetimeuse.condition": "false",
+    "saml.allow.ecp.flow": "false"
+  },
+  "protocolMappers": [
+    {
+      "name": "email",
+      "protocol": "saml",
+      "protocolMapper": "saml-user-property-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "email",
+        "attribute.name": "email",
+        "friendly.name": "email",
+        "attribute.nameformat": "Basic"
+      }
+    },
+    {
+      "name": "name",
+      "protocol": "saml",
+      "protocolMapper": "saml-user-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "displayName",
+        "attribute.name": "name",
+        "friendly.name": "name",
+        "attribute.nameformat": "Basic",
+        "aggregate.attrs": "false"
+      }
+    },
+    {
+      "name": "eduPersonPrincipalName",
+      "protocol": "saml",
+      "protocolMapper": "saml-user-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "eduPersonPrincipalName",
+        "attribute.name": "eduPersonPrincipalName",
+        "friendly.name": "eduPersonPrincipalName",
+        "attribute.nameformat": "Basic",
+        "aggregate.attrs": "false"
+      }
+    },
+    {
+      "name": "displayName",
+      "protocol": "saml",
+      "protocolMapper": "saml-user-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "displayName",
+        "attribute.name": "displayName",
+        "friendly.name": "displayName",
+        "attribute.nameformat": "Basic",
+        "aggregate.attrs": "false"
+      }
+    },
+    {
+      "name": "mail",
+      "protocol": "saml",
+      "protocolMapper": "saml-user-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "mail",
+        "attribute.name": "mail",
+        "friendly.name": "mail",
+        "attribute.nameformat": "Basic",
+        "aggregate.attrs": "false"
+      }
+    },
+    {
+      "name": "ou",
+      "protocol": "saml",
+      "protocolMapper": "saml-user-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "ou",
+        "attribute.name": "ou",
+        "friendly.name": "ou",
+        "attribute.nameformat": "Basic",
+        "aggregate.attrs": "true"
+      }
+    },
+    {
+      "name": "title",
+      "protocol": "saml",
+      "protocolMapper": "saml-user-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "title",
+        "attribute.name": "title",
+        "friendly.name": "title",
+        "attribute.nameformat": "Basic",
+        "aggregate.attrs": "false"
+      }
+    },
+    {
+      "name": "physicalDeliveryOfficeName",
+      "protocol": "saml",
+      "protocolMapper": "saml-user-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "physicalDeliveryOfficeName",
+        "attribute.name": "physicalDeliveryOfficeName",
+        "friendly.name": "physicalDeliveryOfficeName",
+        "attribute.nameformat": "Basic",
+        "aggregate.attrs": "false"
+      }
+    },
+    {
+      "name": "keycloak_user_id",
+      "protocol": "saml",
+      "protocolMapper": "saml-user-property-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "id",
+        "attribute.name": "keycloak_user_id",
+        "friendly.name": "keycloak_user_id",
+        "attribute.nameformat": "Basic"
+      }
+    }
+  ]
+}

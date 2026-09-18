@@ -23,6 +23,13 @@ node_modules/
 deploy/supabase/volumes/db/data/
 deploy/supabase/volumes/storage/
 backups/
+# Keycloak realm-export (kc.sh export): a realm PRIVÁT aláíró kulcsait is tartalmazza.
+deploy/keycloak/export/
+# SAML/TLS kulcsok és tanúsítványok soha nem kerülhetnek a tárolóba.
+*.pem
+*.key
+*.p12
+*.jks
 
 # Local enrollment imports contain personal data and account credentials.
 private-imports/

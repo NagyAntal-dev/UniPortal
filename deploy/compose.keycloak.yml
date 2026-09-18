@@ -1,0 +1,115 @@
+# ============================================================================
+# UniPortal — Keycloak SAML-közvetítő (NJE IdP → Keycloak → Supabase Auth).
+# Opcionális réteg: a .env COMPOSE_FILE sorának végére kell fűzni:
+#   COMPOSE_FILE=docker-compose.yml:deploy/compose.uniportal.yml:deploy/compose.keycloak.yml
+# Részletek, beállítás és hibaelhárítás: docs/keycloak-saml.md
+#
+#   keycloak-db-init   egyszer fut: saját "keycloak" adatbázis + szerepkör a
+#                      meglévő Postgresben (idempotens; H2 NINCS)
+#   keycloak           a broker; kívülről a web továbbítja: <cím>/keycloak/
+#                      Az admin konzol CSAK a szerverről: 127.0.0.1:8180
+#   keycloak-provision kézzel futtatandó beállító (NJE IdP, Supabase-kliens,
+#                      Supabase provider): docker compose run --rm keycloak-provision
+#
+# Biztonság: kifelé a Keycloak NEM nyit portot; a nyilvános forgalom a web
+# (nginx) /keycloak/ útvonalán jön, amely az admin- és a master-realm-útvonalat
+# eleve elzárja. A management/health port (9000) csak a belső hálózaton él.
+# ============================================================================
+services:
+  keycloak-db-init:
+    image: postgres:17-alpine
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: ${POSTGRES_PORT:-5432}
+      # A szerepkör és az adatbázis létrehozásához superuser kell; a Keycloak
+      # maga a korlátozott "keycloak" szerepkörrel fut.
+      PGUSER: supabase_admin
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-postgres}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-}
+      # Csak a kitöltöttség ellenőrzéséhez (CHANGE_ME / üres → leáll).
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-}
+    volumes:
+      - ./deploy/keycloak/db-init.sh:/uniportal/db-init.sh:ro
+    entrypoint: ["/bin/sh", "/uniportal/db-init.sh"]
+
+  keycloak:
+    build:
+      context: deploy/keycloak
+      dockerfile: Dockerfile
+    image: uniportal-keycloak:26.7.4
+    restart: unless-stopped
+    depends_on:
+      keycloak-db-init:
+        condition: service_completed_successfully
+    environment:
+      KC_DB_URL: jdbc:postgresql://db:${POSTGRES_PORT:-5432}/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-}
+      # A nyilvános cím (a web továbbítja): https://uniportal.nje.hu/keycloak
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-}
+      # Az admin konzol CSAK SSH-alagúton: ssh -L 8180:127.0.0.1:8180 <szerver>
+      KC_HOSTNAME_ADMIN: http://127.0.0.1:${KEYCLOAK_ADMIN_PORT:-8180}/keycloak
+      # A TLS a külső proxyn végződik; a web nginx HTTP-n továbbít, és
+      # X-Forwarded-* fejlécet küld (deploy/web/default.conf.template).
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      # Csak a belső (Docker) hálózat X-Forwarded-* fejlécét fogadja el: kívülről
+      # a Keycloak csak a web nginxen át érhető el, amely az X-Forwarded-For-t a
+      # valós ügyfél címére írja (deploy/web/keycloak-proxy.conf).
+      KC_PROXY_TRUSTED_ADDRESSES: ${KEYCLOAK_PROXY_TRUSTED_ADDRESSES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      # Az első induláskor létrejövő admin (a master realmben). Később a .env
+      # átírása NEM változtatja meg — lásd docs/keycloak-saml.md.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-kcadmin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
+      KC_LOG_LEVEL: ${KEYCLOAK_LOG_LEVEL:-info}
+    volumes:
+      # A uniportal realm első induláskor importálódik; létező realmet NEM ír felül.
+      - ./deploy/keycloak/realm:/opt/keycloak/data/import:ro
+    ports:
+      - "127.0.0.1:${KEYCLOAK_ADMIN_PORT:-8180}:8080"
+    healthcheck:
+      # A képben nincs curl: bash /dev/tcp a management porton. A /ready 200-at
+      # csak kész állapotban ad (a törzsben egy-egy alellenőrzés akkor is "UP"
+      # lehet, ha az egész még DOWN — ezért az állapotsort nézzük).
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /keycloak/health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          head -n1 <&3 | grep -q ' 200 '
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  keycloak-provision:
+    build:
+      context: deploy/keycloak/provision
+      dockerfile: Dockerfile
+    image: uniportal-keycloak-provision:latest
+    # Csak kézzel: docker compose run --rm keycloak-provision [register-supabase]
+    profiles: ["tools"]
+    restart: "no"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_ADMIN_USER: ${KEYCLOAK_ADMIN_USER:-kcadmin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-}
+      NJE_IDP_METADATA_URL: ${NJE_IDP_METADATA_URL:-https://idp.nje.hu/simplesaml/saml2/idp/metadata.php}
+      SUPABASE_SP_METADATA_URL: ${SUPABASE_SP_METADATA_URL:-}
+      SSO_DOMAIN: ${SSO_DOMAIN:-nje.hu}
+      # Csak a register-supabase használja (GoTrue admin API, belső hálózaton).
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+    volumes:
+      - ./deploy/keycloak/provision/provision.sh:/uniportal/bin/provision.sh:ro
+      - ./deploy/keycloak/templates:/uniportal/templates:ro

@@ -1,0 +1,120 @@
+{
+  "realm": "uniportal",
+  "displayName": "NJE UniPortal",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 10,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanLogin": 1800,
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false,
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "hu",
+    "en"
+  ],
+  "defaultLocale": "hu",
+  "defaultRole": {
+    "name": "default-roles-uniportal",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "composites": {
+      "realm": [
+        "offline_access",
+        "uma_authorization"
+      ],
+      "client": {
+        "account": [
+          "view-profile"
+        ]
+      }
+    }
+  },
+  "authenticationFlows": [
+    {
+      "alias": "nje-browser",
+      "description": "Supabase -> Keycloak: meglevo Keycloak-munkamenet, kulonben azonnal az NJE IdP (nincs Keycloak-loginoldal).",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "identity-provider-redirector",
+          "authenticatorConfig": "nje-redirector",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "nje-first-broker-login",
+      "description": "Elso NJE-belepes: uj user az ePPN-bol, ha meg nincs. NINCS e-mail alapu osszekapcsolas; utkozeskor hiba (fail-closed).",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-create-user-if-unique",
+          "authenticatorConfig": "nje-create-user-if-unique",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "nje-redirector",
+      "config": {
+        "defaultProvider": "nje"
+      }
+    },
+    {
+      "alias": "nje-create-user-if-unique",
+      "config": {
+        "require.password.update.after.registration": "false"
+      }
+    }
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"unmanagedAttributePolicy\":\"ADMIN_VIEW\",\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false,\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}}},{\"name\":\"email\",\"displayName\":\"${email}\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false,\"validations\":{\"email\":{},\"length\":{\"max\":255}}},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false,\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}}},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false,\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}}},{\"name\":\"eduPersonPrincipalName\",\"displayName\":\"eduPersonPrincipalName (NJE)\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false,\"validations\":{\"length\":{\"max\":1024}},\"group\":\"nje\"},{\"name\":\"displayName\",\"displayName\":\"displayName (NJE)\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false,\"validations\":{\"length\":{\"max\":1024}},\"group\":\"nje\"},{\"name\":\"mail\",\"displayName\":\"mail (NJE)\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false,\"validations\":{\"length\":{\"max\":1024}},\"group\":\"nje\"},{\"name\":\"ou\",\"displayName\":\"ou (NJE)\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":true,\"validations\":{\"length\":{\"max\":1024}},\"group\":\"nje\"},{\"name\":\"title\",\"displayName\":\"title (NJE)\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false,\"validations\":{\"length\":{\"max\":1024}},\"group\":\"nje\"},{\"name\":\"physicalDeliveryOfficeName\",\"displayName\":\"physicalDeliveryOfficeName (NJE)\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false,\"validations\":{\"length\":{\"max\":1024}},\"group\":\"nje\"}],\"groups\":[{\"name\":\"nje\",\"displayHeader\":\"NJE\",\"displayDescription\":\"Az NJE IdP-tol kapott adatok (minden belepeskor felulirodnak)\"}]}"
+          ]
+        }
+      }
+    ]
+  }
+}
