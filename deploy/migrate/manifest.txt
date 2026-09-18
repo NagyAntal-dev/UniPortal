@@ -80,3 +80,4 @@
 67_echo_campaign_students_status.sql
 68_echo_campaign_ref_no.sql
 69_feed_audience.sql
+70_feed_views.sql

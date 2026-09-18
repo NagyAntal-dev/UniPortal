@@ -335,7 +335,7 @@ function FeedComposer({ open, onClose, onPublished, authorName }) {
 }
 
 /* ---------- individual post card ---------- */
-function FeedCard({ post, user, rsvps, tix, onChange, onDelete }) {
+function FeedCard({ post, user, rsvps, tix, onChange, onDelete, nezes, onLatta }) {
   const meta = FEED_TYPES[post.type] || FEED_TYPES.news;
   const I = meta.icon;
   const [copied, setCopied] = useState(false);
@@ -357,8 +357,28 @@ function FeedCard({ post, user, rsvps, tix, onChange, onDelete }) {
   };
   const dleft = DL_daysLeft(post.event_date);
 
+  /* „LÁTTA” = a kártya legalább félig megjelent a képernyőn (70). Nem
+     kattintás és nem olvasás — a felület szövege sem állít többet. Egy
+     felhasználó egy bejegyzésnél egyszer számít, a naplózás a szerveren
+     ütközésmentes (on conflict). */
+  const hivRef = useRef(null);
+  const lattaRef = useRef(false);
+  useEffect(() => {
+    if (!onLatta || lattaRef.current) return;
+    const el = hivRef.current;
+    if (!el || typeof IntersectionObserver !== 'function') return;
+    const fig = new IntersectionObserver((sorok) => {
+      sorok.forEach(x => {
+        if (x.isIntersecting && !lattaRef.current) { lattaRef.current = true; onLatta(post.id); fig.disconnect(); }
+      });
+    }, { threshold: 0.5 });
+    fig.observe(el);
+    return () => fig.disconnect();
+  }, [post.id, onLatta]);
+
   return (
-    <article className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <article ref={hivRef} data-feed-poszt={post.id}
+      className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
       {post.type === 'gallery' && post.gallery && post.gallery.length > 0 && (
         <div className={'grid gap-1 ' + (post.gallery.length === 1 ? 'grid-cols-1' : post.gallery.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
           {post.gallery.slice(0, 6).map((g, i) => <div key={i} className="aspect-[4/3] bg-slate-100 overflow-hidden">{FEED_img(g, 'w-full h-full object-cover')}</div>)}
@@ -380,6 +400,13 @@ function FeedCard({ post, user, rsvps, tix, onChange, onDelete }) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {nezes != null && (
+              <span data-feed-nezes={post.id}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400"
+                title={'Hányan látták — ' + nezes + ' különböző felhasználó képernyőjén jelent meg. Nevet a rendszer nem mutat, és az ügyintézők megtekintése nem számít bele.'}>
+                <Lucide.Eye size={13} className="flex-none" /> {nezes}
+              </span>
+            )}
             <span className="text-[11px] text-slate-400 font-bold">{DL_date(post.created_at)}</span>
             {FEED_szerkeszto(user) && <button onClick={() => onDelete(post)} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors" title="Törlés"><Lucide.Trash2 size={14} /></button>}
           </div>
@@ -618,12 +645,47 @@ const FeedView = ({ user, onNavigate }) => {
   const [filter, setFilter] = useState('all');
   const [composer, setComposer] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
+  /* Megtekintés-számlálók (70). Ha a migráció még nem futott le, a szám
+     sehol nem jelenik meg — a hírfolyam enélkül is teljes értékű. */
+  const [nezesek, setNezesek] = useState({});
+  const [nezesVan, setNezesVan] = useState(true);
+  const varoRef = useRef([]);
+  const idoRef = useRef(null);
+
+  const nezesHiba = (error) => {
+    const m = ((error && error.message) || '') + ((error && error.code) || '');
+    if (/feed_view_|schema cache|PGRST202/i.test(m)) setNezesVan(false);
+  };
 
   const refetch = async () => {
     const [p, r, t] = await Promise.all([FEED_loadPosts(FEED_ugyintezo(user)), FEED_loadRsvps(), FEED_loadTix()]);
     setPosts(p); setRsvps(r); setTix(t);
+    const idk = (p || []).map(x => x && x.id).filter(Boolean).slice(0, 200);
+    if (window.sb && idk.length) {
+      try {
+        const { data, error } = await window.sb.rpc('feed_view_counts', { p_posts: idk });
+        if (error) nezesHiba(error); else if (data) setNezesek(prev => ({ ...prev, ...data }));
+      } catch (e) { /* a szám hiánya nem állíthatja meg a hírfolyamot */ }
+    }
   };
   useEffect(() => { refetch(); }, []);
+
+  /* A látottá vált bejegyzéseket összegyűjtjük, és egy kéréssel naplózzuk —
+     görgetés közben ne menjen kérés kártyánként. */
+  const latta = React.useCallback((id) => {
+    if (!window.sb || !id) return;
+    if (varoRef.current.indexOf(id) < 0) varoRef.current.push(id);
+    if (idoRef.current) clearTimeout(idoRef.current);
+    idoRef.current = setTimeout(async () => {
+      const idk = varoRef.current.slice(0, 200); varoRef.current = [];
+      if (!idk.length) return;
+      try {
+        const { data, error } = await window.sb.rpc('feed_view_log', { p_posts: idk });
+        if (error) nezesHiba(error); else if (data) setNezesek(prev => ({ ...prev, ...data }));
+      } catch (e) { /* csendben: a számláló nem kritikus */ }
+    }, 900);
+  }, []);
+  useEffect(() => () => { if (idoRef.current) clearTimeout(idoRef.current); }, []);
 
   const firstName = ((user && user.name) || '').split(' ').slice(-1)[0] || (user && user.name) || 'there';
   const filtered = (posts || []).filter(p => filter === 'all' || p.type === filter);
@@ -660,7 +722,10 @@ const FeedView = ({ user, onNavigate }) => {
         <div className="bg-white rounded-3xl border border-slate-100"><UEmpty icon={<Lucide.Newspaper size={26} />} title="Itt még nincs semmi" subtitle={FEED_szerkeszto(user) ? 'Tedd közzé az első bejegyzést, hogy elinduljon a hírfolyam.' : 'Nézz vissza hamarosan a hírekért és eseményekért.'} action={FEED_szerkeszto(user) ? <button className={U_btnPrimary} onClick={() => setComposer(true)}><Lucide.Plus size={16} /> Új bejegyzés</button> : null} /></div>
       ) : (
         <div className="space-y-5">
-          {ordered.map(p => <FeedCard key={p.id} post={p} user={user} rsvps={rsvps} tix={tix} onChange={refetch} onDelete={setConfirmDel} />)}
+          {ordered.map(p => (
+            <FeedCard key={p.id} post={p} user={user} rsvps={rsvps} tix={tix} onChange={refetch} onDelete={setConfirmDel}
+              nezes={nezesVan && nezesek[p.id] != null ? nezesek[p.id] : null} onLatta={nezesVan ? latta : null} />
+          ))}
         </div>
       )}
 

@@ -13593,6 +13593,7 @@ Object.entries({
   'Nem lett kitöltve — legalább egy célt adj meg (e nélkül a félév végén nincs mit értékelni).': 'Not filled in — add at least one goal (otherwise there is nothing to evaluate at the end of the term).',
   'A hiányzó válaszokat pirossal jelöltük a kérdéseknél.': 'Missing answers are marked in red at the questions.',
   'Célmeghatározás/Értékelés': 'Goal setting/Evaluation',
+  'Hányan látták': 'How many have seen it',
   'Hallgatók és jelentkezők': 'Students and applicants',
   'Oktatók': 'Teachers',
   'Ügynökök': 'Agents',
@@ -14121,6 +14122,7 @@ HU_EN_PHRASES.push(
   [/^(\d+) fő látja$/, 'seen by $1 people'],
   [/^\((\d+) hallgató · (\d+) oktató · (\d+) ügynök\)$/, '($1 students · $2 teachers · $3 agents)'],
   [/^A közzététel nem sikerült: (.+)$/, 'Publishing failed: $1'],
+  [/^Hányan látták — (\d+) különböző felhasználó képernyőjén jelent meg\. Nevet a rendszer nem mutat, és az ügyintézők megtekintése nem számít bele\.$/, 'How many have seen it — it appeared on the screens of $1 different users. No names are shown, and staff views are not counted.'],
   [/\+ még (\d+) teendő — mutasd mind/g, '+ $1 more — show all'],
   [/·\s*(\d+)\s*fő\b/g, '· $1 students'],
 );
