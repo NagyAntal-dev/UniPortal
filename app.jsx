@@ -146,6 +146,14 @@ const MENU_GROUPS = [
    ============================================================================ */
 function canSeeView(currentUser, viewId) {
   if (!currentUser) return false;
+    // A kódba égetett, de SZEREPKÖR-alapú ágak (Kurzusok, Oktatók, ECHO,
+    // Szállásom) ezen keresztül kérdezik a 72-es modul-mátrixot. Ha él, az
+    // RBAC-felületen elvett VIEW jog itt is érvényesül; ha nem (null), az ág
+    // a mai, kódba égetett szabályra esik vissza.
+    const matrixView = () => PERM_elo(currentUser)
+      ? PERM_can(currentUser, viewId, 'VIEW', true)
+        || (currentUser.groupPerms || []).includes(viewId)
+      : null;
     // Approving registrations is the superadmin's alone — not even ADMIN.
     if (viewId === AppView.REGISTRATIONS) return currentUser.role === 'SUPERADMIN';
     // A hozzájárulási napló személyes adatot tartalmaz: csak rendszergazda (az RLS is így szűr).
@@ -156,7 +164,10 @@ function canSeeView(currentUser, viewId) {
     // A kitöltő a belső szerepköröknek és a hallgatóknak jár. A külsős AGENT
     // (partnerügynökség) nem hallgató, ezért nem véleményez oktatót — a
     // 15_echo_core.sql 11.7 seedje sem veszi fel a kurzusokra.
-    if (viewId === AppView.ECHO_STUDENT) return currentUser.role !== 'AGENT';
+    if (viewId === AppView.ECHO_STUDENT) {
+      if (currentUser.role === 'AGENT') return false;
+      return matrixView() ?? true;
+    }
     // A kurzusnyilvantartas ugyintezoi ES oktatoi kepernyo. A feltetel a
     // szerver oldali parja: az echo_course_list() is_staff()-ot VAGY elo
     // echo.teacher sort kovetel. Az 'OKTATO' ECHO-grantot is beengedjuk, mert
@@ -167,9 +178,13 @@ function canSeeView(currentUser, viewId) {
     // inaktivalas. A COURSES-szal szemben a hallgato es az oktato NEM latja
     // — nekik nincs mit kezdeniuk vele.
     if (viewId === AppView.TEACHERS) {
-      return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role);
+      return matrixView() ?? ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role);
     }
     if (viewId === AppView.COURSES) {
+      // Az 'OKTATO' ECHO-grant saját szabály, nem szerepkör-beállítás: a mátrix nem veszi el.
+      if ((currentUser.echoRoles || []).indexOf('OKTATO') >= 0) return true;
+      const m = matrixView();
+      if (m !== null) return m;
       if (['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role)) return true;
       if (currentUser.role === 'TEACHER') return true;
       // A HALLGATO is latja, de mast: a sajat kurzusait (CRS_StudentView).
@@ -190,6 +205,9 @@ function canSeeView(currentUser, viewId) {
     // A (b) ag DEFENZIV: a 19-es migracio elott az echoRoles ures tomb, tehat a
     // menupont lathatosaga BETURE ugyanaz marad, mint eddig.
     if (viewId === AppView.ECHO_TEACHER) {
+      if ((currentUser.echoRoles || []).indexOf('OKTATO') >= 0) return true;
+      const m = matrixView();
+      if (m !== null) return m;
       if (['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role)) return true;
       return (currentUser.echoRoles || []).indexOf('OKTATO') >= 0;
     }
@@ -211,7 +229,10 @@ function canSeeView(currentUser, viewId) {
     // A „Szállásom” mindenkinek jár az AGENT kivételével: a külsős partner-
     // ügynökség nem lakhat kollégiumban. Aki nem lakó, annak a nézet maga
     // mondja meg, hogy nincs elhelyezése — nem a menüből tűnik el.
-    if (viewId === AppView.DORM_STUDENT) return currentUser.role !== 'AGENT';
+    if (viewId === AppView.DORM_STUDENT) {
+      if (currentUser.role === 'AGENT') return false;
+      return matrixView() ?? true;
+    }
     // A SZUPERADMIN mindent lát, és ezt SEMMILYEN tábla nem írhatja felül.
     // Ha elvehető lenne, ki lehetne zárni magát abból a képernyőből is,
     // amivel visszaállítaná — és nem maradna út vissza.
