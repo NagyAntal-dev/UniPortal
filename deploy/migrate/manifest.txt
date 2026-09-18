@@ -82,3 +82,4 @@
 69_feed_audience.sql
 70_feed_views.sql
 71_student_directory.sql
+72_teacher_stats.sql

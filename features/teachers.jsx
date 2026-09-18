@@ -435,7 +435,7 @@ function TCH_LinkForm({ open, teacher, onClose, onDone }) {
      „hozzá tartozó diákok" a kurzus teljes névsora — pontosan azt hívjuk le,
      amit a kurzusnyilvántartás is (echo_course_students).
    ------------------------------------------------------------ */
-function TCH_CourseRow({ k, teacherId, busy, onChanged, onRemove }) {
+function TCH_CourseRow({ k, teacherId, busy, onChanged, onRemove, felvett }) {
   const [nyit, setNyit]     = useState(false);
   const [szerk, setSzerk]   = useState(false);
   const [share, setShare]   = useState(k.share_pct == null ? '' : String(Number(k.share_pct)));
@@ -523,6 +523,16 @@ function TCH_CourseRow({ k, teacherId, busy, onChanged, onRemove }) {
           </button>
         </td>
         <td className="px-6 py-3 text-slate-500">{k.term}</td>
+
+        {/* A FELVETT LETSZAM az aktiv enrollment sorokbol jon (72-es migracio).
+            A kurzus sajat 'letszam' mezoje a forrasrendszere, es gyakran ures —
+            ezert a mert szam az elsodleges, az meg csak tartalek. */}
+        <td className="px-6 py-3">
+          <span className="font-black text-slate-700 tabular-nums">
+            {felvett != null ? felvett : (k.letszam != null ? k.letszam : '—')}
+          </span>
+          <span className="text-[11px] text-slate-400 font-bold"> fő</span>
+        </td>
 
         <td className="px-6 py-3">
           {szerk ? (
@@ -677,6 +687,11 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
   const [link, setLink]     = useState(false);
   const [uzenet, setUzenet] = useState('');
   const [busy, setBusy]     = useState(false);
+  /* Összesítő számok (72_teacher_stats.sql). Külön hívás, mert az
+     echo_teacher_get() törzse a törzsadaté — és ha a migráció még nem futott
+     le, a lap többi része maradjon változatlanul használható. */
+  const [stat, setStat]     = useState(null);
+  const hivRef = useRef(null);
 
   /* Helyben frissítés (mentés, kurzusváltozás, fiók-kötés után). A `d`-t
      SZÁNDÉKOSAN nem nullázza: ilyenkor ugyanarról az oktatóról van szó, és
@@ -703,10 +718,17 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
     if (!id) return;
     let el = true;
     setD(null); setErr(''); setUzenet(''); setTolt(true);
+    setStat(null);
     TCH_api.get(id)
       .then(r => { if (el) { setD(r); setErr(''); } })
       .catch(e => { if (el) setErr(TCH_msg(e)); })
       .finally(() => { if (el) setTolt(false); });
+    TCH_rpc('echo_teacher_stats', { p_teacher: id })
+      .then(r => { if (el) setStat(r); })
+      .catch(() => { if (el) setStat(null); });   /* a 72-es migráció még nem futott le */
+    // A lap a lista ALATT nyílik meg: oktatóváltásnál oda görgetünk, különben
+    // a kattintás után a képernyőn látszólag nem történik semmi.
+    setTimeout(() => { try { hivRef.current && hivRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }, 120);
     return () => { el = false; };
   }, [id]);
 
@@ -745,8 +767,11 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
     finally { setBusy(false); }
   };
 
+  const szam = (v) => (v == null ? '—' : v);
+  const felevek = (stat && stat.felevek) || [];
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" ref={hivRef} data-tch-lap={id}>
       {/* fejléc */}
       <div className="bg-white rounded-3xl border border-slate-100 p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -841,6 +866,46 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
         </div>
       </div>
 
+      {/* ÖSSZESÍTŐ — mennyi munkája van, és hány hallgatót érint.
+          Eredményt (átlagot, választ) SZÁNDÉKOSAN nem mutat: az a k-küszöbhöz
+          kötött „Oktatói eredmények” képernyőé, a kérdőív pedig névtelen. */}
+      {stat && (
+        <div className="space-y-3" data-tch-osszesito="1">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[[szam(stat.kurzus_ossz), 'kurzusa', 'A hozzárendelt kurzusok száma, minden félévben.'],
+              [szam(stat.hallgato_ossz), 'hallgatója', 'Különböző hallgatók az összes kurzusán. Aki két kurzusára is jár, egyszer számít.'],
+              [szam(stat.kurzusfelvetel_ossz), 'kurzusfelvétel', 'Hallgató × kurzus párok száma — ennyi értékelhető kurzusa van összesen.'],
+              [szam(stat.kampany_db), 'kampányban érintett', 'Hány ECHO-kampány jogosultsági listájára került fel.']]
+              .map(([v, cimke, sug], i) => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-100 px-5 py-4" title={sug}>
+                <div className="text-2xl font-black text-slate-900 tabular-nums">{v}</div>
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{cimke}</div>
+              </div>
+            ))}
+          </div>
+
+          {felevek.length > 0 && (
+            <div className="bg-white rounded-3xl border border-slate-100 px-5 py-4">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Félévenként</p>
+              <div className="flex flex-wrap gap-2">
+                {felevek.map(f => (
+                  <span key={f.felev} data-tch-felev={f.felev}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-1.5 text-[12px] font-bold text-slate-600">
+                    <span className="text-slate-800">{f.felev}</span>
+                    <span className="text-slate-400">{f.kurzus} kurzus · {f.hallgato} hallgató</span>
+                  </span>
+                ))}
+              </div>
+              {Number(stat.kizaras_db) > 0 && (
+                <p className="text-[11px] text-amber-700 font-bold mt-2.5">
+                  {stat.kizaras_db} kizárási bejegyzés (létszám, órarendi info, vizsgakurzus vagy óraarány miatt kimaradt kurzus).
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* kurzusok */}
       <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-100 flex-wrap">
@@ -877,6 +942,7 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
                 <tr className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
                   <th className="px-6 py-3">Kurzus</th>
                   <th className="px-6 py-3">Félév</th>
+                  <th className="px-6 py-3">Hallgató</th>
                   <th className="px-6 py-3">Szerep</th>
                   <th className="px-6 py-3">Részarány</th>
                   <th className="px-6 py-3"></th>
@@ -885,6 +951,7 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
               <tbody>
                 {d.kurzusok.map(k => (
                   <TCH_CourseRow key={k.course_id} k={k} teacherId={d.id} busy={busy}
+                    felvett={stat && stat.kurzusok ? stat.kurzusok[k.course_id] : null}
                     onChanged={tolts} onRemove={kurzusLe} />
                 ))}
               </tbody>
