@@ -4,7 +4,9 @@
 // beállított SAML-végpont rosszabb, mint egy, ami hangosan hibát jelez.
 // ============================================================================
 
-const NJE_IDP = 'https://idp.nje.hu/simplesaml/saml2/idp/metadata.php';
+import { createPrivateKey, createPublicKey, X509Certificate } from 'node:crypto';
+
+const NJE_IDP ='https://idp.nje.hu/simplesaml/saml2/idp/metadata.php';
 
 // A kulcs / tanúsítvány háromféle alakban jöhet a .env-ből:
 //   - PEM szövegként (-----BEGIN …),
@@ -19,6 +21,28 @@ export function decodePem(value) {
     if (decoded.includes('-----BEGIN')) return decoded.trim();
   } catch { /* nem base64 — lent puszta törzsként kezeljük */ }
   return v.replace(/\s+/g, '');
+}
+
+// Az SP kulcsa és tanúsítványa összetartozik-e. Ha nem, az IdP az aláírt
+// kéréseinket csendben elutasítaná — ezt inkább induláskor mondjuk ki.
+export function checkKeyPair(keyPem, certPem) {
+  let key;
+  let cert;
+  try {
+    key = createPrivateKey(keyPem);
+  } catch (e) {
+    throw new Error(`A SAML_SP_PRIVATE_KEY nem olvasható privát kulcs (${e.message}). Futtasd: sh deploy/saml-sp/gen-keys.sh`);
+  }
+  try {
+    cert = new X509Certificate(certPem);
+  } catch (e) {
+    throw new Error(`A SAML_SP_CERT nem olvasható tanúsítvány (${e.message}). Futtasd: sh deploy/saml-sp/gen-keys.sh`);
+  }
+  const fromKey = createPublicKey(key).export({ type: 'spki', format: 'der' });
+  const fromCert = cert.publicKey.export({ type: 'spki', format: 'der' });
+  if (!fromKey.equals(fromCert)) {
+    throw new Error('A SAML_SP_CERT nem a SAML_SP_PRIVATE_KEY kulcshoz tartozik. Futtasd: sh deploy/saml-sp/gen-keys.sh');
+  }
 }
 
 export function loadConfig(env = process.env) {
@@ -41,6 +65,7 @@ export function loadConfig(env = process.env) {
   if (cookieSecret.length < 32) {
     throw new Error('A SAML_COOKIE_SECRET legalább 32 karakter legyen (openssl rand -hex 32).');
   }
+  checkKeyPair(spKey, spCert);
 
   const idpEntityId = String(env.SAML_IDP_ENTITY_ID || NJE_IDP).trim();
 

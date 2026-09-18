@@ -53,10 +53,14 @@ Az adatok a `public.saml_identities` táblában vannak (`supabase/76_saml_sso.sq
 **Meglévő `.env`:**
 
 ```sh
-./deploy/saml-sp/gen-keys.sh        # csak a hiányzó értékeket írja be
+sh deploy/saml-sp/gen-keys.sh        # csak a hiányzó értékeket írja be
 docker compose up -d --build
 curl -s https://<cím>/saml/metadata  # ezt kapja az IT
 ```
+
+Ha a `.env`-ben már van `SAML_PRIVATE_KEY` (a korábbi GoTrue-s kísérletből), a `gen-keys.sh` **ezt a kulcsot veszi át**, és PEM-re alakítja. A kulcshoz új önaláírt tanúsítványt készít, ha nem kap meglévőt. Ugyanahhoz a kulcshoz tartozó tanúsítvány ugyanazt a nyilvános kulcsot hordozza, ezért az aláírásaink továbbra is ellenőrizhetők. Ha a pontos, az IT-nak már elküldött tanúsítványt akarod megtartani: `sh deploy/saml-sp/gen-keys.sh --cert <fájl.pem>`. A szkript ellenőrzi, hogy a tanúsítvány a kulcshoz tartozik-e.
+
+A `saml-sp` induláskor maga is ellenőrzi a kulcsot és a tanúsítványt. Ha nem olvashatók, vagy nem tartoznak össze, nem indul el, és a naplóban megmondja, miért.
 
 Az IdP aláíró tanúsítványát induláskor a metaadatból töltjük le HTTPS-en, és naponta frissítjük. **Élesben ajánlott rögzíteni** a `.env`-ben:
 
