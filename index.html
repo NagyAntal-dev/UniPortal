@@ -487,6 +487,7 @@
         </div>
         <div id="loginError" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
         <button id="loginBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Sign in</button>
+        <button type="button" id="njeSsoBtn" onclick="doNjeSso()" class="w-full py-3.5 rounded-2xl text-sm font-bold text-primary-600 border border-primary-300 hover:bg-primary-50 transition-all disabled:opacity-60 inline-flex items-center justify-center gap-2"><i data-lucide="building-2" class="w-4 h-4"></i><span>Sign in with NJE ID</span></button>
         <p class="text-center text-[11px] text-slate-400"><a href="privacy.html" target="_blank" rel="noopener" class="hover:text-primary-600">Privacy Notice</a> · <a href="terms.html" target="_blank" rel="noopener" class="hover:text-primary-600">Terms of Use</a></p>
       </form>
 
@@ -705,6 +706,25 @@
         showErr('loginError', 'Connection error. Please try again.'); btn.disabled = false; btn.textContent = label;
       }
       return false;
+    }
+    /* ---- NJE SAML SSO ----
+       Az nje.hu domainhez rendelt IdP-re visz (auth.sso_domains); a sikeres
+       belépés után közvetlenül az app.html-re jön vissza, ugyanúgy, mint az
+       alkalmazás saját bejelentkezőjéből (app.jsx, handleNjeSsoLogin). */
+    async function doNjeSso(){
+      hideErr('loginError');
+      const btn = document.getElementById('njeSsoBtn');
+      btn.disabled = true;
+      try {
+        const { data, error } = await window.sb.auth.signInWithSSO({
+          domain: 'nje.hu',
+          options: { redirectTo: new URL('app.html', window.location.href).href },
+        });
+        if (error || !data || !data.url) { showErr('loginError', (error && error.message) || 'NJE sign-in could not be started.'); btn.disabled = false; return; }
+        window.location.assign(data.url);
+      } catch (err) {
+        showErr('loginError', 'Connection error. Please try again.'); btn.disabled = false;
+      }
     }
     /* ---- Elfelejtett jelszó ----
        A válasz szándékosan ugyanaz, akár létezik a fiók, akár nem: a felületről
@@ -1039,6 +1059,8 @@
       "Send templated WhatsApp messages to applicants without leaving the platform.": "Sablonos WhatsApp-üzenetek a jelentkezőknek, a platform elhagyása nélkül.",
       "Signing in…": "Belépés…",
       "Sign-in failed.": "A belépés nem sikerült.",
+      "Sign in with NJE ID": "Belépés NJE azonosítóval",
+      "NJE sign-in could not be started.": "Az NJE bejelentkezés nem indítható el.",
       "Connection error. Please try again.": "Kapcsolódási hiba. Kérjük, próbáld újra.",
       "Sending…": "Küldés…",
       "Too many requests. Please wait a minute before requesting another link.": "Túl sok kérés. Várj egy percet, mielőtt új linket kérsz.",

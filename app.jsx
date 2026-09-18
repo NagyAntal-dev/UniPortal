@@ -12613,7 +12613,9 @@ const App: React.FC = () => {
     try {
       const { data, error } = await sb.auth.signInWithSSO({
         domain: 'nje.hu',
-        options: { redirectTo: 'https://uniportal.nje.hu/' },
+        // Vissza az alkalmazásba, ne a nyitóoldalra (index.html): a munkamenetet
+        // az app.html veszi át a címsorból. Relatív, így bármely telepítésen jó.
+        options: { redirectTo: new URL('app.html', window.location.href).href },
       });
       if (error || !data?.url) {
         setLoginError(error?.message || 'Az NJE bejelentkezés nem indítható el.');
