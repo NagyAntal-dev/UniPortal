@@ -67,6 +67,7 @@ const AppView = {
   // onallo torzsadat-menupont: az echo.teacher-re az ECHO-n kivul is
   // hivatkoznak, es a felvitel/inaktivalas nem kampanyhoz kotott muvelet.
   TEACHERS: 'teachers',
+  STUDENTS: 'students',
   // Kollégiumi modul (26_dorm.sql). Három nézet, három közönség:
   // az üzemeltetés, a karbantartás és maga a lakó.
   DORM_OPS: 'dorm_ops',
@@ -92,6 +93,7 @@ const MENU_ITEMS = [
   { id: AppView.INTERVIEWS, label: 'Interjú Foglalás', icon: <Lucide.Calendar size={20} /> },
   { id: AppView.MARKETING_LEADS, label: 'Marketing és Lead kezelés', icon: <Lucide.Target size={20} /> },
   { id: AppView.STUDENT_PORTAL, label: 'Hallgatói Portál', icon: <Lucide.Users size={20} /> },
+  { id: AppView.STUDENTS, label: 'Hallgatók', icon: <Lucide.Users size={20} /> },
   { id: AppView.REPORTS, label: 'Riportok', icon: <Lucide.BarChart2 size={20} /> },
   { id: AppView.INTELLIGENCE, label: 'Intelligence', icon: <Lucide.Zap size={20} /> },
   { id: AppView.SYSTEM_ADMIN, label: 'Rendszerkezelés', icon: <Lucide.Settings size={20} /> },
@@ -116,7 +118,7 @@ const MENU_ITEMS = [
    A jogosultságokon ez NEM változtat: a csoportosítás a már szűrt listán fut. */
 const MENU_GROUPS = [
   { key: 'altalanos', label: 'Általános',                 ids: [AppView.FEED, AppView.ASSISTANT] },
-  { key: 'kepzes',    label: 'Képzés és oktatás',         ids: [AppView.PROGRAMS, AppView.TRAININGS, AppView.COURSES, AppView.TEACHERS] },
+  { key: 'kepzes',    label: 'Képzés és oktatás',         ids: [AppView.PROGRAMS, AppView.TRAININGS, AppView.COURSES, AppView.TEACHERS, AppView.STUDENTS] },
   { key: 'felveteli', label: 'Felvételi',                 ids: [AppView.ADMISSIONS_CORE, AppView.EVALUATION, AppView.INTERVIEWS, AppView.IMMIGRATION, AppView.STUDENT_PORTAL] },
   { key: 'partner',   label: 'Partnerek és kommunikáció', ids: [AppView.AGENT_PORTAL, AppView.ENGAGEMENT_CRM, AppView.MARKETING_LEADS] },
   { key: 'penzugy',   label: 'Pénzügy és elemzés',        ids: [AppView.FINANCE, AppView.REPORTS, AppView.INTELLIGENCE] },
@@ -12480,6 +12482,11 @@ const App: React.FC = () => {
     if (item.id === AppView.TEACHERS) {
       return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role);
     }
+    // A hallgatoi nyilvantartas szemelyes adatot mutat: ugyintezoi kepernyo.
+    // A szerver oldali parja a 71-es migracio is_staff() feltetele.
+    if (item.id === AppView.STUDENTS) {
+      return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role);
+    }
     if (item.id === AppView.COURSES) {
       if (['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role)) return true;
       if (currentUser.role === 'TEACHER') return true;
@@ -12600,6 +12607,10 @@ const App: React.FC = () => {
         // latszana, de a Hirfolyam jonne fel helyette.
         return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role)
           ? <TCH_View user={currentUser} />
+          : <FeedView user={currentUser} onNavigate={setActiveView} />;
+      case AppView.STUDENTS:
+        return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role)
+          ? <STU_View user={currentUser} />
           : <FeedView user={currentUser} onNavigate={setActiveView} />;
       case AppView.COURSES:
         // Ugyanaz a ket feltetel, mint a menuszuresben — kulonben egy oktato
@@ -13593,6 +13604,52 @@ Object.entries({
   'Nem lett kitöltve — legalább egy célt adj meg (e nélkül a félév végén nincs mit értékelni).': 'Not filled in — add at least one goal (otherwise there is nothing to evaluate at the end of the term).',
   'A hiányzó válaszokat pirossal jelöltük a kérdéseknél.': 'Missing answers are marked in red at the questions.',
   'Célmeghatározás/Értékelés': 'Goal setting/Evaluation',
+  'Hallgatók': 'Students',
+  'Névsor, besorolás, csoportok, kurzusok és felvételi folyamatok — kereséssel és szűrőkkel.': 'Name list, classification, groups, courses and admission processes — with search and filters.',
+  'Keresés név, e-mail vagy Neptun-kód szerint…': 'Search by name, e-mail or Neptun code…',
+  'Találat': 'Matches',
+  'Besorolással': 'With classification',
+  'Kurzussal': 'With a course',
+  'Felvételivel': 'With an admission',
+  'Új (30 nap)': 'New (30 days)',
+  'Szűrők törlése': 'Clear filters',
+  'Jelölők': 'Markers',
+  'Csoport': 'Group',
+  'Van Neptun-besorolása': 'Has Neptun classification',
+  'Nincs besorolása': 'Has no classification',
+  'Van aktív kurzusa': 'Has an active course',
+  'Van felvételi folyamata': 'Has an admission process',
+  'A különböző szempontok együtt szűkítenek, egy szemponton belül bármelyik érték elég.': 'Criteria narrow together; within one criterion any value is enough.',
+  'Fiókállapot': 'Account status',
+  'Telephely': 'Site',
+  'Besorolás': 'Classification',
+  'Szak · kar': 'Programme · faculty',
+  'Csoportok': 'Groups',
+  'Kurzus': 'Course',
+  'Felvételi': 'Admission',
+  'Nincs találat': 'No match',
+  'Próbáld meg más kereséssel, vagy törölj a szűrőkből.': 'Try a different search, or clear some filters.',
+  'Hallgatói adatlap': 'Student record',
+  'Fiók': 'Account',
+  'Neptun-besorolás': 'Neptun classification',
+  'Neptun-kód': 'Neptun code',
+  'Regisztrált': 'Registered',
+  'Nyelv · telephely': 'Language · site',
+  'egyetlen csoportnak sem tagja': 'not a member of any group',
+  'nincs kurzusfelvétele': 'no course registration',
+  'Felvételi folyamatok': 'Admission processes',
+  'nincs felvételi folyamata': 'no admission process',
+  'A kurzusértékelés (ECHO) kitöltöttsége szándékosan nem szerepel itt: a kérdőív névtelen. A kollégiumi elhelyezést a Kollégium, a fizetéseket a Pénzügy képernyő mutatja.': 'Course evaluation (ECHO) completion is deliberately absent here: the survey is anonymous. Dormitory placement is shown by the Dormitory screen, payments by the Finance screen.',
+  'A lista személyes adatot mutat, ezért csak ügyintézői szerepkörrel nyílik meg — ezt az adatbázis kényszeríti ki, nem a menü. A kurzusértékelés kitöltöttsége itt szándékosan nem jelenik meg: a kérdőív névtelen.': 'The list shows personal data, so it only opens with a staff role — enforced by the database, not by the menu. Course evaluation completion is deliberately not shown here: the survey is anonymous.',
+  'A hallgatói nyilvántartás még nincs telepítve': 'The student directory is not installed yet',
+  'Futtatni kell a supabase/71_student_directory.sql migrációt, utána ez a képernyő azonnal működik.': 'Run the supabase/71_student_directory.sql migration; this screen works right afterwards.',
+  'Ehhez a képernyőhöz ügyintézői jogosultság kell.': 'This screen requires a staff role.',
+  'hallgatónál': 'with the student',
+  'ügyintézőnél': 'with the office',
+  'lezárt': 'closed',
+  'szabály': 'rule-based',
+  'kézi': 'manual',
+  'leadva': 'dropped',
   'Hányan látták': 'How many have seen it',
   'Hallgatók és jelentkezők': 'Students and applicants',
   'Oktatók': 'Teachers',

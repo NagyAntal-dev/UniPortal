@@ -73,6 +73,9 @@ const FEATURE_FILES = [
   'features/teachers.jsx',
   // Jogi dokumentumok, elfogadások, hozzájárulási napló (59_legal_consents.sql).
   // A data-layer UTAN: onnan veszi a UBadge / U_btnPrimary / U_input atomokat.
+  // Hallgatoi nyilvantartas (71_student_directory.sql). A data-layer UTAN:
+  // onnan veszi a UModal/UBadge/UEmpty/U_input atomokat.
+  'features/students.jsx',
   'features/legal.jsx',
 ];
 
