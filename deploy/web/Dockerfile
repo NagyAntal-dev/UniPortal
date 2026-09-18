@@ -31,6 +31,7 @@ RUN chown -R 101:0 /usr/share/nginx/html /etc/nginx/uniportal \
  && chmod -R g+w /usr/share/nginx/html /etc/nginx/uniportal
 USER 101
 ENV API_GW_UPSTREAM=api-gw:8000
+ENV SAML_SP_UPSTREAM=saml-sp:3000
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1

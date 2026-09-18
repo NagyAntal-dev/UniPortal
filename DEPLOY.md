@@ -22,6 +22,7 @@ A csomag helyett a nyilvános tárolóból is dolgozhatsz: `git clone https://gi
 |---|---|
 | `web` | A UniPortal felülete (nginx), és **ugyanazon a címen** a Supabase API továbbítása (`/auth/v1`, `/rest/v1`, `/realtime/v1`, `/storage/v1`, `/functions/v1`). Ez az egyetlen kifelé nyitott port. |
 | `migrate` | Indításkor egyszer lefut. Felviszi az adatbázis-migrációkat (`supabase/NN_*.sql`, a sorrend a `deploy/migrate/manifest.txt`-ben), a már lefutottakat kihagyja, és lezárja a nyilvános jelszavú demó fiókokat. A `web` csak utána indul. |
+| `saml-sp` | NJE SAML bejelentkezés (`/saml/*`) automatikus regisztrációval. Kifelé nem nyit portot, a `web` továbbít rá. Részletek: [docs/nje-saml.md](docs/nje-saml.md) |
 | `db` | PostgreSQL 17 (Supabase-kép) |
 | `auth` | Bejelentkezés, regisztráció, jelszó-visszaállítás |
 | `rest` | Adatbázis-API (PostgREST) |

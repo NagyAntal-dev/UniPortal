@@ -90,3 +90,4 @@
 72_rbac_actions.sql
 74_rbac_enforce_rpc.sql
 73_rbac_enforce_rls.sql
+76_saml_sso.sql

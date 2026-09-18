@@ -1,0 +1,20 @@
+{
+  "name": "uniportal-saml-sp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "UniPortal — NJE SAML 2.0 service provider (bejelentkezés + automatikus regisztráció)",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@node-saml/node-saml": "^5.1.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "xml-crypto": "^6.1.2"
+  }
+}

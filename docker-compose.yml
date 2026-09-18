@@ -10,6 +10,7 @@
 #   migrate  egyszer fut indításkor: felviszi a supabase/NN_*.sql migrációkat
 #            (deploy/migrate/manifest.txt), a már lefutottakat kihagyja, és
 #            lezárja a nyilvános jelszavú demó fiókokat
+#   saml-sp  NJE SAML bejelentkezés + automatikus regisztráció (/saml/*)
 #   + a hivatalos Supabase stack (deploy/supabase, rögzített verzió):
 #     db, auth, rest, realtime, storage, imgproxy, meta, functions, api-gw,
 #     studio, supavisor
@@ -79,6 +80,37 @@ services:
       UNIPORTAL_CONN_LIMIT: ${UNIPORTAL_CONN_LIMIT:-}
     depends_on:
       api-gw:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # SZÁNDÉKOSAN nem függ a saml-sp-től: ha az (pl. hiányzó SAML-kulcs miatt)
+    # nem indul, a felület és a jelszavas belépés akkor is működjön — csak a
+    # /saml/ ad 502-t. Az nginx a címet kérésenként oldja fel.
+
+  # NJE SAML bejelentkezés (saját service provider, docs/nje-saml.md). Kifelé
+  # nem nyit portot: a web a /saml/ útvonalat továbbítja ide. A GoTrue-t és a
+  # PostgREST-et a belső hálózaton, a service_role kulccsal hívja.
+  saml-sp:
+    build:
+      context: deploy/saml-sp
+    image: uniportal-saml-sp:latest
+    restart: unless-stopped
+    environment:
+      UNIPORTAL_PUBLIC_URL: ${UNIPORTAL_PUBLIC_URL}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      GOTRUE_URL: http://auth:9999
+      POSTGREST_URL: http://rest:3000
+      SAML_SP_ENTITY_ID: ${SAML_SP_ENTITY_ID:-}
+      SAML_SP_PRIVATE_KEY: ${SAML_SP_PRIVATE_KEY:-}
+      SAML_SP_CERT: ${SAML_SP_CERT:-}
+      SAML_COOKIE_SECRET: ${SAML_COOKIE_SECRET:-}
+      SAML_IDP_ENTITY_ID: ${SAML_IDP_ENTITY_ID:-https://idp.nje.hu/simplesaml/saml2/idp/metadata.php}
+      SAML_IDP_SSO_URL: ${SAML_IDP_SSO_URL:-https://idp.nje.hu/simplesaml/saml2/idp/SSOService.php}
+      SAML_IDP_SLO_URL: ${SAML_IDP_SLO_URL:-https://idp.nje.hu/simplesaml/saml2/idp/SingleLogoutService.php}
+      SAML_IDP_METADATA_URL: ${SAML_IDP_METADATA_URL:-}
+      SAML_IDP_CERT: ${SAML_IDP_CERT:-}
+    depends_on:
+      auth:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully

@@ -67,6 +67,7 @@ server {
     # A Docker belső DNS-e: az api-gw újraindulás után is feloldható marad.
     resolver 127.0.0.11 valid=30s ipv6=off;
     set $api_gw http://${API_GW_UPSTREAM};
+    set $saml_sp http://${SAML_SP_UPSTREAM};
 
     client_max_body_size 50m;
     large_client_header_buffers 4 16k;
@@ -164,6 +165,15 @@ server {
         # kérésfolyam. A darabszámot a szerverszintű limit_conn uni_conn fogja.
         proxy_pass $api_gw;
     }
+    # ---- NJE SAML bejelentkezés (deploy/saml-sp) ----
+    # A bejelentkezési vödörben: az /saml/acs regisztrálhat is, a /saml/login
+    # pedig minden hívásra aláírt kérést készít.
+    location /saml/ {
+        limit_req zone=uni_auth burst=${UNIPORTAL_RL_AUTH_BURST} nodelay;
+        include /etc/nginx/uniportal/proxy.conf;
+        proxy_pass $saml_sp;
+    }
+
     location /storage/v1/ {
         limit_req zone=uni_storage burst=${UNIPORTAL_RL_STORAGE_BURST};
         include /etc/nginx/uniportal/proxy.conf;

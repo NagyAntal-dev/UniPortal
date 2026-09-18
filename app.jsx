@@ -12564,6 +12564,20 @@ const App: React.FC = () => {
   useEffect(() => {
     let sub = null;
     (async () => {
+      // NJE SAML: a saml-sp egyszer használható tokennel küld ide
+      // (#sso_token_hash). Még a munkamenet-ellenőrzés ELŐTT váltjuk be, és a
+      // címsorból azonnal kitöröljük, hogy se az előzményekbe, se egy
+      // megosztott linkbe ne kerüljön.
+      const ssoMatch = /(^|[#&])sso_token_hash=([^&]+)/.exec(window.location.hash);
+      if (ssoMatch) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        try {
+          const { error } = await sb.auth.verifyOtp({ token_hash: decodeURIComponent(ssoMatch[2]), type: 'magiclink' });
+          if (error) setLoginError('Az NJE bejelentkezés lejárt vagy már felhasználták. Kérjük, próbálja újra.');
+        } catch (e) {
+          setLoginError('Az NJE bejelentkezés nem fejezhető be. Kérjük, próbálja újra.');
+        }
+      }
       try {
         const { data: { session } } = await sb.auth.getSession();
         if (session && session.user) await loadProfile(session.user);
@@ -12607,26 +12621,14 @@ const App: React.FC = () => {
     }
   };
 
-  const handleNjeSsoLogin = async () => {
+  // A saját SAML SP-nk (deploy/saml-sp) visz az NJE IdP-re, és a sikeres
+  // belépés után ide jön vissza (#sso_token_hash — lásd a fenti useEffect-et).
+  // Az első belépő fiókja automatikusan létrejön. Relatív cím, így bármely
+  // telepítésen jó.
+  const handleNjeSsoLogin = () => {
     setLoginError('');
     setAuthBusy(true);
-    try {
-      const { data, error } = await sb.auth.signInWithSSO({
-        domain: 'nje.hu',
-        // Vissza az alkalmazásba, ne a nyitóoldalra (index.html): a munkamenetet
-        // az app.html veszi át a címsorból. Relatív, így bármely telepítésen jó.
-        options: { redirectTo: new URL('app.html', window.location.href).href },
-      });
-      if (error || !data?.url) {
-        setLoginError(error?.message || 'Az NJE bejelentkezés nem indítható el.');
-        setAuthBusy(false);
-        return;
-      }
-      window.location.assign(data.url);
-    } catch (err) {
-      setLoginError('Kapcsolódási hiba. Kérjük, próbálja újra.');
-      setAuthBusy(false);
-    }
+    window.location.assign(new URL('saml/login?next=app.html', window.location.href).href);
   };
 
   const kuldResetLink = async (e) => {
@@ -12649,9 +12651,16 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
+    // NJE-s (SAML) fióknál az IdP-munkamenetet is lezárjuk — különben a
+    // következő „NJE bejelentkezés” kattintás jelszó nélkül visszaléptetne.
+    let njeSso = false;
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      njeSso = session?.user?.app_metadata?.sso === 'nje';
+    } catch (e) { /* ignore */ }
     try { await sb.auth.signOut(); } catch (e) { /* ignore */ }
     setCurrentUser(null);
-    window.location.href = 'index.html';
+    window.location.href = njeSso ? 'saml/logout' : 'index.html';
   };
 
   if (isLoading) {

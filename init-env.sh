@@ -65,11 +65,20 @@ set_kv S3_PROTOCOL_ACCESS_KEY_ID     "$(openssl rand -hex 16)"
 set_kv S3_PROTOCOL_ACCESS_KEY_SECRET "$(openssl rand -hex 32)"
 set_kv MINIO_ROOT_PASSWORD         "$(openssl rand -hex 16)"
 set_kv POOLER_TENANT_ID            "uniportal-$(openssl rand -hex 4)"
+# NJE SAML bejelentkezés (deploy/saml-sp): az SP aláíró kulcsa és tanúsítványa.
+SAML_TMP=$(mktemp -d)
+openssl req -x509 -newkey rsa:3072 -sha256 -nodes -days 3650 \
+  -subj "/CN=uniportal-saml-sp" -keyout "$SAML_TMP/sp.key" -out "$SAML_TMP/sp.crt" 2>/dev/null
+set_kv SAML_SP_PRIVATE_KEY         "$(openssl enc -base64 -A < "$SAML_TMP/sp.key")"
+set_kv SAML_SP_CERT                "$(openssl enc -base64 -A < "$SAML_TMP/sp.crt")"
+rm -rf "$SAML_TMP"
+set_kv SAML_COOKIE_SECRET          "$(openssl rand -hex 32)"
 mv .env.tmp .env
 chmod 600 .env
 
 echo "Kész: .env (jogosultság: 600). Nyilvános cím: $PUBLIC_URL"
 echo ""
 echo "Következő lépés:   docker compose up -d --build"
+echo "NJE SAML: az IT-nak ezt a metaadat-címet kell megadni: $PUBLIC_URL/saml/metadata (docs/nje-saml.md)"
 echo "Studio (adminfelület) csak a szerverről: http://127.0.0.1:8000  — felhasználó: supabase,"
 echo "jelszó: DASHBOARD_PASSWORD a .env-ben. Távolról SSH-alagúttal: ssh -L 8000:127.0.0.1:8000 <szerver>"

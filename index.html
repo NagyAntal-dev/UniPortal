@@ -42,6 +42,8 @@
     if (window.NJE_LANG !== 'hu') window.NJE_LANG = 'en';
     window.__RECOVERY_REDIRECT = /(^|[#&])type=recovery(&|$)/.test(location.hash);
     if (window.__RECOVERY_REDIRECT) location.replace('reset-password.html' + location.hash);
+    // NJE SAML: a bejelentkezési token az app.html-nek szól (ott váltjuk be).
+    if (/(^|[#&])sso_token_hash=/.test(location.hash)) location.replace('app.html' + location.hash);
     try { window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY,
             window.__RECOVERY_REDIRECT ? { auth: { detectSessionInUrl: false } } : undefined); }
     catch (e) { console.error('Failed to init Supabase client', e); }
@@ -708,24 +710,33 @@
       return false;
     }
     /* ---- NJE SAML SSO ----
-       Az nje.hu domainhez rendelt IdP-re visz (auth.sso_domains); a sikeres
-       belépés után közvetlenül az app.html-re jön vissza, ugyanúgy, mint az
-       alkalmazás saját bejelentkezőjéből (app.jsx, handleNjeSsoLogin). */
-    async function doNjeSso(){
+       A saját SAML SP-nk (deploy/saml-sp) visz az NJE IdP-re; a sikeres
+       belépés után az app.html-re jön vissza egy egyszer használható tokennel
+       (#sso_token_hash), amit ott váltunk munkamenetre. Az első belépő fiókja
+       automatikusan létrejön. Hiba esetén ide jön vissza: #sso_error=<kód>. */
+    function doNjeSso(){
       hideErr('loginError');
-      const btn = document.getElementById('njeSsoBtn');
-      btn.disabled = true;
-      try {
-        const { data, error } = await window.sb.auth.signInWithSSO({
-          domain: 'nje.hu',
-          options: { redirectTo: new URL('app.html', window.location.href).href },
-        });
-        if (error || !data || !data.url) { showErr('loginError', (error && error.message) || 'NJE sign-in could not be started.'); btn.disabled = false; return; }
-        window.location.assign(data.url);
-      } catch (err) {
-        showErr('loginError', 'Connection error. Please try again.'); btn.disabled = false;
-      }
+      document.getElementById('njeSsoBtn').disabled = true;
+      window.location.assign(new URL('saml/login?next=app.html', window.location.href).href);
     }
+    // Vissza gombbal (bfcache) ne maradjon letiltva a gomb.
+    window.addEventListener('pageshow', () => { const b = document.getElementById('njeSsoBtn'); if (b) b.disabled = false; });
+    const SSO_ERRORS = {
+      expired: 'The NJE sign-in took too long or was already used. Please try again.',
+      invalid_response: 'The NJE sign-in response could not be verified. Please try again.',
+      missing_eppn: 'The NJE identity provider did not send your username. Please contact IT.',
+      missing_email: 'The NJE identity provider did not send your email address. Please contact IT.',
+      provision_failed: 'Your account could not be set up. Please try again later.',
+      start_failed: 'NJE sign-in could not be started.',
+      session_failed: 'NJE sign-in succeeded, but the session could not be started. Please try again.',
+    };
+    (function showSsoError(){
+      const m = /(^|[#&])sso_error=([\w-]+)/.exec(location.hash);
+      if (!m) return;
+      history.replaceState(null, '', location.pathname + location.search);
+      openAuth('login');
+      showErr('loginError', SSO_ERRORS[m[2]] || 'NJE sign-in failed. Please try again.');
+    })();
     /* ---- Elfelejtett jelszó ----
        A válasz szándékosan ugyanaz, akár létezik a fiók, akár nem: a felületről
        így nem deríthető ki, ki van regisztrálva (a Supabase is így válaszol). */
