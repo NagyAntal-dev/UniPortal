@@ -12607,6 +12607,26 @@ const App: React.FC = () => {
     }
   };
 
+  const handleNjeSsoLogin = async () => {
+    setLoginError('');
+    setAuthBusy(true);
+    try {
+      const { data, error } = await sb.auth.signInWithSSO({
+        domain: 'nje.hu',
+        options: { redirectTo: new URL('app.html', window.location.href).href },
+      });
+      if (error || !data?.url) {
+        setLoginError(error?.message || 'Az NJE bejelentkezés nem indítható el.');
+        setAuthBusy(false);
+        return;
+      }
+      window.location.assign(data.url);
+    } catch (err) {
+      setLoginError('Kapcsolódási hiba. Kérjük, próbálja újra.');
+      setAuthBusy(false);
+    }
+  };
+
   const kuldResetLink = async (e) => {
     e.preventDefault();
     const email = String((elfelejtett && elfelejtett.email) || '').trim();
@@ -12710,6 +12730,10 @@ const App: React.FC = () => {
             )}
             <button disabled={authBusy} className="w-full bg-primary text-white py-4 rounded-2xl font-bold shadow-xl shadow-primary/10 hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-60">
               {authBusy ? 'Bejelentkezés…' : 'Belépés a rendszerbe'}
+            </button>
+            <button type="button" onClick={handleNjeSsoLogin} disabled={authBusy} className="w-full border border-primary/30 text-primary py-4 rounded-2xl font-bold hover:bg-primary/5 transition-all disabled:opacity-60 inline-flex items-center justify-center gap-2">
+              <Lucide.Building2 size={18} aria-hidden="true" />
+              Belépés NJE azonosítóval
             </button>
           </form>
           )}
