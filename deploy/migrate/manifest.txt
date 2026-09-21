@@ -98,3 +98,4 @@
 73_user_access.sql
 77_echo_exclusion_rule_reseed.sql
 78_echo_config_reseed.sql
+79_saml_import_match.sql

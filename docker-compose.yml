@@ -110,6 +110,8 @@ services:
       SAML_IDP_SLO_URL: ${SAML_IDP_SLO_URL:-https://idp.nje.hu/simplesaml/saml2/idp/SingleLogoutService.php}
       SAML_IDP_METADATA_URL: ${SAML_IDP_METADATA_URL:-}
       SAML_IDP_CERT: ${SAML_IDP_CERT:-}
+      SAML_STUDENT_SCOPES: ${SAML_STUDENT_SCOPES:-kefo.hu}
+      SAML_IMPORT_EMAIL_DOMAIN: ${SAML_IMPORT_EMAIL_DOMAIN:-nje-import.invalid}
     depends_on:
       auth:
         condition: service_healthy

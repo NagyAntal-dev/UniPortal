@@ -62,6 +62,54 @@ const TCH_api = {
   del:        (id)              => TCH_rpc('echo_teacher_delete', { p_teacher: id }),
   // A fiók-kötés a 19_echo_roles.sql-ből jön: null profillal bont.
   link:       (id, profil)      => TCH_rpc('echo_teacher_link', { p_teacher: id, p_profile: profil }),
+
+  /* SAML-elbírálás (79_saml_import_match.sql). Azok a belépések, amelyeket a
+     szerver NEM mert egyértelműen meglévő fiókhoz kötni. A táblát a személyzet
+     olvashatja (RLS + is_staff()), a lezárás RPC-n megy. */
+  reviews:    async () => {
+    if (!window.sb) throw new Error('Nincs adatbázis-kapcsolat.');
+    const { data, error } = await window.sb.from('saml_link_review')
+      .select('id,eppn,user_id,display_name,email,reason,candidates,created_at,last_seen_at')
+      .is('resolved_at', null).order('created_at', { ascending: false }).limit(200);
+    if (error) throw error;
+    return data || [];
+  },
+  reviewResolve: (id)           => TCH_rpc('saml_review_resolve', { p_id: id }),
+};
+
+/* Miért nem sikerült a párosítás — a nyers okkód helyett mondjuk meg, mi a
+   teendő. A kulcsok a 79_saml_import_match.sql reason értékei. */
+const TCH_SAML_OK = {
+  teacher_ambiguous: {
+    cimke: 'Több azonos nevű oktató',
+    tone:  'amber',
+    mit:   'A névre több oktatói sor is illik, ezért a szerver nem tippelt. '
+         + 'Válaszd ki, melyikhez tartozik a belépő fiók.',
+  },
+  teacher_unmatched: {
+    cimke: 'Nincs hozzá oktatói sor',
+    tone:  'slate',
+    mit:   'Új munkatárs, elírt név, vagy a névre van sor, csak nincs fiókhoz '
+         + 'kötve / nem oktatói a szerepköre. Lentebb látod, mit találtunk.',
+  },
+  teacher_linked: {
+    cimke: 'Az oktató fiókja már foglalt',
+    tone:  'red',
+    mit:   'Az oktatói sorhoz tartozó fiókhoz MÁR tartozik egy másik '
+         + 'NJE-azonosító. Átkötni csak ellenőrzés után szabad.',
+  },
+  student_linked: {
+    cimke: 'A hallgatói fiók már foglalt',
+    tone:  'red',
+    mit:   'A Neptun-kód egyezik, de az a fiók már egy másik NJE-azonosítóhoz '
+         + 'tartozik. Ezt ember nézze meg: elírt Neptun-kód vagy visszaélés is lehet.',
+  },
+  student_ambiguous: {
+    cimke: 'Több fiók ugyanazzal a Neptun-kóddal',
+    tone:  'red',
+    mit:   'Ugyanaz a Neptun-kód több profilon szerepel. Előbb a duplikátumot '
+         + 'kell rendezni, csak utána lehet belépéskor párosítani.',
+  },
 };
 
 const TCH_SZEREP = {
@@ -1025,6 +1073,137 @@ function TCH_Detail({ id, user, onChanged, onDeleted }) {
 /* ------------------------------------------------------------
    Fő képernyő
    ------------------------------------------------------------ */
+/* ------------------------------------------------------------
+   SAML-elbírálás — azok a belépések, amelyeket a szerver nem mert
+   egyértelműen meglévő fiókhoz kötni (79_saml_import_match.sql).
+
+   MIÉRT ITT: a megoldás ugyanaz a művelet, ami az oktató lapján is van —
+   a fiók-kötés (echo_teacher_link). Nem építünk rá új útvonalat.
+
+   MIÉRT NEM KÖT A SZERVER MAGÁTÓL: a munkafüzet oktatóinak nincs
+   forrásazonosítójuk, csak a nevük, és a README maga figyelmeztet, hogy az
+   azonos nevek különböző embereket jelölhetnek. Egy rossz kötés az illető
+   kurzusait és ECHO-értékeléseit vinné át valaki máshoz — ezt ember döntse el.
+   ------------------------------------------------------------ */
+function TCH_SamlReview({ user, onLinked }) {
+  const [sor, setSor]   = useState([]);
+  const [tolt, setTolt] = useState(true);
+  const [err, setErr]   = useState('');
+  const [busy, setBusy] = useState('');
+  const [nyit, setNyit] = useState(false);
+
+  const tolts = React.useCallback(() => {
+    setTolt(true);
+    TCH_api.reviews()
+      .then(r => { setSor(r); setErr(''); })
+      /* A tábla a 79-es migrációval jön. Amíg az nem futott le, ez a panel
+         egyszerűen NEM jelenik meg — nem hibaüzenettel riogat. */
+      .catch(e => { setSor([]); setErr(/does not exist|PGRST205|schema cache/i.test(String(e && e.message)) ? '' : TCH_msg(e)); })
+      .finally(() => setTolt(false));
+  }, []);
+
+  useEffect(() => { tolts(); }, [tolts]);
+
+  const lezar = async (id) => {
+    setBusy(id);
+    try { await TCH_api.reviewResolve(id); tolts(); }
+    catch (e) { setErr(TCH_msg(e)); }
+    finally { setBusy(''); }
+  };
+
+  const kot = async (r, teacherId) => {
+    if (!r.user_id) { setErr('Ehhez a belépéshez még nincs fiók — kérd meg, hogy lépjen be egyszer.'); return; }
+    setBusy(r.id);
+    try {
+      await TCH_api.link(teacherId, r.user_id);
+      await TCH_api.reviewResolve(r.id);
+      tolts();
+      onLinked && onLinked();
+    } catch (e) { setErr(TCH_msg(e)); }
+    finally { setBusy(''); }
+  };
+
+  if (tolt || (!sor.length && !err)) return null;
+
+  return (
+    <div className="bg-white rounded-3xl border border-amber-200 overflow-hidden">
+      <button type="button" onClick={() => setNyit(v => !v)}
+        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-amber-50/60">
+        <div className="flex items-center gap-3">
+          <Lucide.AlertTriangle size={18} className="text-amber-500 shrink-0" />
+          <div>
+            <div className="text-[13px] font-black text-slate-900">
+              {sor.length} NJE-belépés kézi elbírálásra vár
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Ezeket a szerver nem merte magától meglévő fiókhoz kötni
+            </div>
+          </div>
+        </div>
+        <Lucide.ChevronDown size={16} className={`text-slate-400 shrink-0 transition ${nyit ? 'rotate-180' : ''}`} />
+      </button>
+
+      {err && (
+        <div className="text-[13px] font-semibold text-red-600 bg-red-50 border-t border-red-100 px-5 py-3">{err}</div>
+      )}
+
+      {nyit && (
+        <div className="border-t border-amber-100 divide-y divide-slate-100">
+          {sor.map(r => {
+            const ok = TCH_SAML_OK[r.reason] || { cimke: r.reason, tone: 'slate', mit: '' };
+            const jeloltek = Array.isArray(r.candidates) ? r.candidates : [];
+            return (
+              <div key={r.id} className="px-5 py-4 space-y-2">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] font-black text-slate-900">{r.display_name || '(nincs név)'}</span>
+                      <UBadge tone={ok.tone}>{ok.cimke}</UBadge>
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5 font-mono break-all">{r.eppn}</div>
+                  </div>
+                  <button className={U_btnGhost} disabled={busy === r.id} onClick={() => lezar(r.id)}>
+                    <Lucide.Check size={14} /> Rendben, lezárom
+                  </button>
+                </div>
+
+                {ok.mit && <p className="text-[12px] text-slate-500">{ok.mit}</p>}
+
+                {jeloltek.length > 0 && (
+                  <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3 space-y-2">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Amit a névre találtunk
+                    </div>
+                    {jeloltek.map((j, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="text-[12px] text-slate-700 min-w-0">
+                          <span className="font-semibold">{j.name || j.neptun || '—'}</span>
+                          {j.profile_role && <span className="text-slate-400"> · {j.profile_role}</span>}
+                          {j.profile_id ? <span className="text-slate-400"> · fiókhoz kötve</span>
+                                        : <span className="text-amber-600"> · nincs fiókhoz kötve</span>}
+                          {j.active === false && <span className="text-slate-400"> · inaktív</span>}
+                        </div>
+                        {/* Kötni csak oda érdemes, ahol VAN oktatói sor, és a
+                            szerver is engedi (admin vagy ECHO SYSADMIN). */}
+                        {j.teacher_id && ['SUPERADMIN', 'ADMIN'].includes(user.role) && (
+                          <button className={U_btnGhost} disabled={busy === r.id}
+                            onClick={() => kot(r, j.teacher_id)}>
+                            <Lucide.UserCheck size={14} /> Ehhez kötöm
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TCH_View({ user }) {
   const [sor, setSor]       = useState([]);
   const [tolt, setTolt]     = useState(true);
@@ -1099,6 +1278,10 @@ function TCH_View({ user }) {
           </div>
         ))}
       </div>
+
+      {/* NJE-belépések, amiket kézzel kell elbírálni (79_saml_import_match.sql).
+          Ha nincs ilyen — vagy a migráció még nem futott le —, nem jelenik meg. */}
+      <TCH_SamlReview user={user} onLinked={tolts} />
 
       {/* szűrők */}
       <div className="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5">

@@ -99,5 +99,17 @@ export function loadConfig(env = process.env) {
     gotrueUrl: String(env.GOTRUE_URL || 'http://auth:9999').replace(/\/+$/, ''),
     restUrl: String(env.POSTGREST_URL || 'http://rest:3000').replace(/\/+$/, ''),
     serviceKey,
+    // A HALLGATÓI tartomány(ok). Az NJE-nél az ePPN hallgatónál
+    // neptunkod@kefo.hu — a helyi rész maga a Neptun-kód, és ezen az alapon
+    // találjuk meg a munkafüzetből importált fiókját (79_saml_import_match.sql).
+    // A TARTOMÁNY dönt, nem az alak: egy munkatársi felhasználónév is lehet
+    // hat karakter, és azt nem szabad egy hallgató Neptun-kódjának nézni.
+    studentScopes: String(env.SAML_STUDENT_SCOPES || 'kefo.hu')
+      .split(',').map((s) => s.trim().toLowerCase().replace(/^@/, '')).filter(Boolean),
+    // Az importált fiókok bejelentkezési neve (student.<neptun>@…, teacher.<hash>@…).
+    // Ezek NEM postafiókok: ha egy ilyen fiókot veszünk át, a címet a valódira
+    // cseréljük, a munkafüzet-import jelszavát pedig érvénytelenítjük.
+    importEmailDomain: String(env.SAML_IMPORT_EMAIL_DOMAIN || 'nje-import.invalid')
+      .trim().toLowerCase().replace(/^@/, ''),
   };
 }

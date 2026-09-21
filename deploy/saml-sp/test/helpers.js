@@ -34,6 +34,8 @@ export function testConfig(over = {}) {
     gotrueUrl: 'http://auth:9999',
     restUrl: 'http://rest:3000',
     serviceKey: 'service-key',
+    studentScopes: ['kefo.hu'],
+    importEmailDomain: 'nje-import.invalid',
     ...over,
   };
 }

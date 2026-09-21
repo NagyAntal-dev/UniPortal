@@ -38,7 +38,7 @@ test('új felhasználó: létrehozás, jóváhagyás, token', async () => {
   });
   const p = createProvisioner(testConfig(), { fetchImpl });
   const r = await p.provision(ATTRS, { nameID: '_nid', sessionIndex: '_s' });
-  assert.deepEqual(r, { userId: 'u-1', tokenHash: 'th-abc', isNew: true, linked: false });
+  assert.deepEqual(r, { userId: 'u-1', tokenHash: 'th-abc', isNew: true, matchedBy: null, linked: false });
 
   const create = calls.find((c) => c.key === R.create).body;
   assert.equal(create.email_confirm, true);
@@ -96,6 +96,91 @@ test('meglévő, MEG NEM erősített fiók: e-mail megerősítve, jelszó vélet
   assert.equal(put.email_confirm, true);
   assert.ok(put.password && put.password.length >= 40);
   assert.equal(calls.find((c) => c.key === R.link).body.p_is_new, false);
+});
+
+// ---------------------------------------------------------------------------
+// A munkafüzetből importált fiókok átvétele (79_saml_import_match.sql).
+// Ezek a fiókok .invalid bejelentkezési névvel és a credentials.csv-ben
+// kiosztott jelszóval jöttek létre — mindkettőt le kell váltani.
+// ---------------------------------------------------------------------------
+
+const STUDENT = { ...ATTRS, eppn: 'a00kh0@kefo.hu', email: 'a00kh0@kefo.hu', displayName: 'Árvai Szabolcs' };
+
+test('a keresés megkapja a displayName-t és a hallgatói tartományokat', async () => {
+  const { fetchImpl, calls } = fakeFetch({
+    [R.find]: [200, []],
+    [R.create]: [200, { id: 'u-0', email: 'a00kh0@kefo.hu' }],
+    [R.link]: [200, null],
+    [R.genlink]: [200, { hashed_token: 't' }],
+  });
+  await createProvisioner(testConfig(), { fetchImpl }).provision(STUDENT);
+  const find = calls.find((c) => c.key === R.find).body;
+  assert.equal(find.p_display_name, 'Árvai Szabolcs', 'oktatói párosításhoz kell');
+  assert.deepEqual(find.p_student_scopes, ['kefo.hu']);
+});
+
+test('importált HALLGATÓI fiók: valódi cím, a CSV-jelszó érvénytelenítve', async () => {
+  const { fetchImpl, calls } = fakeFetch({
+    [R.find]: [200, [{ user_id: 'u-s', email: 'student.a00kh0@nje-import.invalid', matched_by: 'neptun', email_confirmed: true }]],
+    'PUT http://auth:9999/admin/users/u-s': [200, {}],
+    [R.link]: [200, null],
+    [R.genlink]: [200, { hashed_token: 't' }],
+  });
+  const r = await createProvisioner(testConfig(), { fetchImpl }).provision(STUDENT);
+  assert.equal(r.isNew, false, 'NEM új fiók — a meglévőt vesszük át');
+  assert.equal(r.matchedBy, 'neptun');
+  assert.equal(r.userId, 'u-s');
+
+  const put = calls.find((c) => c.key.startsWith('PUT')).body;
+  assert.equal(put.email, 'a00kh0@kefo.hu', 'a .invalid login helyére a valódi cím kerül');
+  assert.equal(put.email_confirm, true);
+  assert.ok(put.password && put.password.length >= 40, 'a credentials.csv jelszava nem maradhat érvényben');
+
+  // A LÉNYEG: a magic link az ÚJ címre szól. A régivel a belépés elhasalna.
+  assert.equal(calls.find((c) => c.key === R.genlink).body.email, 'a00kh0@kefo.hu');
+});
+
+test('importált OKTATÓI fiók: névegyezés alapján átvéve', async () => {
+  const { fetchImpl, calls } = fakeFetch({
+    [R.find]: [200, [{ user_id: 'u-t', email: 'teacher.407debeaed928719@nje-import.invalid', matched_by: 'teacher_name', email_confirmed: true }]],
+    'PUT http://auth:9999/admin/users/u-t': [200, {}],
+    [R.link]: [200, null],
+    [R.genlink]: [200, { hashed_token: 't' }],
+  });
+  const attrs = { ...ATTRS, eppn: 'bferenc@nje.hu', email: 'bferenc@nje.hu', displayName: 'Dr. Baglyas Ferenc' };
+  const r = await createProvisioner(testConfig(), { fetchImpl }).provision(attrs);
+  assert.equal(r.matchedBy, 'teacher_name');
+  assert.equal(r.linked, true);
+  assert.equal(calls.find((c) => c.key.startsWith('PUT')).body.email, 'bferenc@nje.hu');
+  assert.equal(calls.find((c) => c.key === R.genlink).body.email, 'bferenc@nje.hu');
+  // A szerepkört a párosított fióké marad: a link-hívás nem új regisztráció.
+  assert.equal(calls.find((c) => c.key === R.link).body.p_is_new, false);
+});
+
+test('már valódi címen lévő fiók: a címet és a jelszót NEM bántjuk', async () => {
+  const { fetchImpl, calls } = fakeFetch({
+    [R.find]: [200, [{ user_id: 'u-r', email: 'sajat.cim@nje.hu', matched_by: 'neptun', email_confirmed: true }]],
+    'PUT http://auth:9999/admin/users/u-r': [200, {}],
+    [R.link]: [200, null],
+    [R.genlink]: [200, { hashed_token: 't' }],
+  });
+  await createProvisioner(testConfig(), { fetchImpl }).provision(STUDENT);
+  const put = calls.find((c) => c.key.startsWith('PUT')).body;
+  assert.deepEqual(put, { app_metadata: { sso: 'nje' } }, 'csak az sso-jelölés');
+  assert.equal(calls.find((c) => c.key === R.genlink).body.email, 'sajat.cim@nje.hu');
+});
+
+test('visszatérő felhasználó importált címmel: nincs admin-módosítás', async () => {
+  // A matched_by='eppn' SZÁNDÉKOSAN kimarad az átvételből: itt már nincs mit
+  // átvenni, és egy fölösleges jelszócsere kizárná a felhasználót.
+  const { fetchImpl, calls } = fakeFetch({
+    [R.find]: [200, [{ user_id: 'u-e', email: 'student.a00kh0@nje-import.invalid', matched_by: 'eppn', email_confirmed: true }]],
+    [R.link]: [200, null],
+    [R.genlink]: [200, { hashed_token: 't' }],
+  });
+  const r = await createProvisioner(testConfig(), { fetchImpl }).provision(STUDENT);
+  assert.equal(r.linked, false);
+  assert.ok(!calls.some((c) => c.key.startsWith('PUT')), 'visszatérőnél nincs PUT');
 });
 
 test('párhuzamos első belépés (422): újrakeresés', async () => {

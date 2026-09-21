@@ -77,7 +77,10 @@ export function createApp(cfg, { saml, provisioner, log = console }) {
       log.error(`[saml] acs: felhasználó (${attrs.eppn}): ${e.message}`);
       return fail(res, 'provision_failed');
     }
-    log.info(`[saml] belépés: ${attrs.eppn}${result.isNew ? ' (új regisztráció)' : ''}${result.linked ? ' (meglévő fiókhoz kötve)' : ''}`);
+    // A matchedBy megmondja, MELYIK ágon találtuk meg a fiókot ('eppn',
+    // 'email', 'neptun', 'teacher_name') — üzembe helyezéskor ebből derül ki,
+    // hogy az importált fiókok párosítása tényleg működik-e.
+    log.info(`[saml] belépés: ${attrs.eppn}${result.isNew ? ' (új regisztráció)' : ''}${result.linked ? ` (meglévő fiókhoz kötve: ${result.matchedBy})` : ''}`);
 
     const sid = sign(cfg.cookieSecret, {
       nameID: profile.nameID,
