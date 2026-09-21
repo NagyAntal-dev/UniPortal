@@ -67,6 +67,8 @@ const AppView = {
   // onallo torzsadat-menupont: az echo.teacher-re az ECHO-n kivul is
   // hivatkoznak, es a felvitel/inaktivalas nem kampanyhoz kotott muvelet.
   TEACHERS: 'teachers',
+  STUDENTS: 'students',
+  ACCESS: 'access',
   // Kollégiumi modul (26_dorm.sql). Három nézet, három közönség:
   // az üzemeltetés, a karbantartás és maga a lakó.
   DORM_OPS: 'dorm_ops',
@@ -92,11 +94,13 @@ const MENU_ITEMS = [
   { id: AppView.INTERVIEWS, label: 'Interjú Foglalás', icon: <Lucide.Calendar size={20} /> },
   { id: AppView.MARKETING_LEADS, label: 'Marketing és Lead kezelés', icon: <Lucide.Target size={20} /> },
   { id: AppView.STUDENT_PORTAL, label: 'Hallgatói Portál', icon: <Lucide.Users size={20} /> },
+  { id: AppView.STUDENTS, label: 'Hallgatók', icon: <Lucide.Users size={20} /> },
   { id: AppView.REPORTS, label: 'Riportok', icon: <Lucide.BarChart2 size={20} /> },
   { id: AppView.INTELLIGENCE, label: 'Intelligence', icon: <Lucide.Zap size={20} /> },
   { id: AppView.SYSTEM_ADMIN, label: 'Rendszerkezelés', icon: <Lucide.Settings size={20} /> },
   // Superadmin-only; the sidebar filter hides it from every other role.
   { id: AppView.REGISTRATIONS, label: 'Regisztrációk', icon: <Lucide.UserCheck size={20} /> },
+  { id: AppView.ACCESS, label: 'Jogosultságok', icon: <Lucide.KeyRound size={20} /> },
   // ECHO: a kitöltő minden szerepkörnek látszik, a kampánykezelés csak SUPERADMIN/ADMIN-nak.
   { id: AppView.ECHO_STUDENT, label: 'Kurzusértékelés', icon: <Lucide.ClipboardList size={20} /> },
   { id: AppView.ECHO_ADMIN, label: 'ECHO kampányok', icon: <Lucide.ClipboardCheck size={20} /> },
@@ -116,13 +120,13 @@ const MENU_ITEMS = [
    A jogosultságokon ez NEM változtat: a csoportosítás a már szűrt listán fut. */
 const MENU_GROUPS = [
   { key: 'altalanos', label: 'Általános',                 ids: [AppView.FEED, AppView.ASSISTANT] },
-  { key: 'kepzes',    label: 'Képzés és oktatás',         ids: [AppView.PROGRAMS, AppView.TRAININGS, AppView.COURSES, AppView.TEACHERS] },
+  { key: 'kepzes',    label: 'Képzés és oktatás',         ids: [AppView.PROGRAMS, AppView.TRAININGS, AppView.COURSES, AppView.TEACHERS, AppView.STUDENTS] },
   { key: 'felveteli', label: 'Felvételi',                 ids: [AppView.ADMISSIONS_CORE, AppView.EVALUATION, AppView.INTERVIEWS, AppView.IMMIGRATION, AppView.STUDENT_PORTAL] },
   { key: 'partner',   label: 'Partnerek és kommunikáció', ids: [AppView.AGENT_PORTAL, AppView.ENGAGEMENT_CRM, AppView.MARKETING_LEADS] },
   { key: 'penzugy',   label: 'Pénzügy és elemzés',        ids: [AppView.FINANCE, AppView.REPORTS, AppView.INTELLIGENCE] },
   { key: 'echo',      label: 'Minőségbiztosítás (ECHO)',  ids: [AppView.ECHO_STUDENT, AppView.ECHO_ADMIN, AppView.ECHO_TEACHER] },
   { key: 'kollegium', label: 'Kollégium és szállás',      ids: [AppView.DORM_OPS, AppView.DORM_MAINTENANCE, AppView.DORM_STUDENT] },
-  { key: 'rendszer',  label: 'Rendszer',                  ids: [AppView.SYSTEM_ADMIN, AppView.REGISTRATIONS, AppView.CONSENTS] },
+  { key: 'rendszer',  label: 'Rendszer',                  ids: [AppView.SYSTEM_ADMIN, AppView.REGISTRATIONS, AppView.ACCESS, AppView.CONSENTS] },
 ];
 
 /* ============================================================================
@@ -153,11 +157,15 @@ function canSeeView(currentUser, viewId) {
     const matrixView = () => PERM_elo(currentUser)
       ? PERM_can(currentUser, viewId, 'VIEW', true)
         || (currentUser.groupPerms || []).includes(viewId)
+        || (currentUser.userPerms || []).includes(viewId)
       : null;
     // Approving registrations is the superadmin's alone — not even ADMIN.
     if (viewId === AppView.REGISTRATIONS) return currentUser.role === 'SUPERADMIN';
     // A hozzájárulási napló személyes adatot tartalmaz: csak rendszergazda (az RLS is így szűr).
     if (viewId === AppView.CONSENTS) return currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN';
+    // A jogosultságkezelés: olvasni admin is tud, EGYÉNI jogot csak szuperadmin
+    // adhat (ezt a 73-as migráció kényszeríti ki, nem a menü).
+    if (viewId === AppView.ACCESS) return currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN';
     // Az ECHO kampánykezelés a REGISTRATIONS mintájára a fail-open ág ELŐTT dönt,
     // különben a lenti 'SUPERADMIN || ADMIN → true' után minden ügyintéző látná.
     if (viewId === AppView.ECHO_ADMIN) return currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN';
@@ -179,6 +187,19 @@ function canSeeView(currentUser, viewId) {
     // — nekik nincs mit kezdeniuk vele.
     if (viewId === AppView.TEACHERS) {
       return matrixView() ?? ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role);
+    }
+    // A hallgatoi nyilvantartas szemelyes adatot mutat: ugyintezoi kepernyo.
+    // A szerver oldali parja a 71-es migracio is_staff() feltetele.
+    //
+    // MIERT NEM matrixView(): a 'students' MODULKENT nincs benne a 72-es
+    // rbac_actions seedjeben (a 'teachers' igen, lasd 72:290). A PERM_can a
+    // sor nelkuli modulra FALSE-t ad (perm.jsx:67), nem null-t, tehat a '??'
+    // tartalek AGA SEM futna le: a Hallgatok menupont elo matrix mellett
+    // eltunne az ADMIN / ADMISSIONS / FINANCE szerepkor alol.
+    // HA a modul bekerul a matrixba egy kesobbi migracioval, ez az ag
+    // atirhato matrixView() ?? [...] alakra, a TEACHERS mintajara.
+    if (viewId === AppView.STUDENTS) {
+      return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role);
     }
     if (viewId === AppView.COURSES) {
       // Az 'OKTATO' ECHO-grant saját szabály, nem szerepkör-beállítás: a mátrix nem veszi el.
@@ -258,7 +279,8 @@ function canSeeView(currentUser, viewId) {
                       Array.isArray(currentUser.rolePerms)
                         ? currentUser.rolePerms.includes(viewId)
                         : undefined)
-          || (currentUser.groupPerms || []).includes(viewId);
+          || (currentUser.groupPerms || []).includes(viewId)
+          || (currentUser.userPerms || []).includes(viewId);
     }
 
     if (currentUser.role === 'ADMIN') return true;
@@ -271,6 +293,9 @@ function canSeeView(currentUser, viewId) {
     // csak olyan menüpontot nyithat meg, amit a szerepkör nem adott meg.
     // ELVENNI nem tud semmit — a lenti `return false` marad a végszó.
     if ((currentUser.groupPerms || []).includes(viewId)) return true;
+    // EGYENI JOG (73_user_access.sql) — a csoporttal azonos elv: csak ADHAT
+    // menupontot, elvenni nem tud. A fail-closed `return false` a vegszo.
+    if ((currentUser.userPerms || []).includes(viewId)) return true;
     return false;
 }
 
@@ -12508,6 +12533,15 @@ const App: React.FC = () => {
       if (!gpErr && Array.isArray(gp)) groupPerms = gp;
     } catch (e) { /* a 38-as migráció még nem futott le — a menü marad a régi */ }
 
+    // --- EGYÉNI JOGOSULTSÁGOK (73_user_access.sql) ---
+    // Ugyanaz az elv, mint a csoportnál: csak ADHAT menüpontot. A szűrőben a
+    // szerepkör-ág UTÁN jut szóhoz, tehát elvenni nem tud semmit.
+    let userPerms = [];
+    try {
+      const { data: up, error: upErr } = await sb.rpc('my_user_permissions');
+      if (!upErr && Array.isArray(up)) userPerms = up;
+    } catch (e) { /* a 73-as migráció még nem futott le */ }
+
     // --- Kollégiumi modul HATÓKÖRÖS szerepkörei (26_dorm.sql) ---
     // Ugyanaz a minta, mint az ECHO-nál, és ugyanabból az okból: a menüszűrő
     // utolsó ága `return false`, ezért egy ÚJ profiles.role érték (GONDNOK,
@@ -12547,6 +12581,7 @@ const App: React.FC = () => {
       dormRoles,
       // Csoportból örökölt menüpont-jogosultságok (38_student_groups.sql).
       groupPerms,
+      userPerms,
       // A szerepkörhöz rendelt menüpontok (39_role_admin.sql). null = nincs
       // adat, ilyenkor a kódba égetett lista dönt.
       rolePerms,
@@ -12842,6 +12877,8 @@ const App: React.FC = () => {
       case AppView.ECHO_STUDENT: return <ECHO_StudentView user={currentUser} />;
       case AppView.CONSENTS: return <LEG_AdminLog user={currentUser} />;
       case AppView.TEACHERS: return <TCH_View user={currentUser} />;
+      case AppView.ACCESS: return <ACC_View user={currentUser} />;
+      case AppView.STUDENTS: return <STU_View user={currentUser} />;
       case AppView.COURSES: return <CRS_View user={currentUser} />;
       case AppView.ECHO_ADMIN: return <ECHO_AdminView user={currentUser} />;
       case AppView.ECHO_TEACHER: return <ECHO_TeacherView user={currentUser} />;
@@ -13812,6 +13849,95 @@ Object.entries({
   'Nem lett kitöltve — legalább egy célt adj meg (e nélkül a félév végén nincs mit értékelni).': 'Not filled in — add at least one goal (otherwise there is nothing to evaluate at the end of the term).',
   'A hiányzó válaszokat pirossal jelöltük a kérdéseknél.': 'Missing answers are marked in red at the questions.',
   'Célmeghatározás/Értékelés': 'Goal setting/Evaluation',
+  'Jogosultságok': 'Permissions',
+  'Személyek': 'People',
+  'Szerepkörök': 'Roles',
+  'Ki mit lát a menüben, és milyen munkakörben. Három szinten állítható: szerepkörönként, csoportonként és egyénenként. Mindhárom csak ad hozzáférést — elvenni egyik sem tud.': 'Who sees what in the menu, and in what job. Adjustable on three levels: by role, by group and per person. All three only grant access — none can take it away.',
+  'Név, e-mail vagy munkakör…': 'Name, e-mail or job…',
+  'Mind': 'All',
+  'Válassz valakit a listából': 'Pick someone from the list',
+  'Itt látszik majd, honnan kapja a jogosultságait, és itt adható meg a munkaköre.': 'This will show where their permissions come from, and here you can set their job.',
+  'mindent lát': 'sees everything',
+  'A szuperadmin minden képernyőt lát, és ez szándékosan nem állítható — enélkül ki lehetne zárni magát abból a felületből is, amivel visszaállítaná.': 'The superadmin sees every screen, and this is deliberately not adjustable — otherwise they could lock themselves out of the very screen that would restore it.',
+  'Munkakör': 'Job',
+  'Beosztás': 'Position',
+  'Szervezeti egység': 'Organisational unit',
+  'Megjegyzés': 'Note',
+  'Munkakör mentése': 'Save job',
+  'Adminisztratív adat: leírja, mit csinál az illető. Önmagában egyetlen képernyőt sem nyit meg — a hozzáférést a szerepkör, a csoport vagy az egyéni jog adja.': 'Administrative data describing what the person does. On its own it opens no screen — access comes from the role, the group or an individual grant.',
+  'Mit lát a menüben': 'What they see in the menu',
+  'nincs hozzáférése': 'no access',
+  'szuperadmin — mindent lát': 'superadmin — sees everything',
+  '+ egyéni jog': '+ individual grant',
+  'egyéni jog · vissza': 'individual grant · revoke',
+  'Csoportjai': 'Their groups',
+  'egyetlen csoportnak sem tagja': 'not a member of any group',
+  'A csoporttagságot és a csoport jogait a „Csoportok” fülön lehet szerkeszteni.': 'Group membership and group permissions are edited on the “Groups” tab.',
+  'Az egyéni jogosultság még nincs telepítve': 'Individual permissions are not installed yet',
+  'Futtatni kell a supabase/73_user_access.sql migrációt. A Szerepkörök és a Csoportok fül addig is működik.': 'Run the supabase/73_user_access.sql migration. The Roles and Groups tabs work in the meantime.',
+  'A munkakör elmentve.': 'Job saved.',
+  'Egyéni jog hozzáadva.': 'Individual grant added.',
+  'Az egyéni jog visszavonva.': 'Individual grant revoked.',
+  'Egyéni jogot csak szuperadmin adhat.': 'Only a superadmin can grant individual permissions.',
+  'A szuperadmin hozzáférése szándékosan nem állítható.': 'The superadmin’s access is deliberately not adjustable.',
+  'szabály': 'rule-based',
+  'kurzusa': 'courses',
+  'hallgatója': 'students',
+  'kurzusfelvétel': 'course registrations',
+  'kampányban érintett': 'campaigns involved',
+  'Félévenként': 'By term',
+  'Hallgató': 'Students',
+  'A hozzárendelt kurzusok száma, minden félévben.': 'Number of assigned courses, across all terms.',
+  'Különböző hallgatók az összes kurzusán. Aki két kurzusára is jár, egyszer számít.': 'Distinct students across all their courses. Someone taking two of their courses counts once.',
+  'Hallgató × kurzus párok száma — ennyi értékelhető kurzusa van összesen.': 'Student × course pairs — the number of course registrations that can be evaluated.',
+  'Hány ECHO-kampány jogosultsági listájára került fel.': 'How many ECHO campaign eligibility lists they appear on.',
+  'Hallgatók': 'Students',
+  'Névsor, besorolás, csoportok, kurzusok és felvételi folyamatok — kereséssel és szűrőkkel.': 'Name list, classification, groups, courses and admission processes — with search and filters.',
+  'Keresés név, e-mail vagy Neptun-kód szerint…': 'Search by name, e-mail or Neptun code…',
+  'Találat': 'Matches',
+  'Besorolással': 'With classification',
+  'Kurzussal': 'With a course',
+  'Felvételivel': 'With an admission',
+  'Új (30 nap)': 'New (30 days)',
+  'Szűrők törlése': 'Clear filters',
+  'Jelölők': 'Markers',
+  'Csoport': 'Group',
+  'Van Neptun-besorolása': 'Has Neptun classification',
+  'Nincs besorolása': 'Has no classification',
+  'Van aktív kurzusa': 'Has an active course',
+  'Van felvételi folyamata': 'Has an admission process',
+  'A különböző szempontok együtt szűkítenek, egy szemponton belül bármelyik érték elég.': 'Criteria narrow together; within one criterion any value is enough.',
+  'Fiókállapot': 'Account status',
+  'Telephely': 'Site',
+  'Besorolás': 'Classification',
+  'Szak · kar': 'Programme · faculty',
+  'Csoportok': 'Groups',
+  'Kurzus': 'Course',
+  'Felvételi': 'Admission',
+  'Nincs találat': 'No match',
+  'Próbáld meg más kereséssel, vagy törölj a szűrőkből.': 'Try a different search, or clear some filters.',
+  'Hallgatói adatlap': 'Student record',
+  'Fiók': 'Account',
+  'Neptun-besorolás': 'Neptun classification',
+  'Neptun-kód': 'Neptun code',
+  'Regisztrált': 'Registered',
+  'Nyelv · telephely': 'Language · site',
+  'egyetlen csoportnak sem tagja': 'not a member of any group',
+  'nincs kurzusfelvétele': 'no course registration',
+  'Felvételi folyamatok': 'Admission processes',
+  'nincs felvételi folyamata': 'no admission process',
+  'A kurzusértékelés (ECHO) kitöltöttsége szándékosan nem szerepel itt: a kérdőív névtelen. A kollégiumi elhelyezést a Kollégium, a fizetéseket a Pénzügy képernyő mutatja.': 'Course evaluation (ECHO) completion is deliberately absent here: the survey is anonymous. Dormitory placement is shown by the Dormitory screen, payments by the Finance screen.',
+  'A lista személyes adatot mutat, ezért csak ügyintézői szerepkörrel nyílik meg — ezt az adatbázis kényszeríti ki, nem a menü. A kurzusértékelés kitöltöttsége itt szándékosan nem jelenik meg: a kérdőív névtelen.': 'The list shows personal data, so it only opens with a staff role — enforced by the database, not by the menu. Course evaluation completion is deliberately not shown here: the survey is anonymous.',
+  'A hallgatói nyilvántartás még nincs telepítve': 'The student directory is not installed yet',
+  'Futtatni kell a supabase/71_student_directory.sql migrációt, utána ez a képernyő azonnal működik.': 'Run the supabase/71_student_directory.sql migration; this screen works right afterwards.',
+  'Ehhez a képernyőhöz ügyintézői jogosultság kell.': 'This screen requires a staff role.',
+  'hallgatónál': 'with the student',
+  'ügyintézőnél': 'with the office',
+  'lezárt': 'closed',
+  'szabály': 'rule-based',
+  'kézi': 'manual',
+  'leadva': 'dropped',
+  'Hányan látták': 'How many have seen it',
   'Hallgatók és jelentkezők': 'Students and applicants',
   'Oktatók': 'Teachers',
   'Ügynökök': 'Agents',
@@ -14340,6 +14466,12 @@ HU_EN_PHRASES.push(
   [/^(\d+) fő látja$/, 'seen by $1 people'],
   [/^\((\d+) hallgató · (\d+) oktató · (\d+) ügynök\)$/, '($1 students · $2 teachers · $3 agents)'],
   [/^A közzététel nem sikerült: (.+)$/, 'Publishing failed: $1'],
+  [/^(\d+) csoport$/, '$1 groups'],
+  [/^(\d+) egyéni jog$/, '$1 individual grants'],
+  [/^csoport: (.+)$/, 'group: $1'],
+  [/^(\d+) kurzus · (\d+) hallgató$/, '$1 courses · $2 students'],
+  [/^(\d+) kizárási bejegyzés \(létszám, órarendi info, vizsgakurzus vagy óraarány miatt kimaradt kurzus\)\.$/, '$1 exclusion entries (courses left out for headcount, timetable data, exam course or teaching share).'],
+  [/^Hányan látták — (\d+) különböző felhasználó képernyőjén jelent meg\. Nevet a rendszer nem mutat, és az ügyintézők megtekintése nem számít bele\.$/, 'How many have seen it — it appeared on the screens of $1 different users. No names are shown, and staff views are not counted.'],
   [/\+ még (\d+) teendő — mutasd mind/g, '+ $1 more — show all'],
   [/·\s*(\d+)\s*fő\b/g, '· $1 students'],
 );

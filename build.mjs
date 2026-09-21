@@ -78,7 +78,14 @@ const FEATURE_FILES = [
   'features/teachers.jsx',
   // Jogi dokumentumok, elfogadások, hozzájárulási napló (59_legal_consents.sql).
   // A data-layer UTAN: onnan veszi a UBadge / U_btnPrimary / U_input atomokat.
+  // Hallgatoi nyilvantartas (71_student_directory.sql). A data-layer UTAN:
+  // onnan veszi a UModal/UBadge/UEmpty/U_input atomokat.
+  'features/students.jsx',
   'features/legal.jsx',
+  // Jogosultsagok (73_user_access.sql): szerepkor, csoport es EGYENI jog egy
+  // kepernyon. A roles/groups/registrations UTAN: azok ROLE_Tab / GRP_Tab /
+  // REG_loadProfiles elemeire epul.
+  'features/access.jsx',
 ];
 
 // `motion` is only referenced by the shim at the top of app.jsx, which renders

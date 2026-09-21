@@ -81,6 +81,9 @@ const EXTRAK = [
   { nev: 'dorm KARBANTARTO',   dormRoles: ['KARBANTARTO'] },
   { nev: 'dorm KOLI_SYSADMIN', dormRoles: ['KOLI_SYSADMIN'] },
   { nev: 'csoport-jog',        groupPerms: ['finance', 'reports'] },
+  // EGYENI JOG (73_user_access.sql). Enelkul a userPerms ag VAK FOLT volt:
+  // a canSeeView el is felejtette, es a teszt ezt nem vette eszre.
+  { nev: 'egyeni jog',         userPerms: ['finance', 'reports'] },
 ];
 
 let elteres = 0, ossz = 0;
@@ -91,6 +94,7 @@ for (const role of SZEREPEK) {
       role, status: 'approved',
       rolePerms: ROLE_PERMS[role],
       groupPerms: extra.groupPerms || [],
+      userPerms:  extra.userPerms  || [],
       echoRoles:  extra.echoRoles  || [],
       dormRoles:  extra.dormRoles  || [],
       // A 72-es utáni állapot: a VIEW jogok = a rolePerms + a kódba égetett ágak.

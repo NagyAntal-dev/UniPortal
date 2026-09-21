@@ -193,7 +193,7 @@
     // modul-gyorsitotarabol pedig tovabb — a REGI kodot futtatta, es a
     // felhasznalo joggal hitte, hogy a javitas nem keszult el. Mert(ve): az elo
     // csomagban mar benne volt a javitas, a bongeszo megis a regit mutatta.
-    const BUNDLE_V = '50f03e007930';
+    const BUNDLE_V = '6304c6b5d5c9';
     const BUNDLE_URL = './app.bundle.js?v=' + BUNDLE_V;
 
     async function hasPrebuilt() {
@@ -221,7 +221,7 @@
         let src = await (await fetch('app.jsx')).text();
         // New feature modules are concatenated into app.jsx's module (shared
         // scope) at the /*__FEATURES__*/ marker, just before the App component.
-        const FEATURE_FILES = ['features/data-layer.jsx', 'features/perm.jsx', 'features/countries.jsx', 'features/echo.jsx', 'features/knowledge-base.jsx', 'features/feed.jsx', 'features/programs.jsx', 'features/assistant.jsx', 'features/registrations.jsx', 'features/interview.jsx', 'features/interview-calendar.jsx', 'features/messages.jsx', 'features/student-calendar.jsx', 'features/recordings.jsx', 'features/dorm.jsx', 'features/dorm-views.jsx', 'features/agency.jsx', 'features/multiprogram.jsx', 'features/groups.jsx', 'features/roles.jsx', 'features/courses.jsx', 'features/teachers.jsx', 'features/legal.jsx'];
+        const FEATURE_FILES = ['features/data-layer.jsx', 'features/perm.jsx', 'features/countries.jsx', 'features/echo.jsx', 'features/knowledge-base.jsx', 'features/feed.jsx', 'features/programs.jsx', 'features/assistant.jsx', 'features/registrations.jsx', 'features/interview.jsx', 'features/interview-calendar.jsx', 'features/messages.jsx', 'features/student-calendar.jsx', 'features/recordings.jsx', 'features/dorm.jsx', 'features/dorm-views.jsx', 'features/agency.jsx', 'features/multiprogram.jsx', 'features/groups.jsx', 'features/roles.jsx', 'features/courses.jsx', 'features/teachers.jsx', 'features/students.jsx', 'features/legal.jsx', 'features/access.jsx'];
         try {
           const parts = await Promise.all(FEATURE_FILES.map(f => fetch(f).then(r => r.ok ? r.text() : '')));
           const featureCode = parts.join('\n\n');

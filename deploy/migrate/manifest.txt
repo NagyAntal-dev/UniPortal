@@ -91,3 +91,8 @@
 74_rbac_enforce_rpc.sql
 73_rbac_enforce_rls.sql
 76_saml_sso.sql
+# --- upstream/main (hirfolyam, hallgatok, oktatoi statisztika, jogosultsagok) ---
+70_feed_views.sql
+71_student_directory.sql
+72_teacher_stats.sql
+73_user_access.sql
