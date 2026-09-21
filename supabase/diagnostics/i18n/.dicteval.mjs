@@ -868,6 +868,8 @@ Object.entries({
   'A kihagyási kapu csak „oktatónként” ismétlődve működik: azt jelzi, hogy a kitöltő egy adott oktatót nem tud értékelni. Állítsd az Ismétlődést oktatónkéntire, vagy válassz másik kérdéstípust.':
     'The skip gate only works when repeated “per teacher”: it marks that the respondent cannot evaluate a given teacher. Set Repetition to per teacher, or choose another question type.',
   'Célonként ismétlődő kérdés: csak azok látják, akik a félév elején célt adtak meg — célonként egyszer.': 'Repeated per goal: only respondents who set goals at the start of the semester see it — once per goal.',
+  'Oktatónként és célonként ismétlődő kérdés: minden oktatónál egyszer, és — akik a félév elején célt adtak meg — célonként is egyszer. A célonkénti válaszok összevontan kerülnek be.': 'Repeated per teacher and per goal: once for every teacher and — for respondents who set goals at the start of the semester — once per goal as well. The per-goal answers are submitted merged.',
+  'Oktatónként és célonként': 'Per teacher and per goal',
 }).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
 // Jogosult hallgatók — névtelen kitöltöttségi összesítő (67).
 Object.entries({
