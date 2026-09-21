@@ -3559,6 +3559,11 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
                 legfeljebb {(elo || aud).legfeljebb_kurzus}
                 {(elo || aud).kurzus_szukitve && !(elo || aud).hallgato_szukitve
                   ? ' kijelölt kurzus' : ' kurzus'}
+                {/* Egy tantargynak tobb kurzusa is lehet (EA01, GY01, GY02...),
+                    ezert a kurzusszam onmagaban tulzonak hat. */}
+                {(elo || aud).legfeljebb_targy != null
+                  && (elo || aud).legfeljebb_targy !== (elo || aud).legfeljebb_kurzus
+                  && ` (${(elo || aud).legfeljebb_targy} tantárgy)`}
                 {' · '}{(elo || aud).legfeljebb_hallgato} hallgató
               </p>
               {/* A modok kulon kiirva: 59 kijelolt kurzus es "a felev minden

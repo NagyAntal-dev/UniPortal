@@ -192,6 +192,7 @@ declare
   v_has_c    boolean;
   v_has_w    boolean;
   v_kurzus   int;
+  v_targy    int;
   v_hallgato int;
   v_who      int;
   v_who_be   int;
@@ -208,13 +209,20 @@ begin
 
   -- A kurzusszam ugyanazt a halmazt irja le, amit az eligibility_rebuild()
   -- ertekel (lasd ott): kurzus nelkul a felev osszes kurzusa.
-  with p as materialized (select * from echo.audience_pairs(p_campaign, p_items))
+  --
+  -- A tantargy a kurzuskod kozepe: N-K-GGEPBAL-ANALIZI1-2-EA01 -> GGEPBAL-ANALIZI1-2.
+  -- Szandekosan NEM a Neptun-export "Targykod" oszlopa: az a hallgato sajat
+  -- tantervi targya (pl. Erasmusnal GERASMN-...), nem a kurzuse.
+  with p as materialized (select * from echo.audience_pairs(p_campaign, p_items)),
+       cel as (
+         select k.id, k.code from echo.course k
+          where (not v_has_c and k.term = v_term)
+             or (v_has_c and (k.id = any(v_courses)
+                              or k.id in (select course_id from p))))
   select (select count(distinct student_key) from p),
-         case when not v_has_c
-              then (select count(*) from echo.course k where k.term = v_term)
-              else (select count(*) from (select unnest(v_courses)
-                                          union select course_id from p) s) end
-    into v_hallgato, v_kurzus;
+         (select count(*) from cel),
+         (select count(distinct regexp_replace(code, '^[^-]+-[^-]+-(.+)-[^-]+$', '\1')) from cel)
+    into v_hallgato, v_kurzus, v_targy;
 
   select count(*) into v_who from echo.audience_who(p_items);
   -- A KI-dobozok tagjai kozul hanyan vettek fel egyaltalan kurzust a felevben.
@@ -227,6 +235,7 @@ begin
     'kurzus_szukitve',      v_has_c,
     'hallgato_szukitve',    v_has_w,
     'legfeljebb_kurzus',    coalesce(v_kurzus, 0),
+    'legfeljebb_targy',     coalesce(v_targy, 0),
     'legfeljebb_hallgato',  coalesce(v_hallgato, 0),
     'celzott_szemely',      coalesce(v_who, 0),
     'celzott_beiratkozott', coalesce(v_who_be, 0));

@@ -297,7 +297,8 @@ console.log('\n82_audience_course_or.sql: OK ketszer is (idempotens)');
 const mkKurzus = async code => (await db.query(
   "insert into echo.course(term,code,name_hu) values($1,$2,$2) returning id",
   [TERM, code])).rows[0].id;
-const k2 = await mkKurzus('K2'), k3 = await mkKurzus('K3');
+// K2 es K3 ugyanannak a tantargynak ket kurzusa (EA01, GY01); K1 kulon targy.
+const k2 = await mkKurzus('N-K-GGEPBAL-ANALIZI1-2-EA01'), k3 = await mkKurzus('N-K-GGEPBAL-ANALIZI1-2-GY01');
 for (const [k, p] of [[k2, p1], [k2, p2], [k3, p2]]) {
   await db.query("insert into echo.enrollment values($1,$2,'active')", [k, p]);
 }
@@ -322,7 +323,7 @@ await egyenlo('p1 a felev osszes kurzusat kapja (K1, K2)',
 
 const pv = `select public.echo_audience_preview($1,$2::jsonb) v`;
 const pvGot = (await db.query(pv, [camp, OR_ITEMS])).rows[0].v;
-const pvVart = { legfeljebb_kurzus: 3, legfeljebb_hallgato: 3, celzott_szemely: 2,
+const pvVart = { legfeljebb_kurzus: 3, legfeljebb_targy: 2, legfeljebb_hallgato: 3, celzott_szemely: 2,
                  celzott_beiratkozott: 2, kurzus_szukitve: true, hallgato_szukitve: true };
 for (const [k, v] of Object.entries(pvVart)) {
   if (pvGot[k] !== v) { hibak++; console.log(`  BUKOTT  becsles.${k}: ${pvGot[k]} != ${v}`); }
