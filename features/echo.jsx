@@ -3498,18 +3498,20 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
           <div>
             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ki kapja meg</h4>
             <p className="text-[11px] text-slate-400 leading-relaxed mt-1.5">
-              Két független kérdés. A <b>kurzusok</b> azt mondják meg, MIT értékelnek;
-              a <b>csoportok</b>, a <b>személyek</b> és a <b>tulajdonságok</b> azt, KI
-              értékel. Amit üresen hagysz, az nem szűkít. A három „KI" doboz
-              egymáshoz <b>hozzáad</b>: aki bármelyikbe beleesik, megkapja a kérdőívet.
+              Mind a négy doboz <b>hozzáad</b>, egyik sem szűkít. A kijelölt
+              <b> kurzusok</b> minden hallgatója megkapja a kérdőívet az adott kurzusra;
+              a <b>csoportok</b>, a <b>személyek</b> és a <b>tulajdonságok</b> tagjai
+              pedig a félévben felvett összes kurzusukra. Ha mind üres: a félév
+              minden kurzusa, minden hallgatója.
             </p>
           </div>
 
           <ECHO_AudiencePicker campaignId={campaign.id} kind="course" ro={ro}
             cimke="Kurzusok" ikon={<Lucide.BookOpen size={13} className="text-slate-400" />}
-            sug="Üresen: a félév MINDEN kurzusa. Kijelölve: pontosan ezek."
+            sug="Kijelölve: ezek minden hallgatója bekerül, a lenti dobozoktól függetlenül."
             nyitSug="Az összes kurzushoz NE jelölj ki semmit — az üres lista jelenti a félév
-                     minden kurzusát. Amit itt kijelölsz, arra szűkül a kérdőív."
+                     minden kurzusát. Amit itt kijelölsz, annak minden hallgatója megkapja
+                     a kérdőívet."
             valasztott={azok('course')} onValt={setAzok('course')} />
 
           <ECHO_AudiencePicker campaignId={campaign.id} kind="group" ro={ro}
@@ -3555,29 +3557,32 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
               </div>
               <p className="text-sm font-black text-slate-700">
                 legfeljebb {(elo || aud).legfeljebb_kurzus}
-                {(elo || aud).kurzus_szukitve ? ' kijelölt kurzus' : ' kurzus'}
+                {(elo || aud).kurzus_szukitve && !(elo || aud).hallgato_szukitve
+                  ? ' kijelölt kurzus' : ' kurzus'}
                 {' · '}{(elo || aud).legfeljebb_hallgato} hallgató
               </p>
-              {/* A ket mod kulon kiirva: 59 kijelolt kurzus es "a felev minden
-                  kurzusa" rakerdezes nelkul osszekeverheto — pont igy maradt
-                  egy kampany 3 hallgatonal, mikozben az admin "mindenkinek"
-                  szanta. */}
+              {/* A modok kulon kiirva: 59 kijelolt kurzus es "a felev minden
+                  kurzusa" rakerdezes nelkul osszekeverheto. A kurzusok es a
+                  KI-dobozok VAGY kapcsolatban allnak (82_audience_course_or.sql). */}
               <p className="text-[11px] text-slate-400 font-bold mt-0.5">
-                {(elo || aud).kurzus_szukitve
-                  ? 'Csak a Kurzusok alatt kijelöltek — a félév többi kurzusa nem kap kérdőívet.'
-                  : ((elo || aud).term ? 'A ' + (elo || aud).term + ' félév' : 'A félév')
-                    + ' összes kurzusa.'}
+                {(elo || aud).kurzus_szukitve && (elo || aud).hallgato_szukitve
+                  ? 'A kijelölt kurzusok minden hallgatója, és a csoportok, személyek, '
+                    + 'tulajdonságok tagjai a félév összes kurzusukra.'
+                  : (elo || aud).kurzus_szukitve
+                    ? 'Csak a Kurzusok alatt kijelöltek — a félév többi kurzusa nem kap kérdőívet.'
+                    : ((elo || aud).term ? 'A ' + (elo || aud).term + ' félév' : 'A félév')
+                      + ' összes kurzusa.'}
               </p>
 
-              {/* Ha a szabaly alapu csoport sok emberre illeszkedik, de kozuluk
-                  keves van beiratkozva a celzott kurzusokra, a ket szam elter —
-                  es ez pont az, amit erteni kell a mentes ELOTT. */}
-              {elo && elo.hallgato_szukitve
-                && elo.celzott_szemely > elo.legfeljebb_hallgato && (
+              {/* Ha a KI-dobozok sok emberre illeszkednek, de kozuluk keves vett
+                  fel kurzust a felevben, a ket szam elter — es ez pont az, amit
+                  erteni kell a mentes ELOTT. */}
+              {elo && elo.hallgato_szukitve && elo.celzott_beiratkozott != null
+                && elo.celzott_szemely > elo.celzott_beiratkozott && (
                 <p className="text-[11px] text-amber-700 leading-relaxed mt-1.5">
-                  A kijelölt csoportok és személyek <b>{elo.celzott_szemely}</b> főt fednek le,
-                  de közülük csak <b>{elo.legfeljebb_hallgato}</b> van beiratkozva a célzott
-                  kurzusokra. A többi nem kap kérdőívet.
+                  A kijelölt csoportok, személyek és tulajdonságok <b>{elo.celzott_szemely}</b> főt
+                  fednek le, de közülük csak <b>{elo.celzott_beiratkozott}</b> vett fel kurzust
+                  ebben a félévben. A többinek nincs mit értékelnie.
                 </p>
               )}
 

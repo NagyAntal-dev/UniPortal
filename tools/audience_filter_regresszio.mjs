@@ -268,6 +268,92 @@ await egyenlo('szuro nelkuli regi celzas valtozatlan (illeszkedo)',
 await egyenlo('szuro nelkuli regi celzas valtozatlan (nem illeszkedo)',
   ...F('{"tagozat":["Levelező"]}', p1), false);
 
+// --- 82: a Kurzusok es a KI-dobozok VAGY kapcsolatban ----------------------
+// Az alkalmassagi motor tablainak vaza — csak azok az oszlopok, amiket a
+// 82-es eligibility_rebuild() olvas vagy ir.
+await db.exec(`
+alter table echo.campaign add column code text, add column name_hu text, add column name_en text,
+  add column template_version_id uuid, add column opens_at timestamptz,
+  add column closes_at timestamptz, add column goals_open_at timestamptz,
+  add column goals_close_at timestamptz;
+alter table echo.course add column letszam int, add column van_orarendi_info boolean default true,
+  add column vizsgakurzus boolean default false;
+create table echo.setting (key text primary key, value text);
+insert into echo.setting values ('min_headcount','1'), ('min_share_pct','0');
+create table echo.course_teacher (course_id uuid, teacher_id uuid, share_pct numeric);
+create table echo.eligibility (campaign_id uuid, course_id uuid, teacher_id uuid,
+  share_pct numeric, primary key (campaign_id, course_id, teacher_id));
+create table echo.exclusion_log (campaign_id uuid, course_id uuid, teacher_id uuid,
+  rule_code text, detail jsonb);
+create table echo.participation (campaign_id uuid, course_id uuid, student_key uuid,
+  eligible boolean, primary key (campaign_id, course_id, student_key));
+`);
+await db.exec(read('supabase/82_audience_course_or.sql'));
+await db.exec(read('supabase/82_audience_course_or.sql'));
+console.log('\n82_audience_course_or.sql: OK ketszer is (idempotens)');
+
+// K1: p1..p4 (fent). K2: p1 es p2. K3: CSAK a levelezo p2 — ez a "levelezos
+// kurzus", amire nappali nem jar. Pont ez maradt 3 hallgatonal eles adaton.
+const mkKurzus = async code => (await db.query(
+  "insert into echo.course(term,code,name_hu) values($1,$2,$2) returning id",
+  [TERM, code])).rows[0].id;
+const k2 = await mkKurzus('K2'), k3 = await mkKurzus('K3');
+for (const [k, p] of [[k2, p1], [k2, p2], [k3, p2]]) {
+  await db.query("insert into echo.enrollment values($1,$2,'active')", [k, p]);
+}
+for (const k of [kurzus, k2, k3]) {
+  await db.query("insert into echo.course_teacher values($1,gen_random_uuid(),100)", [k]);
+}
+
+console.log('\n8) VAGY szemantika — kurzus ES tulajdonsag egyutt');
+const OR_ITEMS = JSON.stringify([
+  { kind: 'course', id: k3 }, { kind: 'filter', szabaly: { tagozat: [NAPPALI] } }]);
+const tgt = items => [`select count(*)::int v from echo.audience_target($1,$2::jsonb)`, [camp, items]];
+await egyenlo('K3 + nappali: a K3 hallgatoja (p2) ES a ket nappali (p1, p3)',
+  ...tgt(OR_ITEMS), 3);
+await egyenlo('csak K3: egyetlen hallgato', ...tgt(JSON.stringify([{ kind: 'course', id: k3 }])), 1);
+await egyenlo('csak nappali szuro: valtozatlanul ketto', ...tgt(ITEMS), 2);
+await egyenlo('p2 csak a K3-at kapja, nem a K1/K2-t (nem nappali)',
+  `select kurzus v from echo.audience_target($1,$2::jsonb) where student_key=$3`,
+  [camp, OR_ITEMS, p2], 1);
+await egyenlo('p1 a felev osszes kurzusat kapja (K1, K2)',
+  `select kurzus v from echo.audience_target($1,$2::jsonb) where student_key=$3`,
+  [camp, OR_ITEMS, p1], 2);
+
+const pv = `select public.echo_audience_preview($1,$2::jsonb) v`;
+const pvGot = (await db.query(pv, [camp, OR_ITEMS])).rows[0].v;
+const pvVart = { legfeljebb_kurzus: 3, legfeljebb_hallgato: 3, celzott_szemely: 2,
+                 celzott_beiratkozott: 2, kurzus_szukitve: true, hallgato_szukitve: true };
+for (const [k, v] of Object.entries(pvVart)) {
+  if (pvGot[k] !== v) { hibak++; console.log(`  BUKOTT  becsles.${k}: ${pvGot[k]} != ${v}`); }
+  else console.log(`  ok      becsles.${k} = ${v}`);
+}
+
+console.log('\n9) eligibility_rebuild — a mentett allapot ugyanazt adja, mint a becsles');
+const camp2 = (await db.query(
+  "insert into echo.campaign(term,state) values($1,'draft') returning id", [TERM])).rows[0].id;
+await db.query(`insert into echo.campaign_audience(campaign_id,kind,course_id) values($1,'course',$2)`,
+  [camp2, k3]);
+await db.query(`insert into echo.campaign_audience(campaign_id,kind,szabaly)
+  values($1,'filter','{"tagozat":["Nappali"]}'::jsonb)`, [camp2]);
+await db.query('select * from echo.eligibility_rebuild($1)', [camp2]);
+await egyenlo('4 jogosult par: K3/p2, K1/p1, K2/p1, K1/p3',
+  `select count(*)::int v from echo.participation where campaign_id=$1 and eligible`, [camp2], 4);
+await egyenlo('a mentett osszesito ugyanannyi hallgatot mond, mint a becsles',
+  `select (public.echo_campaign_audience($1)->>'legfeljebb_hallgato')::int v`, [camp2], 3);
+await egyenlo('a tenyleges jogosultak szama is 3',
+  `select count(distinct student_key)::int v from echo.participation
+    where campaign_id=$1 and eligible`, [camp2], 3);
+
+// A K3 kivetele utan p2 kiesik — a visszavonas a SZABALYT nezi.
+await db.query(`delete from echo.campaign_audience where campaign_id=$1 and kind='course'`, [camp2]);
+await db.query('select * from echo.eligibility_rebuild($1)', [camp2]);
+await egyenlo('K3 nelkul a p2/K3 par mar nem jogosult',
+  `select eligible v from echo.participation where campaign_id=$1 and student_key=$2 and course_id=$3`,
+  [camp2, p2, k3], false);
+await egyenlo('a nappali parok maradnak',
+  `select count(*)::int v from echo.participation where campaign_id=$1 and eligible`, [camp2], 3);
+
 console.log(hibak === 0
   ? '\nMINDEN MERES RENDBEN.'
   : `\n${hibak} MERES BUKOTT.`);
