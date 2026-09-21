@@ -99,3 +99,4 @@
 77_echo_exclusion_rule_reseed.sql
 78_echo_config_reseed.sql
 79_saml_import_match.sql
+80_audience_attribute_filter.sql
