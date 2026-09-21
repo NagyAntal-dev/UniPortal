@@ -17,9 +17,21 @@
    jogot is adhat neki — de kiosztani senkinek nem tudta, mert ez a választó nem
    ismerte. Egy szerepkör, amit senki nem viselhet, nem szerepkör.
 
-   A SUPERADMIN szándékosan kimarad: azt nem ebből a felületről kell adni
-   (deploy/make-superadmin.sh), és a profiles_protect_privileges trigger is
-   csak szuperadminnak engedi a role írását.
+   A SUPERADMIN KIOSZTHATÓ — de csak szuperadmin által, és csak megerősítéssel.
+   Korábban szándékosan kimaradt ebből a listából, azzal, hogy parancssorból
+   (deploy/make-superadmin.sh) kell adni. Ez a gyakorlatban azt jelentette,
+   hogy az egyetlen szuperadmin nem tudott maga mellé másikat állítani: ha
+   elveszti a hozzáférését, senki nem jóváhagy egyetlen regisztrációt sem.
+   Az adatbázis eddig is engedte (a profiles_protect_privileges trigger a
+   szuperadmin írását átengedi, a 07-es migráció 4. pontja) — csak ez a
+   választó nem ismerte.
+
+   HÁROM KAPU őrzi, mert ez a legnagyobb jog a rendszerben:
+     1. a listában csak akkor jelenik meg, ha a MOST BELÉPETT fiók szuperadmin;
+     2. a saját sor változatlanul zárolt (senki nem fokozhatja le magát);
+     3. kiosztás és visszavonás előtt külön megerősítő ablak.
+   A szerveroldal ettől függetlenül is véd: más fiókból ugyanez a hívás a
+   triggeren elbukik, tehát a kapuk kényelmi, nem biztonsági rétegek.
 
    Tartalék: ha a role_definition nem érhető el (a 39-es nem futott le), a
    listánk BETŰRE a régi, kódba égetett lista — a képernyő attól még működik. */
@@ -50,9 +62,17 @@ const REG_ROLE_LABEL = new Proxy({}, {
     return (d && d.nev) || REG_LABEL_TARTALEK[kod] || kod;
   },
 });
-const REG_assignableRoles = () => REG_ROLE_DEFS
-  ? REG_ROLE_DEFS.filter(d => d.aktiv && d.kod !== 'SUPERADMIN').map(d => d.kod)
-  : REG_ROLES_TARTALEK;
+/* A kiosztható szerepkörök. A SUPERADMIN mindig a lista VÉGÉN áll és csak
+   akkor, ha a belépett fiók maga is szuperadmin — így egy félrekattintás nem
+   viszi rá a szomszéd sorról, és az ADMIN elő sem hozza. A role_definition
+   tartalmazhatja a SUPERADMIN sort is; a duplikálást a filter zárja ki. */
+const REG_assignableRoles = (szuperadminIs) => {
+  const alap = REG_ROLE_DEFS
+    ? REG_ROLE_DEFS.filter(d => d.aktiv).map(d => d.kod)
+    : REG_ROLES_TARTALEK;
+  const lista = alap.filter(k => k !== 'SUPERADMIN');
+  return szuperadminIs ? lista.concat('SUPERADMIN') : lista;
+};
 
 const REG_STATUS_STYLE = {
   pending:  { label: 'Jóváhagyásra vár', cls: 'bg-amber-50 text-amber-700 border-amber-100' },
@@ -246,6 +266,9 @@ function RegistrationsView({ user, onCountChange }) {
   const [roleDraft, setRoleDraft] = useState({});   // profileId -> role
   const [rejecting, setRejecting] = useState(null); // profile row
   const [reason, setReason] = useState('');
+  // Szuperadmin-jogot érintő változás megerősítése: { row, role, mod }
+  // mod: 'role' (meglévő fiók átállítása) | 'approve' (jóváhagyás ezzel a joggal)
+  const [superConfirm, setSuperConfirm] = useState(null);
   const [q, setQ] = useState('');
   const [groupBy, setGroupBy] = useState('');
   const [attrOpciok, setAttrOpciok] = useState(null);
@@ -284,12 +307,42 @@ function RegistrationsView({ user, onCountChange }) {
     finally { setBusyId(''); }
   };
 
+  /* A szuperadmin-jog ADÁSA és ELVÉTELE nem mehet egyetlen kattintásból: ez az
+     egyetlen szerepkör, amelyik minden más jogot felülír, és a visszavonása
+     ugyanígy egy csapásra zár ki valakit a rendszerből. Minden más szerepkör
+     változik azonnal, mint eddig. */
+  const superErintett = (row, role) => role === 'SUPERADMIN' || row.role === 'SUPERADMIN';
+
+  const changeRoleKert = (row, role) => {
+    if (role === row.role) return;
+    if (superErintett(row, role)) setSuperConfirm({ row, role, mod: 'role' });
+    else changeRole(row, role);
+  };
+
   const decide = async (row, status, role, why) => {
     setBusyId(row.id); setErr('');
     try { await REG_decide(row, status, role, why); await load(); }
     catch (e) { setErr((e && e.message) || 'A módosítás nem sikerült.'); }
     finally { setBusyId(''); setRejecting(null); setReason(''); }
   };
+
+  /* Jóváhagyás. Ha a választott szerepkör a SUPERADMIN, előbb megerősítés —
+     ugyanúgy, mint a meglévő fiók átállításánál. */
+  const decideKert = (row, status, role, why) => {
+    if (status === 'approved' && role === 'SUPERADMIN') setSuperConfirm({ row, role, mod: 'approve' });
+    else decide(row, status, role, why);
+  };
+
+  const superConfirmOk = async () => {
+    const { row, role, mod } = superConfirm;
+    setSuperConfirm(null);
+    if (mod === 'approve') await decide(row, 'approved', role);
+    else await changeRole(row, role);
+  };
+
+  // Szuperadmin-jogot csak szuperadmin oszthat. A szerveroldali pár a
+  // profiles_protect_privileges trigger — ez itt csak a felület kapuja.
+  const isSuper = !!(user && user.role === 'SUPERADMIN');
 
   if (rows === null) {
     return (
@@ -461,21 +514,29 @@ function RegistrationsView({ user, onCountChange }) {
                           <span className="inline-flex items-center gap-1.5 text-slate-400">
                             <Lucide.Lock size={13} /> {REG_ROLE_LABEL[r.role] || r.role}
                           </span>
-                        ) : r.role === 'SUPERADMIN' ? (
+                        ) : r.role === 'SUPERADMIN' && !isSuper ? (
+                          // Szuperadmin sorát csak szuperadmin írhatja át. Másnak
+                          // ez zárolt címke — a mentés úgyis elbukna a triggeren.
                           <span className="inline-flex items-center gap-1.5 text-primary font-bold">
                             <Lucide.ShieldCheck size={13} /> Superadmin
                           </span>
                         ) : (
-                          <select
-                            value={r.role || 'STUDENT'}
-                            disabled={busy}
-                            onChange={e => changeRole(r, e.target.value)}
-                            className="text-[13px] font-semibold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
-                          >
-                            {REG_assignableRoles().map(role => (
-                              <option key={role} value={role}>{REG_ROLE_LABEL[role]}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center gap-1.5">
+                            {r.role === 'SUPERADMIN' && <Lucide.ShieldCheck size={13} className="text-primary flex-none" />}
+                            <select
+                              value={r.role || 'STUDENT'}
+                              disabled={busy}
+                              onChange={e => changeRoleKert(r, e.target.value)}
+                              className={'text-[13px] font-semibold border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 '
+                                + (r.role === 'SUPERADMIN'
+                                   ? 'bg-primary/5 border-primary/30 text-primary'
+                                   : 'bg-slate-50 border-slate-200')}
+                            >
+                              {REG_assignableRoles(isSuper).map(role => (
+                                <option key={role} value={role}>{REG_ROLE_LABEL[role]}</option>
+                              ))}
+                            </select>
+                          </div>
                         )
                       ) : (
                         <>
@@ -509,11 +570,11 @@ function RegistrationsView({ user, onCountChange }) {
                             className="text-[13px] font-semibold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
                             title="Szerepkör a jóváhagyáskor"
                           >
-                            {REG_assignableRoles().map(role => (
+                            {REG_assignableRoles(isSuper).map(role => (
                               <option key={role} value={role}>{REG_ROLE_LABEL[role]}</option>
                             ))}
                           </select>
-                          <button disabled={busy} onClick={() => decide(r, 'approved', chosen)}
+                          <button disabled={busy} onClick={() => decideKert(r, 'approved', chosen)}
                             className="px-3 py-2 rounded-xl text-[13px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-1.5">
                             <Lucide.Check size={15} /> {busy ? '…' : 'Jóváhagyás'}
                           </button>
@@ -565,6 +626,58 @@ function RegistrationsView({ user, onCountChange }) {
           </div>
         </div>
       )}
+
+      {/* Szuperadmin-jog adása vagy elvétele. Külön ablak, mert ez az egyetlen
+          szerepkör, ami minden más jogot felülír — a legördülő egy kattintása
+          kevés hozzá. Azt is kiírjuk, mi jár vele, ne emlékezetből kelljen. */}
+      {superConfirm && (() => {
+        const ad = superConfirm.role === 'SUPERADMIN';
+        return (
+          <div className="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onClick={() => setSuperConfirm(null)}>
+            <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-5 sm:p-7 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className={'w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ' +
+                (ad ? 'bg-primary/10 text-primary' : 'bg-amber-50 text-amber-600')}>
+                {ad ? <Lucide.ShieldCheck size={24} /> : <Lucide.ShieldOff size={24} />}
+              </div>
+              <h3 className="text-lg font-black text-slate-900">
+                {ad ? 'Szuperadmin jog adása' : 'Szuperadmin jog visszavonása'}
+              </h3>
+              <p className="text-sm text-slate-500 mt-1.5">
+                <span className="font-bold text-slate-700">{superConfirm.row.name || superConfirm.row.email}</span>
+                {superConfirm.row.name && <span className="text-slate-400"> · {superConfirm.row.email}</span>}
+              </p>
+              <div className={'mt-5 rounded-2xl border px-4 py-3 text-[13px] leading-relaxed ' +
+                (ad ? 'bg-primary/5 border-primary/20 text-slate-600' : 'bg-amber-50 border-amber-100 text-amber-800')}>
+                {ad ? (
+                  <>
+                    A szuperadmin <span className="font-bold">minden képernyőt lát</span>, jóváhagyhat és
+                    elutasíthat regisztrációkat, szerepköröket és jogosultságokat állíthat — és további
+                    szuperadminokat nevezhet ki. Ezt a jogot semmilyen szerepkör- vagy csoportbeállítás
+                    nem tudja utólag korlátozni.
+                    {superConfirm.mod === 'approve' && <> A fiók ezzel egyben jóváhagyottá is válik.</>}
+                  </>
+                ) : (
+                  <>
+                    A fiók elveszíti a teljes hozzáférést, és ezután csak azt látja, amit a(z){' '}
+                    <span className="font-bold">{REG_ROLE_LABEL[superConfirm.role] || superConfirm.role}</span>{' '}
+                    szerepkör ad. Ha ő az utolsó szuperadmin, a regisztrációkat többé senki nem tudja
+                    jóváhagyni a felületről.
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-2 justify-end mt-6">
+                <button onClick={() => setSuperConfirm(null)}
+                  className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition-colors">Mégsem</button>
+                <button onClick={superConfirmOk}
+                  className={'px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors ' +
+                    (ad ? 'bg-primary hover:opacity-90' : 'bg-amber-600 hover:bg-amber-700')}>
+                  {ad ? 'Szuperadmin jog adása' : 'Jog visszavonása'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
