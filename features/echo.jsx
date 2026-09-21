@@ -3157,7 +3157,7 @@ const ECHO_audItems = (tetel) => (tetel || []).reduce((acc, x) => {
    Egy típus (kurzus / csoport / személy) kiválasztott tételei + kereső. Az
    ajánlatokat a szerver adja (echo_audience_options), mert a kurzuslista és a
    hallgatói névsor is túl nagy ahhoz, hogy a kliensbe töltsük. */
-function ECHO_AudiencePicker({ campaignId, kind, cimke, ikon, sug, valasztott, onValt, ro, betolt }) {
+function ECHO_AudiencePicker({ campaignId, kind, cimke, ikon, sug, valasztott, onValt, ro, betolt, nyitSug }) {
   const [q, setQ]         = useState('');
   const [opts, setOpts]   = useState(null);
   const [nyit, setNyit]   = useState(false);
@@ -3188,10 +3188,22 @@ function ECHO_AudiencePicker({ campaignId, kind, cimke, ikon, sug, valasztott, o
           )}
         </div>
         {!ro && (
-          <button type="button" onClick={() => setNyit(v => !v)}
-            className="text-[11px] font-black text-primary hover:underline">
-            {nyit ? 'Kész' : '+ Hozzáadás'}
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Sok kijelolt tetelt egyenkent torolni kinszenvedes — es ha a
+                kurzusokat valaki "mindet kijelolom" szandekkal toltotte fel,
+                pont ez kell a javitashoz: az URES kurzuslista jelenti a
+                felev osszes kurzusat. */}
+            {valasztott.length > 1 && (
+              <button type="button" onClick={() => onValt([])}
+                className="text-[11px] font-black text-slate-400 hover:text-red-500 hover:underline">
+                Összes eltávolítása
+              </button>
+            )}
+            <button type="button" onClick={() => setNyit(v => !v)}
+              className="text-[11px] font-black text-primary hover:underline">
+              {nyit ? 'Kész' : '+ Hozzáadás'}
+            </button>
+          </div>
         )}
       </div>
       <p className="text-[11px] text-slate-400 leading-relaxed mb-3">{sug}</p>
@@ -3220,7 +3232,10 @@ function ECHO_AudiencePicker({ campaignId, kind, cimke, ikon, sug, valasztott, o
         <div className="mt-3 border-t border-slate-100 pt-3">
           <input className={U_input + ' text-sm'} value={q} autoFocus
             onChange={e => setQ(e.target.value)} placeholder="Keresés…" />
-          {err && <p className="text-[11px] text-red-500 font-bold mt-2">{err}</p>}
+          {nyitSug && (
+            <p className="text-[11px] text-amber-700 font-bold leading-relaxed mt-2">{nyitSug}</p>
+          )}
+          {err &&<p className="text-[11px] text-red-500 font-bold mt-2">{err}</p>}
           <div className="mt-2 max-h-56 overflow-y-auto space-y-1">
             {opts === null ? <SkeletonBar h={32} /> : opts.length === 0 ? (
               <p className="text-[11px] text-slate-300 font-bold italic py-2">nincs találat</p>
@@ -3493,6 +3508,8 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
           <ECHO_AudiencePicker campaignId={campaign.id} kind="course" ro={ro}
             cimke="Kurzusok" ikon={<Lucide.BookOpen size={13} className="text-slate-400" />}
             sug="Üresen: a félév MINDEN kurzusa. Kijelölve: pontosan ezek."
+            nyitSug="Az összes kurzushoz NE jelölj ki semmit — az üres lista jelenti a félév
+                     minden kurzusát. Amit itt kijelölsz, arra szűkül a kérdőív."
             valasztott={azok('course')} onValt={setAzok('course')} />
 
           <ECHO_AudiencePicker campaignId={campaign.id} kind="group" ro={ro}
@@ -3537,8 +3554,19 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
                 <RefreshingBadge on={eloBusy} />
               </div>
               <p className="text-sm font-black text-slate-700">
-                legfeljebb {(elo || aud).legfeljebb_kurzus} kurzus
+                legfeljebb {(elo || aud).legfeljebb_kurzus}
+                {(elo || aud).kurzus_szukitve ? ' kijelölt kurzus' : ' kurzus'}
                 {' · '}{(elo || aud).legfeljebb_hallgato} hallgató
+              </p>
+              {/* A ket mod kulon kiirva: 59 kijelolt kurzus es "a felev minden
+                  kurzusa" rakerdezes nelkul osszekeverheto — pont igy maradt
+                  egy kampany 3 hallgatonal, mikozben az admin "mindenkinek"
+                  szanta. */}
+              <p className="text-[11px] text-slate-400 font-bold mt-0.5">
+                {(elo || aud).kurzus_szukitve
+                  ? 'Csak a Kurzusok alatt kijelöltek — a félév többi kurzusa nem kap kérdőívet.'
+                  : ((elo || aud).term ? 'A ' + (elo || aud).term + ' félév' : 'A félév')
+                    + ' összes kurzusa.'}
               </p>
 
               {/* Ha a szabaly alapu csoport sok emberre illeszkedik, de kozuluk
