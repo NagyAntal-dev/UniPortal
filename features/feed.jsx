@@ -65,7 +65,7 @@ const FEED_torolhet = (user) => PERM_can(user, 'feed', 'DELETE',
 const FEED_CEL_LISTAK = ['szerep', 'tagozat', 'kepzesi_szint', 'kar', 'szak'];
 const FEED_CEL_TETELEK = ['kurzus', 'csoport', 'szemely'];
 const FEED_SZEREPEK = [['STUDENT', 'Hallgatók és jelentkezők'], ['TEACHER', 'Oktatók'], ['AGENT', 'Ügynökök']];
-const FEED_celUres = () => ({ mod: 'mindenki', szerep: [], tagozat: [], kepzesi_szint: [], kar: [], szak: [], kurzus: [], csoport: [], szemely: [] });
+const FEED_celUres = () => ({ mod: 'mindenki', szerep: [], tagozat: [], kepzesi_szint: [], kar: [], szak: [], kurzus: [], csoport: [], szemely: [], szurok: [] });
 
 /* A mentendő JSON: csak a nem üres listák, a tételekből csak az azonosító
    (név SOHA — a célzott hallgatók a sort a célközönséggel együtt olvassák). */
@@ -74,6 +74,13 @@ function FEED_celNormal(c) {
   const out = {};
   FEED_CEL_LISTAK.forEach(k => { const v = (c[k] || []).filter(Boolean); if (v.length) out[k] = v; });
   FEED_CEL_TETELEK.forEach(k => { const v = (c[k] || []).map(x => x && x.ref).filter(Boolean); if (v.length) out[k] = v; });
+  /* Tulajdonság-szűrők (80): szabályobjektumok TÖMBJE, egymással VAGY
+     kapcsolatban. A ref csak a kliensé, nem megy ki. Az üres kártya kimarad —
+     azt épp most adták hozzá, de még nem kattintottak bele. */
+  const szurok = (c.szurok || [])
+    .map(x => (x && x.szabaly) || {})
+    .filter(sz => Object.keys(sz).length);
+  if (szurok.length) out.szurok = szurok;
   return Object.keys(out).length ? out : null;
 }
 
@@ -87,6 +94,11 @@ function FEED_celOsszegzes(aud) {
   if (lista('kurzus').length) reszek.push(lista('kurzus').length + ' kurzus');
   if (lista('csoport').length) reszek.push(lista('csoport').length + ' csoport');
   if (lista('szemely').length) reszek.push(lista('szemely').length + ' személy');
+  if (lista('szurok').length) {
+    reszek.push(lista('szurok').length === 1
+      ? ATTR_cimke(lista('szurok')[0])
+      : lista('szurok').length + ' tulajdonság-szűrő');
+  }
   return reszek.join(' · ');
 }
 
@@ -125,11 +137,22 @@ function FEED_CelkozonsegValaszto({ ertek, onValt }) {
   const set = (k) => (v) => onValt({ ...ertek, [k]: v });
   const celzott = ertek.mod === 'celzott';
 
+  const [attrAll, setAttrAll] = useState(null);
+
   useEffect(() => {
     if (!celzott || attr || !window.sb) return;
     window.sb.rpc('student_attribute_options')
       .then(({ data, error }) => setAttr(!error && data ? data : {}))
       .catch(() => setAttr({}));
+  }, [celzott]);
+
+  /* A szűrőkártyák mind a HAT mezőt kínálják, a fenti chipsor csak négyet —
+     a nyelv és a telephely értékkészletét csak a 71-es adja ki. */
+  useEffect(() => {
+    if (!celzott || attrAll || !window.sb) return;
+    window.sb.rpc('student_directory_options')
+      .then(({ data, error }) => setAttrAll(!error && data ? data : {}))
+      .catch(() => setAttrAll({}));
   }, [celzott]);
 
   const aud = FEED_celNormal(ertek);
@@ -207,6 +230,31 @@ function FEED_CelkozonsegValaszto({ ertek, onValt }) {
                 valasztott={tetel('szemely')} onValt={set('szemely')} />
             </div>
           )}
+
+          {/* TULAJDONSÁG-SZŰRŐK. A fenti chipsor egyetlen ÉS-feltételt ad:
+              "nappali ÉS GAMF". Ide az kerül, amit azzal nem lehet leírni —
+              több feltételcsoport egymással VAGY: "nappali BSc GAMF VAGY
+              levelező MSc KVK". Ezek a fenti szempontoktól FÜGGETLENÜL
+              engednek be, akárcsak az egyedi személyek. */}
+          <div className="border border-slate-100 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Lucide.SlidersHorizontal size={13} className="text-slate-400" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Tulajdonság-szűrők
+              </span>
+              {(ertek.szurok || []).length > 0 && (
+                <span className="text-[10px] font-black text-primary">{(ertek.szurok || []).length}</span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+              Több, egymással <b>VAGY</b> kapcsolatban álló feltételcsoport — arra, amit
+              a fenti egyetlen szempontsorral nem lehet leírni. Aki bármelyik
+              feltételcsoportba beleesik, látja a bejegyzést, a fenti szempontoktól
+              függetlenül. A nyelv és a telephely is választható.
+            </p>
+            <AttrRuleCards szurok={ertek.szurok || []} onChange={set('szurok')}
+              opciok={attrAll} />
+          </div>
 
           <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3" data-feed-cel-elonezet="1">
             {nincsMigracio ? (

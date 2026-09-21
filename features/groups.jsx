@@ -80,17 +80,9 @@ const GRP_api = {
   },
 };
 
-/* A szabály mezői. A kulcsok EGYEZNEK a szerver zárt mezőlistájával
-   (group_rule_matches) — ami itt nincs felsorolva, arra a szerver úgysem
-   illeszkedik, tehát a felület sem kínálja fel. */
-const GRP_RULE_FIELDS = [
-  ['tagozat',       'Tagozat'],
-  ['kepzesi_szint', 'Képzési szint'],
-  ['szak',          'Szak'],
-  ['kar',           'Kar'],
-  ['nyelv',         'Nyelv'],
-  ['telephely',     'Telephely'],
-];
+/* A szabály mezőit a data-layer.jsx ATTR_RULE_FIELDS-e adja. Egy lista, mert a
+   kampányszerkesztő és a hírfolyam ugyanezt a szabályt állítja össze — három
+   külön lista előbb-utóbb elcsúszna a szerver zárt mezőlistájától. */
 
 /* Milyen értékek fordulnak elő ténylegesen — a már betöltött névsorból.
    Nem kérdezzük külön a szervertől: a Regisztrációk úgyis behúzta. */
@@ -132,74 +124,34 @@ const GRP_Err = ({ text, onClose }) => !text ? null : (
    nyilvánvaló: "nappali + mesterképzés" simán lehet nulla ember.
    --------------------------------------------------------------------------- */
 function GRP_RuleBuilder({ rows, szabaly, onChange }) {
-  const [nyitott, setNyitott] = useState(GRP_RULE_FIELDS[0][0]);
-  const sz = szabaly || {};
-
-  const toggle = (mezo, ertek) => {
-    const cur = Array.isArray(sz[mezo]) ? sz[mezo] : [];
-    const uj = cur.includes(ertek) ? cur.filter(x => x !== ertek) : [...cur, ertek];
-    const kimenet = { ...sz };
-    if (uj.length) kimenet[mezo] = uj; else delete kimenet[mezo];
-    onChange(Object.keys(kimenet).length ? kimenet : null);
-  };
+  /* Az értékkészlet a MÁR BETÖLTÖTT névsorból — a Regisztrációk úgyis behúzta,
+     nem kérünk érte külön kört a szervertől. A kártya {ertek, db} alakot vár. */
+  const opciok = React.useMemo(() => {
+    const ki = {};
+    ATTR_RULE_FIELDS.forEach(([k]) => {
+      ki[k] = GRP_options(rows, k).map(([ertek, db]) => ({ ertek, db }));
+    });
+    return ki;
+  }, [rows]);
 
   /* Hány emberre illeszkedik MOST — ugyanazzal a logikával, amit a szerver
-     használ: a mezők ÉS, a listán belüli értékek VAGY kapcsolatban. */
-  const talalat = React.useMemo(() => {
-    if (!szabaly || !Object.keys(szabaly).length) return null;
-    return (rows || []).filter(r =>
-      Object.entries(szabaly).every(([m, v]) =>
-        Array.isArray(v) ? v.includes(r[m]) : r[m] === v)).length;
-  }, [rows, szabaly]);
+     használ: a mezők ÉS, a listán belüli értékek VAGY kapcsolatban. Itt
+     kliensoldalon fut, mert a névsor már a kezünkben van. */
+  const szamol = React.useCallback((sz) => (rows || []).filter(r =>
+    Object.entries(sz).every(([m, v]) =>
+      Array.isArray(v) ? v.includes(r[m]) : r[m] === v)).length, [rows]);
 
+  /* EGY kártya: a csoport szabálya egyetlen objektum (user_group.szabaly). A
+     kampány és a hírfolyam ugyanebből a kártyából többet is felvehet. */
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-1.5">
-        {GRP_RULE_FIELDS.map(([k, label]) => {
-          const db = Array.isArray(sz[k]) ? sz[k].length : 0;
-          return (
-            <button key={k} type="button" onClick={() => setNyitott(k)}
-              className={'px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ' +
-                (nyitott === k ? 'bg-slate-900 text-white border-slate-900'
-                               : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>
-              {label}{db > 0 && <span className="ml-1.5 opacity-70">{db}</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 max-h-52 overflow-y-auto">
-        <div className="flex flex-wrap gap-1.5">
-          {GRP_options(rows, nyitott).map(([ertek, db]) => (
-            <GRP_Chip key={ertek} text={ertek + ' · ' + db}
-              active={Array.isArray(sz[nyitott]) && sz[nyitott].includes(ertek)}
-              onClick={() => toggle(nyitott, ertek)} />
-          ))}
-          {GRP_options(rows, nyitott).length === 0 && (
-            <span className="text-[12px] text-slate-400">
-              Ehhez a mezőhöz még nincs adat. Futtasd le a besorolást
-              (teszt_jellemzok.sql), vagy tölts fel valódi Neptun-adatot.
-            </span>
-          )}
-        </div>
-      </div>
-
+    <div className="space-y-2.5">
+      <AttrRuleCard ertek={szabaly || {}} opciok={opciok} szamol={szamol} cim={null}
+        onChange={(sz) => onChange(Object.keys(sz).length ? sz : null)} />
       {szabaly && Object.keys(szabaly).length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap text-[12px]">
-          <span className="font-bold text-slate-500">Most illeszkedik:</span>
-          <span className={'font-black ' + (talalat === 0 ? 'text-amber-600' : 'text-emerald-700')}>
-            {talalat} fő
-          </span>
-          {talalat === 0 && (
-            <span className="text-amber-600">
-              — ez a szabály senkire nem illeszkedik, érdemes tágítani.
-            </span>
-          )}
-          <button type="button" onClick={() => onChange(null)}
-            className="ml-auto text-slate-400 hover:text-slate-700 font-bold">
-            Szabály törlése
-          </button>
-        </div>
+        <button type="button" onClick={() => onChange(null)}
+          className="text-[11px] font-bold text-slate-400 hover:text-slate-700">
+          Szabály törlése
+        </button>
       )}
     </div>
   );

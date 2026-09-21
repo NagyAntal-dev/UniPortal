@@ -445,6 +445,10 @@ const ECHO_api = {
                                     { p_campaign: id, p_items: items }),
   audienceOptions:(id, kind, q) => ECHO_rpc('echo_audience_options',
                                     { p_campaign: id, p_kind: kind, p_q: q || null, p_limit: 60 }),
+  /* A tulajdonsag-szuro ertekkeszlete es kartyankenti letszama (80). Az
+     ertekkeszletet a 71-es mar kiadja mind a hat mezore — nem irunk masodikat. */
+  attrOptions:    ()            => ECHO_rpc('student_directory_options'),
+  attrCount:      (rule)        => ECHO_rpc('attr_rule_count', { p_rule: rule }),
   rate:       (campaign)  => ECHO_rpc('echo_rate', { p_campaign: campaign }),
   rebuildEligibility: (campaign) => ECHO_rpc('echo_rebuild_eligibility', { p_campaign: campaign }),
 
@@ -3124,6 +3128,23 @@ function ECHO_TransitionConfirm({ step, campaign, busy, onCancel, onConfirm }) {
   );
 }
 
+/* A célközönség tételei a SZERVER alakjában. Egyetlen helyen, mert négy hívó
+   is használja (előnézet, névsor, kurzusbontás, mentés), és ha ezek elcsúsznak,
+   a szerkesztőben látott szám másról szól, mint ami mentésre kerül.
+
+   A 'filter' tételnek NINCS id-ja: maga hordozza a szabályt (80). Az üres
+   kártya — amit épp most adtak hozzá, de még nem kattintottak bele — kimarad:
+   a szerver validálása joggal utasítaná el, de a felhasználó még csak elkezdte. */
+const ECHO_audItems = (tetel) => (tetel || []).reduce((acc, x) => {
+  if (x.kind === 'filter') {
+    const sz = x.szabaly || {};
+    if (Object.keys(sz).length) acc.push({ kind: 'filter', szabaly: sz });
+  } else {
+    acc.push({ kind: x.kind, id: x.ref });
+  }
+  return acc;
+}, []);
+
 /* --- Célközönség-választó ------------------------------------------------
    Egy típus (kurzus / csoport / személy) kiválasztott tételei + kereső. Az
    ajánlatokat a szerver adja (echo_audience_options), mert a kurzuslista és a
@@ -3230,6 +3251,7 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
   const [gop, setGop]     = useState('');
   const [gcl, setGcl]     = useState('');
   const [tetel, setTetel] = useState([]);
+  const [attrOpts, setAttrOpts] = useState(null);  // a tulajdonsag-szuro ertekkeszlete
   const [elo, setElo]     = useState(null);     // elonezet a MEG NEM MENTETT listara
   const [eloBusy, setEloBusy] = useState(false);
   const [nevsorOpen, setNevsorOpen] = useState(false);
@@ -3243,7 +3265,7 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
   useEffect(() => {
     if (!open || !campaign) return;
     setErr(''); setBusy(false);
-    setAud(null); setTetel([]);
+    setAud(null); setTetel([]); setAttrOpts(null);
     // A mezoket NEM a listasorbol toltjuk: az echo_campaigns() nem ad
     // name_en-t, a celmeghatarozasi ablakot pedig egyik lista sem. Egyetlen
     // forras van, az echo_campaign_audience().kampany — igy nem tud ketto
@@ -3278,10 +3300,16 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
         setCl(ECHO_toLocalInput(k.closes_at));
         setGop(ECHO_toLocalInput(k.goals_open_at));
         setGcl(ECHO_toLocalInput(k.goals_close_at));
+        // A 'filter' sorok a szabalyt is hozzak: ebbol epul vissza a
+        // kartyak allapota. A ref ilyenkor a sor sajat azonositoja.
         setTetel((d && Array.isArray(d.sorok) ? d.sorok : [])
-          .map(x => ({ ref: x.ref, cimke: x.cimke, kind: x.kind })));
+          .map(x => ({ ref: x.ref, cimke: x.cimke, kind: x.kind, szabaly: x.szabaly })));
       })
       .catch(e => { setAud(null); setErr(ECHO_msg(e)); });
+
+    // Az ertekkeszlet a szurokartyakhoz. Nem blokkolo: ha a 80-as meg nem
+    // futott le, a kartyak ures listat mutatnak, a tobbi felulet mukodik.
+    ECHO_api.attrOptions().then(setAttrOpts).catch(() => setAttrOpts({}));
   }, [open, campaign && campaign.id]);
 
   // A becslest a SZERVER adja, mert a beiratkozasi adat nincs a kliensben.
@@ -3293,15 +3321,22 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
     let el = true;
     setEloBusy(true);
     const t = setTimeout(() => {
-      ECHO_api.audiencePreview(campaign.id, tetel.map(x => ({ kind: x.kind, id: x.ref })))
+      ECHO_api.audiencePreview(campaign.id, ECHO_audItems(tetel))
         .then(d => { if (el) { setElo(d); setEloBusy(false); } })
         .catch(() => { if (el) { setElo(null); setEloBusy(false); } });
     }, 350);
     return () => { el = false; clearTimeout(t); setEloBusy(false); };
-  }, [open, campaign && campaign.id, draft, JSON.stringify(tetel.map(x => x.kind + ':' + x.ref).sort())]);
+    // A kulcs a SZERVERNEK KULDOTT alakbol keszul: egy szurokartyan belul egy
+    // chip atkattintasa is uj becslest kell hogy inditson, pedig a ref ugyanaz.
+  }, [open, campaign && campaign.id, draft, JSON.stringify(ECHO_audItems(tetel))]);
 
   const azok = (k) => tetel.filter(t => t.kind === k);
   const setAzok = (k) => (uj) => setTetel(tetel.filter(t => t.kind !== k).concat(uj));
+
+  // A szurokartyak a kozos AttrRuleCards alakjaban: { ref, szabaly }.
+  const szurok = azok('filter').map(t => ({ ref: t.ref, szabaly: t.szabaly || {} }));
+  const setSzurok = (uj) => setAzok('filter')(
+    uj.map(x => ({ ref: x.ref, kind: 'filter', szabaly: x.szabaly })));
 
   const felAblak   = (!!op) !== (!!cl);
   const felCel     = (!!gop) !== (!!gcl);
@@ -3333,8 +3368,7 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
         clear,
       });
       if (draft) {
-        await ECHO_api.audienceSet(campaign.id,
-          tetel.map(t => ({ kind: t.kind, id: t.ref })));
+        await ECHO_api.audienceSet(campaign.id, ECHO_audItems(tetel));
       }
       onDone();
     } catch (e) { setErr(ECHO_msg(e)); }
@@ -3442,8 +3476,9 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ki kapja meg</h4>
             <p className="text-[11px] text-slate-400 leading-relaxed mt-1.5">
               Két független kérdés. A <b>kurzusok</b> azt mondják meg, MIT értékelnek;
-              a <b>csoportok</b> és a <b>személyek</b> azt, KI értékel. Amit üresen hagysz,
-              az nem szűkít.
+              a <b>csoportok</b>, a <b>személyek</b> és a <b>tulajdonságok</b> azt, KI
+              értékel. Amit üresen hagysz, az nem szűkít. A három „KI" doboz
+              egymáshoz <b>hozzáad</b>: aki bármelyikbe beleesik, megkapja a kérdőívet.
             </p>
           </div>
 
@@ -3454,13 +3489,36 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
 
           <ECHO_AudiencePicker campaignId={campaign.id} kind="group" ro={ro}
             cimke="Csoportok" ikon={<Lucide.Users size={13} className="text-slate-400" />}
-            sug="A Felhasználók → Csoportok alatt létrehozott csoportok. Szabály alapú csoportnál a tagság a mentés pillanatában dől el."
+            sug="A Felhasználók → Csoportok alatt létrehozott csoportok. Szabály alapú csoportnál a tagság MINDIG a mentett szabályból következik, tehát magától frissül, ha valakinek megváltozik a besorolása."
             valasztott={azok('group')} onValt={setAzok('group')} />
 
           <ECHO_AudiencePicker campaignId={campaign.id} kind="user" ro={ro}
             cimke="Egyedi személyek" ikon={<Lucide.User size={13} className="text-slate-400" />}
             sug="Nevesített hallgatók — csoporton kívül, egyedi esetekre."
             valasztott={azok('user')} onValt={setAzok('user')} />
+
+          {/* TULAJDONSÁGOK. Ugyanaz a szabály-motor, mint a szabály alapú
+              csoportoknál — csak nem kell előbb csoportot létrehozni hozzá.
+              Több feltételcsoport egymással VAGY kapcsolatban áll. */}
+          <div className="border border-slate-100 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Lucide.SlidersHorizontal size={13} className="text-slate-400" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Tulajdonságok
+              </span>
+              {szurok.length > 0 && (
+                <span className="text-[10px] font-black text-primary">{szurok.length}</span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+              Szűrés a besorolásra — tagozat, képzési szint, kar, szak. Egy
+              feltételcsoporton belül a mezők <b>ÉS</b>, az értékek <b>VAGY</b>
+              kapcsolatban; több feltételcsoport egymással <b>VAGY</b>. A tagság
+              itt sem fagy be: mindig a mentett szabály dönt.
+            </p>
+            <AttrRuleCards szurok={szurok} onChange={setSzurok} ro={ro}
+              opciok={attrOpts} szamol={ECHO_api.attrCount} />
+          </div>
 
           {(elo || aud) && (
             <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
@@ -3515,10 +3573,9 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
       <ECHO_StudentListModal open={nevsorOpen} onClose={() => setNevsorOpen(false)}
         cim="A célközönség hallgatói"
         alcim={'A MOSTANI, még nem mentett beállítás szerint · ' + campaign.code}
-        betolt={(q) => ECHO_api.audienceStudents(campaign.id,
-                         tetel.map(x => ({ kind: x.kind, id: x.ref })), q)}
+        betolt={(q) => ECHO_api.audienceStudents(campaign.id, ECHO_audItems(tetel), q)}
         betoltKurzus={(pid) => ECHO_api.studentCourses(campaign.id, pid,
-                         tetel.map(x => ({ kind: x.kind, id: x.ref })))} />
+                         ECHO_audItems(tetel))} />
 
       <div className="flex items-center justify-end gap-2 mt-6 pt-5 border-t border-slate-100">
         <button onClick={onClose} disabled={busy} className={U_btnGhost + ' py-2.5 px-5'}>Mégse</button>

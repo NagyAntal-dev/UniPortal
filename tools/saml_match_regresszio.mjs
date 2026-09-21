@@ -57,8 +57,13 @@ create schema auth; create schema echo;
 create function auth.uid() returns uuid language sql as $$ select null::uuid $$;
 create table auth.users (
   id uuid primary key, email text unique, email_confirmed_at timestamptz,
+  encrypted_password text,
   created_at timestamptz default now(), deleted_at timestamptz, banned_until timestamptz,
   raw_user_meta_data jsonb, raw_app_meta_data jsonb);
+create table auth.identities (id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  provider text, provider_id text, identity_data jsonb,
+  created_at timestamptz default now(), unique(provider, provider_id));
 create table auth.sessions (id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade);
 create function public.is_staff() returns boolean language sql as $$ select true $$;
@@ -81,6 +86,9 @@ console.log('79_saml_import_match.sql: OK (a beepitett ellenorzo blokk lefutott)
 const mkUser = async (email, name, role) => {
   const id = (await db.query('select gen_random_uuid() u')).rows[0].u;
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())', [id, email]);
+  await db.query(`insert into auth.identities(user_id,provider,provider_id,identity_data)
+    select u.id,'email',u.id::text,jsonb_build_object('sub',u.id::text,'email',u.email)
+      from auth.users u where u.id=$1`, [id]);
   await db.query("insert into public.profiles(id,email,name,role,approval_status) values($1,$2,$3,$4,'approved')", [id, email, name, role]);
   return id;
 };
@@ -185,5 +193,93 @@ await find('kpeter@nje.hu', 'kpeter@nje.hu', 'Kiss Péter');
 await find('kpeter@nje.hu', 'kpeter@nje.hu', 'Kiss Péter');
 assert.equal((await db.query("select count(*) c from public.saml_link_review where reason='teacher_ambiguous'")).rows[0].c, 1);
 console.log('12. ismetelt belepes -> egyetlen nyitott sor: OK');
+
+// ---------------------------------------------------------------------------
+// 13-15. A VALÓDI NJE-FORMÁTUMOK (az éles diagnosztikából, 2026-09).
+//
+// A feltételezés, hogy a @kefo.hu csak a hallgatóké, HAMIS: az oktatók is
+// onnan lépnek be. NEM a tartomány különbözteti meg őket, hanem a helyi rész
+// ALAKJA — a hallgatóé a hat karakteres Neptun-kód, az oktatóé pontos
+// vezeteknev.keresztnev. Ezt a három eset őrzi, hogy a szűrő ne romoljon el.
+// ---------------------------------------------------------------------------
+const elo = await mkUser('student.x61p08@nje-import.invalid', 'Valódi Hallgató', 'STUDENT');
+await db.query("insert into public.student_attributes(profile_id,neptun,forras) values($1,'X61P08','nje-workbook')", [elo]);
+r = await find('x61p08@kefo.hu', 'x61p08@hallgato.uni-neumann.hu', 'Valódi Hallgató');
+assert.equal(r.length, 1, 'x61p08@kefo.hu -> Neptun-parositas');
+assert.equal(r[0].matched_by, 'neptun');
+assert.equal(r[0].user_id, elo);
+console.log('13. elo alak: x61p08@kefo.hu (mail mas tartomanyon) -> neptun: OK');
+
+const sagi = await mkUser('teacher.ddd@nje-import.invalid', 'Sági Norberta Dr.', 'TEACHER');
+await db.query("insert into echo.teacher(code,name,profile_id) values('T-SAGI','Sági Norberta Dr.',$1)", [sagi]);
+r = await find('sagi.norberta@kefo.hu', 'sagi.norberta@kefo.hu', 'Dr. Sági Norberta');
+assert.equal(r.length, 1, 'az OKTATO is @kefo.hu-rol jon — a helyi resz alakja dont');
+assert.equal(r[0].matched_by, 'teacher_name');
+assert.equal(r[0].user_id, sagi);
+console.log('14. elo alak: sagi.norberta@kefo.hu -> teacher_name (NEM hallgato): OK');
+
+const szabo = await mkUser('teacher.eee@nje-import.invalid', 'Szabó Lóránt', 'TEACHER');
+await db.query("insert into echo.teacher(code,name,profile_id) values('T-SZABO','Szabó Lóránt',$1)", [szabo]);
+r = await find('szabo.lorant@kefo.hu', 'szabo.lorant@kefo.hu', 'Szabó Lóránt');
+assert.equal(r.length, 1); assert.equal(r[0].matched_by, 'teacher_name');
+console.log('15. elo alak: szabo.lorant@kefo.hu (ekezet nelkuli login, ekezetes nev): OK');
+
+// ---------------------------------------------------------------------------
+// 16-18. Az ÖSSZEVONÓ szkript (diagnostics/79_saml_duplikatum_merge.sql).
+// Fiókokat nyugdíjaz, ezért tesztelés nélkül nem adható ki a kezünkből.
+// A psql meta-parancsokat (\echo, \set) a PGlite nem ismeri — kiszedjük.
+// ---------------------------------------------------------------------------
+const mergeSql = read('supabase/diagnostics/79_saml_duplikatum_merge.sql')
+  .split('\n').filter(l => !/^\s*\\/.test(l)).join('\n');
+
+// Egy tiszta duplikátum-pár: importált fiók a kurzusfelvétellel, mellette a
+// fölösleges SSO-fiók a valódi címmel.
+const imp = await mkUser('student.m99xyz@nje-import.invalid', 'Duplikált Dóra', 'STUDENT');
+await db.query("insert into public.student_attributes(profile_id,neptun,forras) values($1,'M99XYZ','nje-workbook')", [imp]);
+await db.query("update auth.users set encrypted_password='$2b$10$REGI_CSV_JELSZO_HASH' where id=$1", [imp]);
+await db.query("insert into echo.org_unit(code,name_hu,kind) values('NJE','NJE','egyetem') on conflict do nothing");
+const kurzus = (await db.query("insert into echo.course(code,name_hu,term,org_unit_id) select 'K-1','Teszt','2026/27/1',id from echo.org_unit limit 1 returning id")).rows[0].id;
+await db.query("insert into echo.enrollment(course_id,student_key) values($1,$2)", [kurzus, imp]);
+
+const dup = await mkUser('m99xyz@hallgato.uni-neumann.hu', 'Duplikált Dóra', 'STUDENT');
+await db.query("select public.saml_link_login('m99xyz@kefo.hu',$1,'m99xyz@hallgato.uni-neumann.hu','Duplikált Dóra',null,null,null,null,null,true)", [dup]);
+
+// 16. Ha az SSO-fiókhoz ADAT tartozik, az összevonás NEM futhat le.
+await db.query("insert into echo.enrollment(course_id,student_key) values($1,$2)", [kurzus, dup]);
+// A hibauzenet NEVEZZE MEG a tablat — enelkul egy elgepelt engedelyezett-lista
+// miatt is "atmenne" a teszt, csak rossz okbol (ez egyszer meg is tortent).
+await assert.rejects(db.exec(mergeSql),
+  e => /ADAT tartozik/.test(e.message) && /enrollment\.student_key: 1 sor/.test(e.message),
+  'nem ures SSO-fiokot nem szabad nyugdijazni, es mondja meg, mi tartja vissza');
+await db.exec('rollback;');
+assert.equal((await db.query('select email from auth.users where id=$1', [dup])).rows[0].email,
+  'm99xyz@hallgato.uni-neumann.hu', 'a megszakadt osszevonas semmit nem valtoztathat');
+console.log('16. nem ures SSO-fiok -> az osszevonas elszall, semmi nem valtozik: OK');
+
+// 17. Üres SSO-fiókkal lefut az összevonás.
+await db.query("delete from echo.enrollment where student_key=$1", [dup]);
+await db.exec(mergeSql);
+
+const ident = (await db.query("select user_id from public.saml_identities where eppn='m99xyz@kefo.hu'")).rows[0];
+assert.equal(ident.user_id, imp, 'az NJE-azonosito az IMPORTALT fiokra kerul');
+const cel = (await db.query('select email, encrypted_password from auth.users where id=$1', [imp])).rows[0];
+assert.equal(cel.email, 'm99xyz@hallgato.uni-neumann.hu', 'a celfiok megkapja a valodi cimet');
+assert.notEqual(cel.encrypted_password, '$2b$10$REGI_CSV_JELSZO_HASH', 'a CSV-jelszo ervenytelenitve');
+assert.equal((await db.query('select email from public.profiles where id=$1', [imp])).rows[0].email,
+  'm99xyz@hallgato.uni-neumann.hu', 'a profiles.email is kovesse');
+assert.equal((await db.query('select count(*) c from echo.enrollment where student_key=$1', [imp])).rows[0].c, 1,
+  'a kurzusfelvetel megmarad');
+console.log('17. osszevonas: azonosito atkotve, valodi cim, CSV-jelszo ervenytelen: OK');
+
+// 18. A fölösleges fiók nyugdíjazva — de NEM törölve (57 tábla hivatkozik rá).
+const regi = (await db.query('select email, banned_until from auth.users where id=$1', [dup])).rows[0];
+assert.ok(regi, 'a duplikatum fiok NEM torlodhet');
+assert.ok(String(regi.email).startsWith('merged-'), 'a cim felszabadul');
+assert.ok(regi.banned_until, 'a fiok tiltva');
+assert.equal((await db.query('select approval_status from public.profiles where id=$1', [dup])).rows[0].approval_status, 'rejected');
+// Újrafuttatás: nincs mit összevonni, nem csinál semmit.
+await db.exec(mergeSql);
+assert.equal((await db.query("select user_id from public.saml_identities where eppn='m99xyz@kefo.hu'")).rows[0].user_id, imp);
+console.log('18. a duplikatum nyugdijazva (nem torolve), ujrafuttatas ures: OK');
 
 console.log('\nMINDEN ELLENORZES SIKERES.');
