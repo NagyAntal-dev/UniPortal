@@ -789,12 +789,23 @@ function ECHO_part1Questions(form) {
    (lásd ECHO_buildPayload → ECHO_goalsMerge). */
 function ECHO_goalKey(q, item) { return q.id + '@' + item.key; }
 
-/* Ismétlődés-fajták. A repeat:"teacher_goal" kérdés MINDKÉT bontásban
-   elhangzik — oktatónként egyszer ÉS célonként egyszer (nem a kettő szorzata).
-   Az oktatói válasz az oktató zsákjába, a célonkénti az összevont kurzusszintű
-   értékbe megy, pontosan úgy, mint a sima "teacher" / "goal" kérdésnél. */
+/* Ismétlődés-fajták. A repeat:"teacher_goal" kérdés („Oktatónként és
+   elvárásonként”) MINDKÉT bontásban elhangzik — oktatónként egyszer ÉS
+   ELVÁRÁSONKÉNT egyszer (nem a kettő szorzata). A saját célokra NEM kérdez rá:
+   a félév eleji listából csak a kind:'exp' tételek kapnak lépést.
+   Az oktatói válasz az oktató zsákjába, az elvárásonkénti az összevont
+   kurzusszintű értékbe megy, pontosan úgy, mint a sima "teacher" / "goal"
+   kérdésnél. (A tárolt érték történeti okból maradt 'teacher_goal'.) */
 function ECHO_repTeacher(q) { return q.repeat === 'teacher' || q.repeat === 'teacher_goal'; }
 function ECHO_repGoal(q)    { return q.repeat === 'goal'    || q.repeat === 'teacher_goal'; }
+/* A cél/elvárás-tételek, amelyekre az adott kérdés vonatkozik. */
+function ECHO_goalItemsFor(q, items) {
+  const all = Array.isArray(items) ? items : [];
+  return q.repeat === 'teacher_goal' ? all.filter(it => it.kind === 'exp') : all;
+}
+function ECHO_repGoalFor(q, item) {
+  return ECHO_repGoal(q) && (q.repeat !== 'teacher_goal' || item.kind === 'exp');
+}
 
 /* A célonkénti válaszok ÖSSZEVONÁSA egyetlen értékké.
    MIÉRT KELL ÖSSZEVONNI: a válaszsor névtelen, a célok SZÁMOSSÁGA viszont
@@ -866,15 +877,19 @@ function ECHO_buildSteps(form, teachers, goalItems) {
        rögtön az összegzést mutatta, mintha kész lenne (hibajelentés, 2026-09-17).
        Most: az ismétlődés nélküli kérdések egy lépés, utána oktatónként, majd
        célonként külön lépések — mindegyik csak a saját fajtájú kérdéseit mutatja
-       (visibleQs). A repeat:"teacher_goal" kérdés az oktatói ÉS a célonkénti
-       lépésekben is megjelenik. */
+       (visibleQs). A repeat:"teacher_goal" kérdés az oktatói ÉS az
+       elvárásonkénti lépésekben is megjelenik. */
     if (qs.some(q => !q.repeat)) steps.push({ kind: 'section', section: sec });
     if (qs.some(ECHO_repTeacher)) {
       (teachers || []).forEach((t) => steps.push({ kind: 'teacher', section: sec, teacher: t }));
     }
     if (qs.some(ECHO_repGoal)) {
       // Nincs cél → nincs célonkénti lépés; a szakasz többi kérdése ettől még megjelenik.
-      items.forEach((it) => steps.push({ kind: 'goal', section: sec, goal: it }));
+      // Csak az a tétel kap lépést, amelyre legalább egy kérdés vonatkozik
+      // (a saját cél pl. nem, ha a szakaszban csak teacher_goal kérdés van).
+      items.forEach((it) => {
+        if (qs.some(q => ECHO_repGoalFor(q, it))) steps.push({ kind: 'goal', section: sec, goal: it });
+      });
     }
   });
   steps.push({ kind: 'review', section: null });
@@ -1486,9 +1501,10 @@ function ECHO_buildPayload(compiled, teachers, ans, tans, hasGoals, goalItems) {
       // pedig egyenesen azonosít. Lásd ECHO_goalsMerge magyarázatát és az
       // echo_submit() 4. lépését, ami ezeket a kulcsokat amúgy is levágja.
       if (ECHO_repGoal(q)) {
-        if (!items.length) return;
+        const qItems = ECHO_goalItemsFor(q, items);
+        if (!qItems.length) return;
         if (!ECHO_condOk(q.cond, { answers: ans, hasGoals })) return;
-        const merged = ECHO_goalsMerge(items.map(it => ans[ECHO_goalKey(q, it)]));
+        const merged = ECHO_goalsMerge(qItems.map(it => ans[ECHO_goalKey(q, it)]));
         if (merged !== undefined) courseAns[q.id] = merged;
         return;
       }
@@ -1547,11 +1563,12 @@ function ECHO_otherGaps(compiled, teachers, ans, tans, hasGoals, goalItems) {
           if (!ECHO_condOk(q.cond, { answers: bag, hasGoals })) return;
           if (ECHO_otherMissing(q, bag[q.id])) gaps.push({ q, teacher: t });
         });
-        if (!ECHO_repGoal(q)) return;   // teacher_goal: a célonkénti ág is fusson
+        if (!ECHO_repGoal(q)) return;   // teacher_goal: az elvárásonkénti ág is fusson
       }
       if (ECHO_repGoal(q)) {
-        if (!items.length) return;
-        items.forEach((it) => {
+        const qItems = ECHO_goalItemsFor(q, items);
+        if (!qItems.length) return;
+        qItems.forEach((it) => {
           if (ECHO_otherMissing(q, ans[ECHO_goalKey(q, it)])) gaps.push({ q, goal: it });
         });
         return;
@@ -1577,7 +1594,7 @@ function ECHO_elsoHianyosLepes(steps, ans, tans, hasGoals) {
       lathato = qs.filter(q => ECHO_repTeacher(q) && ECHO_condOk(q.cond, { answers: bag, hasGoals }));
       ertek = (q) => bag[q.id];
     } else if (st.kind === 'goal') {
-      lathato = qs.filter(q => ECHO_repGoal(q) && ECHO_condOk(q.cond, { answers: ans, hasGoals }));
+      lathato = qs.filter(q => ECHO_repGoalFor(q, st.goal) && ECHO_condOk(q.cond, { answers: ans, hasGoals }));
       ertek = (q) => ans[ECHO_goalKey(q, st.goal)];
     } else {
       lathato = qs.filter(q => !q.repeat && ECHO_condOk(q.cond, { answers: ans, hasGoals }));
@@ -1791,7 +1808,7 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
       // cél-utótaggal ellátott kulcson. A cond kiértékelése ezért a NYERS
       // `ans`-t kapja: a mai kérdőívben a célkérdésnek nincs feltétele, egy
       // jövőbeli feltétel viszont csak nem-ismétlődő kérdésre hivatkozhat.
-      return qs.filter(q => ECHO_repGoal(q) && ECHO_condOk(q.cond, { answers: ans, hasGoals }));
+      return qs.filter(q => ECHO_repGoalFor(q, cur.goal) && ECHO_condOk(q.cond, { answers: ans, hasGoals }));
     }
     return qs.filter(q => !q.repeat && ECHO_condOk(q.cond, { answers: ans, hasGoals }));
   })();
@@ -2125,10 +2142,11 @@ function ECHO_Review({ compiled, teachers, ans, tans, hasGoals, goalItems, lang,
     if (sec.part && sec.part !== 'part2') return;
     (sec.questions || []).forEach((q) => {
       if (ECHO_repGoal(q)) {
-        if (!items.length) return;
+        const qItems = ECHO_goalItemsFor(q, items);
+        if (!qItems.length) return;
         if (!ECHO_condOk(q.cond, { answers: ans, hasGoals })) return;
-        items.forEach(it => goalRows.push({ q, item: it, v: ans[ECHO_goalKey(q, it)] }));
-        goalMerged.push({ q, v: ECHO_goalsMerge(items.map(it => ans[ECHO_goalKey(q, it)])) });
+        qItems.forEach(it => goalRows.push({ q, item: it, v: ans[ECHO_goalKey(q, it)] }));
+        goalMerged.push({ q, v: ECHO_goalsMerge(qItems.map(it => ans[ECHO_goalKey(q, it)])) });
         return;
       }
       if (q.repeat) return;
@@ -5518,7 +5536,7 @@ const ECHO_REPEATS = [
   { v: '',        label: 'Nincs (egyszer)' },
   { v: 'teacher', label: 'Oktatónként' },
   { v: 'goal',    label: 'Célonként' },
-  { v: 'teacher_goal', label: 'Oktatónként és célonként' },
+  { v: 'teacher_goal', label: 'Oktatónként és elvárásonként' },
 ];
 
 // A cond-ban használható KÖRNYEZETI kulcsok. Az echo.setting
@@ -5892,7 +5910,7 @@ function ECHO_QuestionPanel({ q, allIds, allQs, ro, onPatch, lang }) {
       )}
       {q.repeat === 'teacher_goal' && (
         <div className="rounded-2xl bg-amber-50 border border-amber-100 px-3 py-2.5 text-[11px] font-bold text-amber-800 leading-relaxed" data-echo-szerk-figy="teacher_goal">
-          Oktatónként és célonként ismétlődő kérdés: minden oktatónál egyszer, és — akik a félév elején célt adtak meg — célonként is egyszer. A célonkénti válaszok összevontan kerülnek be.
+          Oktatónként és elvárásonként ismétlődő kérdés: minden oktatónál egyszer, és — akik a félév elején oktatói elvárást adtak meg — elvárásonként is egyszer. Az elvárásonkénti válaszok összevontan kerülnek be.
         </div>
       )}
 
