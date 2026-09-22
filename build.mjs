@@ -81,6 +81,9 @@ const FEATURE_FILES = [
   // kepernyon. A roles/groups/registrations UTAN: azok ROLE_Tab / GRP_Tab /
   // REG_loadProfiles elemeire epul.
   'features/access.jsx',
+  // Webshop (74_webshop.sql). A feed UTAN: onnan veszi a FEED_img-et es a
+  // celkozonseg-valasztot (FEED_CelkozonsegValaszto, FEED_celNormal).
+  'features/shop.jsx',
 ];
 
 // `motion` is only referenced by the shim at the top of app.jsx, which renders
