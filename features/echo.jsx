@@ -939,6 +939,26 @@ function ECHO_buildSteps(form, teachers, goalItems, tans) {
   return steps;
 }
 
+/* Egy lépés stabil azonosítója (a lépéslistán belüli sorszám NEM az: a
+   lépéslista a válaszoktól függ). */
+function ECHO_stepId(st) {
+  if (!st) return '';
+  return st.kind + '|' + (st.section ? st.section.id : '') + '|' +
+         (st.teacher ? st.teacher.id : '') + '|' + (st.goal ? st.goal.key : '');
+}
+/* KIHAGYÁS-KAPU → UGRÁS (hibajelentés, 2026-09-22). Az oktató kihagyásakor a
+   hozzá tartozó oktató × elvárás lépések kiesnek a listából. Ha ezek az
+   aktuális lépés ELŐTT álltak, a változatlan sorszám egy KÉSŐBBI lépésre
+   mutatott: a kapu bepipálása egyből továbbdobta a kitöltőt, a feltételes
+   kérdéseket már nem lehetett ellenőrizni. Ezért a lépést azonosító szerint
+   keressük meg az új listában, és a sorszámot ahhoz igazítjuk. */
+function ECHO_stepAfterChange(oldSteps, oldIdx, newSteps) {
+  const cur = oldSteps[Math.min(oldIdx, oldSteps.length - 1)];
+  const id = ECHO_stepId(cur);
+  const hit = newSteps.findIndex(s => ECHO_stepId(s) === id);
+  return hit >= 0 ? hit : Math.min(oldIdx, newSteps.length - 1);
+}
+
 /* ------------------------------------------------------------
    3. Kérdés-atomok (mobilbarát: nagy érintési célpontok)
    ------------------------------------------------------------ */
@@ -1923,6 +1943,11 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
     if (cur.kind === 'teacher') {
       const id = cur.teacher.id;
       setTans(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [q.id]: v } }));
+      // A kihagyás-kapu átrendezheti a lépéslistát — a kitöltő maradjon ezen a lépésen.
+      const nextTans = { ...tans, [id]: { ...(tans[id] || {}), [q.id]: v } };
+      const nextSteps = ECHO_buildSteps(compiled, teachers, goalItems, nextTans);
+      const n = ECHO_stepAfterChange(steps, step, nextSteps);
+      if (n !== step) setStep(n);
     } else {
       const k = keyOf(q);
       setAns(prev => ({ ...prev, [k]: v }));

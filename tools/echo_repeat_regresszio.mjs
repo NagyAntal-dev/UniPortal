@@ -56,6 +56,7 @@ const NEVEK = [
   'ECHO_skipQ', 'ECHO_teacherSkipped', 'ECHO_GOAL_RANK', 'ECHO_goalsMerge', 'ECHO_buildSteps',
   'ECHO_condOk', 'ECHO_answered', 'ECHO_OTHER_WORDS', 'ECHO_isOtherOption', 'ECHO_otherPicked',
   'ECHO_otherText', 'ECHO_otherMissing', 'ECHO_buildPayload', 'ECHO_otherGaps', 'ECHO_elsoHianyosLepes',
+  'ECHO_stepId', 'ECHO_stepAfterChange',
 ];
 const ctx = {};
 vm.createContext(ctx);
@@ -145,6 +146,22 @@ eset('kihagyott oktató → a párjai kimaradnak', () => {
   const te = lepesek(steps, 'teacher_exp');
   assert.equal(te.length, 2);
   assert(te.every(s => s.teacher.id === 'T2'));
+});
+
+eset('kihagyás-kapu bepipálása nem ugratja tovább a kitöltőt (elvárás-szakasz ELŐBB)', () => {
+  // A teacher_goal szakasz az oktatói szakasz ELŐTT áll: T1E1, T1E2, T2E1, T2E2, T1, T2.
+  const form = { sections: [FORM.sections[2], FORM.sections[1]] };
+  const before = E.ECHO_buildSteps(form, T(2), G(0, 2), {});
+  const idx = before.findIndex(s => s.kind === 'teacher' && s.teacher.id === 'T1');
+  const after = E.ECHO_buildSteps(form, T(2), G(0, 2), { T1: { skip: 'nem tanított' } });
+  // A régi sorszám már egy másik lépésre mutat — ez volt a hiba.
+  assert.notEqual(E.ECHO_stepId(after[idx]), E.ECHO_stepId(before[idx]));
+  const n = E.ECHO_stepAfterChange(before, idx, after);
+  assert.equal(after[n].kind, 'teacher');
+  assert.equal(after[n].teacher.id, 'T1');
+  // Visszapipálva is ugyanazon a lépésen marad.
+  const back = E.ECHO_stepAfterChange(after, n, before);
+  assert.equal(back, idx);
 });
 
 // ---- 2) payload ----
