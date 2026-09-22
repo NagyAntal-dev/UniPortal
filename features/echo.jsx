@@ -1188,8 +1188,28 @@ function ECHO_Question({ q: rawQ, index, value, onChange, lang, seed, ctx, hiba 
   // Objektumot React nem tud gyerekként kirajzolni — feloldjuk.
   const help = (q.help && typeof q.help === 'object') ? ECHO_txt(q.help, lang) : (q.help || '');
   const shown = q.randomize ? ECHO_shuffle(opts, seed + '|' + q.id) : opts;
+  /* Ha a kérdés a kitöltő kattintására megnő (kinyílik), görgessünk annyit,
+     hogy az új rész látsszon. Csak friss interakció után — a lépésváltás vagy
+     a betöltés okozta méretváltozás nem rángatja az oldalt. */
+  const boxRef = useRef(null);
+  const utoljara = useRef(0);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let elozo = el.offsetHeight;
+    const ro = new ResizeObserver(() => {
+      const h = el.offsetHeight;
+      const nott = h > elozo + 4;
+      elozo = h;
+      if (nott && Date.now() - utoljara.current < 1500) ECHO_lathatova(el);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const jelol = () => { utoljara.current = Date.now(); };
   return (
-    <div className={'py-6 border-b border-slate-50 last:border-0 scroll-mt-24 ' + (hiba ? '-mx-3 px-3 rounded-2xl bg-red-50/60 ring-1 ring-red-200' : '')}
+    <div ref={boxRef} onPointerDown={jelol} onKeyDown={jelol}
+      className={'py-6 border-b border-slate-50 last:border-0 scroll-mt-24 ' + (hiba ? '-mx-3 px-3 rounded-2xl bg-red-50/60 ring-1 ring-red-200' : '')}
       data-echo-kerdes={q.id} data-echo-hiba={hiba || undefined}>
       <div className="flex items-start gap-3 mb-4">
         <span className={'flex-none w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center mt-0.5 ' + (hiba ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500')}>
@@ -1721,6 +1741,33 @@ function ECHO_elsoHibara(kerdes) {
   }, 60);
 }
 
+/* KINYÍLÓ KÉRDÉS A KÉPERNYŐ ALJÁN (hibajelentés, 2026-09-22). Ha egy kérdés a
+   válasz után megnő (kihagyás oka, „Egyéb” mező), az új rész a képernyő alá,
+   illetve a fix alsó sáv mögé került, és a kitöltő nem vette észre. Ez a
+   függvény annyit görget, hogy a kérdés alja a sáv fölé kerüljön — de a
+   tetejét nem tolja ki a képernyőről. */
+function ECHO_scrollParent(el) {
+  for (let p = el && el.parentElement; p; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+function ECHO_lathatova(el) {
+  if (!el) return;
+  try {
+    const sav = document.querySelector('[data-echo-akciosav]');
+    const savH = sav ? sav.getBoundingClientRect().height : 0;
+    const r = el.getBoundingClientRect();
+    const also = window.innerHeight - savH - 16;
+    if (r.bottom <= also) return;
+    const dy = Math.min(r.bottom - also, Math.max(0, r.top - 80));
+    if (dy <= 0) return;
+    const p = ECHO_scrollParent(el);
+    (p || window).scrollBy({ top: dy, behavior: 'smooth' });
+  } catch (e) {}
+}
+
 function ECHO_Wizard({ course, onBack, onSubmitted }) {
   const [form, setForm] = useState(null);
   const [err, setErr] = useState('');
@@ -1751,6 +1798,18 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
   const [saving, setSaving] = useState(false);
   // A legutobb ELMENTETT allapot ujjlenyomata. Ha nem valtozott, nem irunk.
   const lastSavedRef = useRef('');
+  /* A fix alsó sáv magassága változik (hibaüzenet, mobilon tördelődő gombok) —
+     az oldal alsó kitöltése ehhez igazodik, különben az utolsó kérdés alja a
+     sáv mögé csúszik. */
+  const savRef = useRef(null);
+  const [savH, setSavH] = useState(0);
+  useEffect(() => {
+    const el = savRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setSavH(Math.ceil(el.getBoundingClientRect().height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
 
   useEffect(() => {
     let dead = false;
@@ -2105,7 +2164,7 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
     : ECHO_txt(cur.section, lang);
 
   return (
-    <div className="p-4 sm:p-8 max-w-3xl mx-auto pb-32">
+    <div className="p-4 sm:p-8 max-w-3xl mx-auto pb-32" style={savH ? { paddingBottom: (savH + 32) + 'px' } : undefined}>
       <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-primary mb-4 transition-colors">
         <Lucide.ArrowLeft size={16} /> Kilépés — a válaszaid piszkozatként megmaradnak
       </button>
@@ -2208,7 +2267,7 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
       )}
 
       {/* navigáció — mobilon a hüvelykujj közelében ragad meg */}
-      <div className="fixed bottom-0 left-72 right-0 bg-white/95 backdrop-blur border-t border-slate-100 px-4 sm:px-8 py-3 z-40">
+      <div ref={savRef} data-echo-akciosav="1" className="fixed bottom-0 left-72 right-0 bg-white/95 backdrop-blur border-t border-slate-100 px-4 sm:px-8 py-3 z-40">
         {/* A figyelmeztetés a gombok fölött is látszik — az oldal alján a sáv mögé kerülhetett. */}
         {touched && blocked > 0 && (
           <div className="max-w-3xl mx-auto mb-2 text-[12px] font-bold text-red-600 flex items-center gap-1.5" role="alert" data-echo-sav-hiba="1">
