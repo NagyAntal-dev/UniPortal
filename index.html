@@ -1,45 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hu">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <title>UniPortal Pro — John von Neumann University | Admissions, studies and campus life</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: {
-              DEFAULT: 'rgb(208, 103, 0)',
-              50: '#fff9f2', 100: '#ffefdb', 200: '#ffdcb3', 300: '#ffbf7a', 400: '#ff9842',
-              500: '#d06700', 600: '#b85200', 700: '#943d00', 800: '#753207', 900: '#612b0a',
-            },
-            ink: '#0f172a',
-          },
-          fontFamily: { sans: ['Inter', 'sans-serif'] },
-        }
-      }
-    }
-  </script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
-  <!-- Supabase client (Step 5: real email + password auth) -->
+  <title>Belépés — UniPortal · Neumann János Egyetem</title>
+  <link rel="preload" as="image" href="assets/eloadoterem.jpg" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <!-- Futásidejű beállítás (Dockerben a .env-ből; GitHub Pages-en üres). -->
   <script src="config.js"></script>
   <script>
     window.SUPABASE_URL = window.SUPABASE_URL || 'https://mdccyastwhzwtyukxlpk.supabase.co';
     window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_S6syNS_lBfb93fT54WaLJg_aYNDqv9M';
-    /* Ha a jelszó-visszaállító link ide érkezett (pl. mert a Supabase az
-       alapcímre küldte), a kliens itt új jelszó NÉLKÜL léptetné be a
-       felhasználót. Ehelyett továbbadjuk az erre szolgáló oldalnak, a címsor
-       tartalmával együtt — és itt nem is dolgozzuk fel a linket. */
-    /* Nyelv: az alkalmazás beállítása (nje_lang), különben a böngészőé — mint a privacy/terms oldalon. */
-    window.NJE_LANG = 'en';
+    /* Nyelv: az alkalmazás beállítása (nje_lang), különben a böngészőé — mint a többi oldalon. */
+    window.NJE_LANG = 'hu';
     try { window.NJE_LANG = localStorage.getItem('nje_lang') || ((navigator.language || '').toLowerCase().indexOf('hu') === 0 ? 'hu' : 'en'); } catch (e) {}
-    if (window.NJE_LANG !== 'hu') window.NJE_LANG = 'en';
+    if (window.NJE_LANG !== 'en') window.NJE_LANG = 'hu';
+    /* A jelszó-visszaállító link ne itt jelentkeztessen be, hanem a saját oldalán. */
     window.__RECOVERY_REDIRECT = /(^|[#&])type=recovery(&|$)/.test(location.hash);
     if (window.__RECOVERY_REDIRECT) location.replace('reset-password.html' + location.hash);
     // NJE SAML: a bejelentkezési token az app.html-nek szól (ott váltjuk be).
@@ -49,1371 +27,301 @@
     catch (e) { console.error('Failed to init Supabase client', e); }
   </script>
   <style>
-    html { scroll-behavior: smooth; }
-    body { font-family: 'Inter', sans-serif; }
-    .grain { background-image: radial-gradient(circle at 1px 1px, rgba(208,103,0,.10) 1px, transparent 0); background-size: 22px 22px; }
-    ::-webkit-scrollbar { width: 10px; }
-    ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-
-    /* ===== Tutorial demos: JS-driven state machine (finite transitions) ===== */
-    .demo-stage.hidden { display: none; }
-    .demo-stage .fo { opacity: 1; transition: opacity .5s ease; }
-    .demo-stage.played .fo { opacity: 0; }
-    .demo-stage .fi { opacity: 0; transition: opacity .5s ease; }
-    .demo-stage.played .fi { opacity: 1; }
-    .demo-stage .fi.dl, .demo-stage .ri.dl { transition-delay: .35s; }
-    .demo-stage .gr { transition: width .9s cubic-bezier(.2,.7,.3,1); }
-    .demo-stage.played .gr { width: 88% !important; }
-    .demo-stage .ri { opacity: 0; transform: translateY(8px); transition: opacity .5s ease, transform .5s ease; }
-    .demo-stage.played .ri { opacity: 1; transform: none; }
-    .demo-stage .cur { opacity: 0; transition: top .8s cubic-bezier(.5,0,.2,1), left .8s cubic-bezier(.5,0,.2,1), opacity .4s ease; }
-    .demo-stage.played .cur { opacity: 1; top: 78px !important; left: 50% !important; }
-    @media (prefers-reduced-motion: reduce) { .demo-stage * { transition: none !important; } }
+    :root {
+      --accent: #d06700; --accent-dark: #943d00; --ink: #0f172a; --muted: #64748b;
+      --line: rgba(15, 23, 42, .10); --field: rgba(248, 250, 252, .92);
+      --err: #b91c1c; --err-bg: #fef2f2; --ok: #047857; --ok-bg: #ecfdf5;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink);
+      background: #1a120b url('assets/eloadoterem.jpg') center / cover no-repeat fixed;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Finom, meleg sötétítés balról: a kép jobb oldala (a stúdium, a padsorok)
+       megmarad, a kártya mögött viszont nyugodt a háttér. */
+    .veil {
+      position: fixed; inset: 0; pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(20, 12, 5, .78) 0%, rgba(20, 12, 5, .55) 34%, rgba(20, 12, 5, .12) 68%, rgba(20, 12, 5, .05) 100%),
+        linear-gradient(0deg, rgba(20, 12, 5, .45) 0%, rgba(20, 12, 5, 0) 30%);
+    }
+    .page {
+      position: relative; min-height: 100%;
+      display: flex; flex-direction: column; justify-content: center;
+      padding-inline: max(16px, 6vw); padding-block: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-bottom));
+    }
+    .card {
+      width: 100%; max-width: 400px;
+      background: rgba(255, 255, 255, .90);
+      -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2);
+      border: 1px solid rgba(255, 255, 255, .6); border-radius: 28px;
+      box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .55);
+      padding: 32px 30px 26px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand .nje { font-size: 24px; font-weight: 900; letter-spacing: -.02em; color: var(--accent); }
+    .brand .bar { width: 1px; height: 26px; background: #e2e8f0; }
+    .brand .up { line-height: 1; }
+    .brand .up b { display: block; font-size: 11px; font-weight: 900; letter-spacing: .18em; }
+    .brand .up span { display: block; font-size: 9px; font-weight: 700; letter-spacing: .18em; color: #94a3b8; margin-top: 3px; }
+    .top { display: flex; align-items: center; justify-content: space-between; }
+    .lang { border: 0; background: transparent; font: inherit; font-size: 11px; font-weight: 900; letter-spacing: .06em;
+            color: var(--muted); padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+    .lang:hover { background: rgba(15, 23, 42, .06); }
+    h1 { margin: 26px 0 4px; font-size: 26px; font-weight: 900; letter-spacing: -.02em; text-wrap: balance; }
+    .sub { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.5; }
+    label { display: block; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px 2px; }
+    .field { margin-bottom: 14px; }
+    input {
+      width: 100%; font: inherit; font-size: 14px; color: var(--ink);
+      background: var(--field); border: 1px solid var(--line); border-radius: 14px;
+      padding: 13px 14px; outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    input:focus { border-color: #ffbf7a; box-shadow: 0 0 0 4px rgba(208, 103, 0, .14); }
+    .pw { position: relative; }
+    .pw input { padding-right: 46px; }
+    .eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: transparent;
+           width: 36px; height: 36px; border-radius: 10px; color: #94a3b8; cursor: pointer; display: grid; place-items: center; }
+    .eye:hover { color: var(--ink); background: rgba(15, 23, 42, .05); }
+    .row { display: flex; justify-content: flex-end; margin: -4px 0 16px; }
+    .link { border: 0; background: none; font: inherit; font-size: 12px; font-weight: 700; color: var(--accent); cursor: pointer; padding: 2px; }
+    .link:hover { color: var(--accent-dark); text-decoration: underline; }
+    .btn {
+      width: 100%; border: 0; font: inherit; font-size: 14px; font-weight: 800; color: #fff; cursor: pointer;
+      background: var(--accent); border-radius: 16px; padding: 14px; box-shadow: 0 12px 24px -10px rgba(208, 103, 0, .7);
+      transition: background .15s, transform .1s;
+    }
+    .btn:hover { background: #b85200; }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .6; cursor: default; }
+    .btn.alt { color: var(--ink); background: rgba(255, 255, 255, .95); border: 1px solid var(--line); box-shadow: none; }
+    .btn.alt:hover { background: #f1f5f9; }
+    .or { display: flex; align-items: center; gap: 10px; margin: 14px 0; font-size: 10px; font-weight: 800;
+          letter-spacing: .14em; text-transform: uppercase; color: #94a3b8; }
+    .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+    .msg { display: none; font-size: 12px; font-weight: 600; line-height: 1.5; border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; }
+    .msg.err { color: var(--err); background: var(--err-bg); border: 1px solid #fecaca; }
+    .msg.ok { color: var(--ok); background: var(--ok-bg); border: 1px solid #a7f3d0; }
+    .msg.on { display: block; }
+    .back { display: block; margin: 14px auto 0; }
+    .foot { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px 14px;
+            justify-content: space-between; font-size: 11px; color: var(--muted); }
+    .foot a { color: var(--muted); text-decoration: none; font-weight: 600; }
+    .foot a:hover { color: var(--accent); text-decoration: underline; }
+    .credit { position: fixed; right: 16px; bottom: max(12px, env(safe-area-inset-bottom)); font-size: 11px; font-weight: 600;
+              color: rgba(255, 255, 255, .72); text-shadow: 0 1px 2px rgba(0, 0, 0, .5); pointer-events: none; }
+    [hidden] { display: none !important; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    @media (max-width: 720px) {
+      .page { align-items: center; }
+      .veil { background: linear-gradient(180deg, rgba(20, 12, 5, .35) 0%, rgba(20, 12, 5, .70) 100%); }
+      .card { padding: 26px 22px 22px; border-radius: 24px; }
+      .credit { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   </style>
 </head>
-<body class="bg-white text-ink antialiased">
-
-  <!-- ===== NAV ===== -->
-  <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-100">
-    <div class="max-w-6xl mx-auto px-6 flex items-center justify-between py-4">
-      <a href="#top" class="flex items-center gap-3">
-        <div class="flex items-center gap-2">
-          <span class="text-2xl font-black tracking-tight text-primary-600">NJE</span>
-          <span class="w-px h-7 bg-slate-200"></span>
-          <span class="leading-none">
-            <span class="block text-[11px] font-black tracking-[0.18em] text-ink">UNIPORTAL</span>
-            <span class="block text-[9px] font-bold tracking-[0.18em] text-slate-400">PRO</span>
-          </span>
+<body>
+  <div class="veil" aria-hidden="true"></div>
+  <main class="page">
+    <div class="card">
+      <div class="top">
+        <div class="brand" aria-label="NJE UniPortal">
+          <span class="nje">NJE</span><span class="bar"></span>
+          <span class="up"><b>UNIPORTAL</b><span>PRO</span></span>
         </div>
-      </a>
-      <nav class="hidden md:flex items-center gap-7 text-sm font-semibold text-slate-500">
-        <a href="#journey" class="hover:text-primary-600 transition-colors">The journey</a>
-        <a href="#audience" class="hover:text-primary-600 transition-colors">Who it's for</a>
-        <a href="#demos" class="hover:text-primary-600 transition-colors">See it in action</a>
-        <a href="#modules" class="hover:text-primary-600 transition-colors">Modules</a>
-        <a href="#trust" class="hover:text-primary-600 transition-colors">Privacy</a>
-      </nav>
-      <div class="flex items-center gap-2">
-        <button id="langToggle" type="button" data-noi18n onclick="njeNyelvValtas()" title="Language / Nyelv" aria-label="Language / Nyelv" class="px-3 py-2.5 rounded-xl text-[11px] font-black tracking-wide text-slate-500 hover:bg-slate-100 transition-colors">EN</button>
-        <button onclick="openAuth('login')" class="px-4 py-2.5 rounded-xl text-sm font-bold text-ink hover:bg-slate-100 transition-colors">Sign in</button>
-        <span aria-hidden="true" class="text-slate-300">|</span>
-        <button type="button" id="njeSsoBtn" data-noi18n onclick="doNjeSso()" class="px-4 py-2.5 rounded-xl text-sm font-bold text-ink hover:bg-slate-100 transition-colors disabled:opacity-60">NJE Login</button>
-        <button onclick="openAuth('register')" class="px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Sign up</button>
+        <button class="lang" id="lang" type="button" title="Nyelv / Language"></button>
+      </div>
+
+      <!-- Belépés -->
+      <form id="fLogin" novalidate>
+        <h1 data-t="cim"></h1>
+        <p class="sub" data-t="alcim"></p>
+        <div class="msg err" id="eLogin" role="alert"></div>
+        <div class="field">
+          <label for="email" data-t="email"></label>
+          <input id="email" type="email" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="jelszo" data-t="jelszo"></label>
+          <div class="pw">
+            <input id="jelszo" type="password" autocomplete="current-password" required />
+            <button class="eye" id="mutat" type="button">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="row"><button class="link" type="button" id="toForgot" data-t="elfelejtett"></button></div>
+        <button class="btn" id="bLogin" type="submit" data-t="belepes"></button>
+        <div class="or" data-t="vagy"></div>
+        <button class="btn alt" id="bSso" type="button" data-t="sso"></button>
+      </form>
+
+      <!-- Elfelejtett jelszó -->
+      <form id="fForgot" hidden novalidate>
+        <h1 data-t="fcim"></h1>
+        <p class="sub" data-t="falcim"></p>
+        <div class="msg err" id="eForgot" role="alert"></div>
+        <div class="msg ok" id="oForgot" aria-live="polite"></div>
+        <div class="field">
+          <label for="femail" data-t="email"></label>
+          <input id="femail" type="email" autocomplete="email" required />
+        </div>
+        <button class="btn" id="bForgot" type="submit" data-t="kuldes"></button>
+        <button class="link back" type="button" id="toLogin" data-t="vissza"></button>
+      </form>
+
+      <div class="foot">
+        <a href="home.html#register" data-t="regisztracio"></a>
+        <a href="home.html" data-t="rolunk"></a>
+        <span><a href="privacy.html" data-t="adatvedelem"></a> · <a href="terms.html" data-t="feltetelek"></a></span>
       </div>
     </div>
-  </header>
-
-  <main id="top">
-    <!-- ===== HERO ===== -->
-    <section class="relative overflow-hidden grain">
-      <div class="absolute -top-40 -right-40 w-[36rem] h-[36rem] rounded-full bg-primary-100/50 blur-3xl"></div>
-      <div class="max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-[1.05fr_1fr] gap-14 items-center relative">
-        <div>
-          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-50 border border-primary-100 text-primary-700 text-xs font-bold mb-7">
-            <span class="w-1.5 h-1.5 rounded-full bg-primary-500"></span>
-            John von Neumann University · Kecskemét
-          </div>
-          <h1 class="text-[2.6rem] leading-[1.05] sm:text-6xl font-black tracking-tight text-ink" style="text-wrap:balance">
-            From first application to campus life — <span class="text-primary-600">one platform</span>.
-          </h1>
-          <p class="mt-6 text-lg text-slate-500 leading-relaxed max-w-xl">
-            Admissions, interviews and offers; courses and anonymous course evaluation; the campus feed, the dormitory and the university shop. For applicants, students, teachers, agents and staff — in Hungarian and English.
-          </p>
-          <div class="mt-9 flex flex-wrap items-center gap-3">
-            <button onclick="openAuth('register')" class="group px-6 py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-xl shadow-primary-600/25 transition-all active:scale-95 flex items-center gap-2">
-              Create account
-              <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-0.5 transition-transform"></i>
-            </button>
-            <button onclick="document.getElementById('demos').scrollIntoView()" class="px-6 py-3.5 rounded-2xl text-sm font-bold text-ink bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-2">
-              <i data-lucide="play" class="w-4 h-4 text-primary-600"></i> Watch demos
-            </button>
-          </div>
-          <dl class="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-xl">
-            <div><dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">Roles</dt><dd class="text-2xl font-black text-ink">5</dd></div>
-            <div><dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">Modules</dt><dd class="text-2xl font-black text-ink">24</dd></div>
-            <div><dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">Languages</dt><dd class="text-2xl font-black text-ink" data-noi18n>HU · EN</dd></div>
-            <div><dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">Evaluation</dt><dd class="text-2xl font-black text-ink">Anonymous</dd></div>
-          </dl>
-        </div>
-
-        <!-- Product preview: a student's home screen -->
-        <div class="relative">
-          <div class="absolute inset-0 scale-95 translate-y-6 bg-primary-200/30 rounded-[2rem] blur-2xl"></div>
-          <div class="relative rounded-[1.6rem] bg-white shadow-2xl shadow-slate-300/40 border border-slate-100 overflow-hidden">
-            <div class="flex items-center gap-2 px-4 h-10 bg-slate-50 border-b border-slate-100">
-              <span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
-              <span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
-              <span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
-              <div class="ml-3 flex-1 h-5 rounded-md bg-white border border-slate-100 flex items-center px-2">
-                <span class="text-[9px] font-bold text-slate-300 tracking-wide" data-noi18n>uniportal.nje.hu</span>
-              </div>
-            </div>
-            <div class="flex h-[22rem]">
-              <aside class="w-[31%] bg-primary-600 p-3 flex flex-col gap-1">
-                <div class="text-white font-black text-sm mb-2.5 px-1">UniPortal</div>
-                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/20 text-white text-[10px] font-bold"><i data-lucide="newspaper" class="w-3.5 h-3.5"></i> Feed</div>
-                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="book-open" class="w-3.5 h-3.5"></i> Courses</div>
-                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i> Course evaluation</div>
-                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i> Webshop</div>
-                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="bed-double" class="w-3.5 h-3.5"></i> My housing</div>
-                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="calendar-days" class="w-3.5 h-3.5"></i> Calendar</div>
-              </aside>
-              <div class="flex-1 p-3.5 bg-slate-50/60 flex flex-col gap-2.5 min-w-0">
-                <div class="text-[9px] font-black uppercase tracking-widest text-primary-600">Campus feed</div>
-                <div class="text-sm font-black text-ink -mt-1.5">Welcome back, Anna</div>
-                <div class="rounded-xl bg-white border border-primary-100 overflow-hidden">
-                  <div class="px-3 py-2 bg-primary-50/70 text-[10px] font-black text-ink flex items-center gap-1.5"><i data-lucide="clipboard-list" class="w-3 h-3 text-primary-600"></i> 2 tasks waiting</div>
-                  <div class="px-3 py-1.5 flex items-center justify-between gap-2 border-t border-slate-50">
-                    <span class="min-w-0"><span class="block text-[10px] font-bold text-ink truncate">Mathematics I</span><span class="block text-[8px] font-bold text-sky-600">Goal setting</span></span>
-                    <span class="text-[8px] font-black text-white bg-primary-600 rounded-md px-1.5 py-1 whitespace-nowrap">Set goals</span>
-                  </div>
-                  <div class="px-3 py-1.5 flex items-center justify-between gap-2 border-t border-slate-50">
-                    <span class="min-w-0"><span class="block text-[10px] font-bold text-ink truncate">Programming II</span><span class="block text-[8px] font-bold text-primary-600">Evaluation · <span data-noi18n>K-0014</span></span></span>
-                    <span class="text-[8px] font-black text-white bg-primary-600 rounded-md px-1.5 py-1">Fill in</span>
-                  </div>
-                </div>
-                <div class="rounded-xl bg-white border border-slate-100 p-3">
-                  <div class="flex items-center justify-between"><span class="text-[8px] font-black uppercase text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">Event</span><span class="text-[9px] font-bold text-slate-400 flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i> 214</span></div>
-                  <div class="text-[11px] font-black text-ink mt-1.5">Freshers' ball — tickets on sale</div>
-                  <div class="text-[9px] text-slate-400 font-semibold mt-0.5">For full-time students · 10 Oct</div>
-                </div>
-                <div class="rounded-xl bg-white border border-slate-100 p-3 flex items-center gap-2.5">
-                  <div class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><i data-lucide="car" class="w-3.5 h-3.5"></i></div>
-                  <div class="min-w-0"><div class="text-[10px] font-black text-ink truncate">Parking card approved</div><div class="text-[8px] font-bold text-slate-400" data-noi18n>WS-00012 · ABC-123</div></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== JOURNEY ===== -->
-    <section id="journey" class="py-24 bg-slate-50/60 border-y border-slate-100">
-      <div class="max-w-6xl mx-auto px-6">
-        <div class="max-w-2xl mb-14">
-          <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-600">The journey</span>
-          <h2 class="mt-3 text-4xl font-black tracking-tight text-ink" style="text-wrap:balance">One account from the first form to the last semester</h2>
-          <p class="mt-4 text-slate-500 text-lg">The same profile carries a person from applicant to enrolled student — no re-registration, no second system.</p>
-        </div>
-        <ol class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          <li class="rounded-3xl bg-white border border-slate-100 p-6">
-            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">01</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="file-text" class="w-5 h-5"></i></span></div>
-            <h3 class="mt-4 font-black text-ink">Apply</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Programme catalogue, online form, document upload and the mathematics placement test.</p>
-          </li>
-          <li class="rounded-3xl bg-white border border-slate-100 p-6">
-            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">02</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="calendar-check" class="w-5 h-5"></i></span></div>
-            <h3 class="mt-4 font-black text-ink">Interview & review</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Book a slot in the interview calendar; reviewers score against an agreed set of criteria.</p>
-          </li>
-          <li class="rounded-3xl bg-white border border-slate-100 p-6">
-            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">03</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="mail-check" class="w-5 h-5"></i></span></div>
-            <h3 class="mt-4 font-black text-ink">Offer & payment</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Conditional acceptance letter as PDF, and a unique payment reference so every transfer finds its applicant.</p>
-          </li>
-          <li class="rounded-3xl bg-white border border-slate-100 p-6">
-            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">04</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="shield-check" class="w-5 h-5"></i></span></div>
-            <h3 class="mt-4 font-black text-ink">Visa & enrolment</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Visa checklist, messages with the International Office, and the move to student status.</p>
-          </li>
-          <li class="rounded-3xl bg-white border border-slate-100 p-6">
-            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">05</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="book-open" class="w-5 h-5"></i></span></div>
-            <h3 class="mt-4 font-black text-ink">Study</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Courses, start-of-term goals and the anonymous end-of-term course evaluation.</p>
-          </li>
-          <li class="rounded-3xl bg-white border border-slate-100 p-6">
-            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">06</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="home" class="w-5 h-5"></i></span></div>
-            <h3 class="mt-4 font-black text-ink">Campus life</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">The campus feed, dormitory and maintenance requests, a personal calendar and the university shop.</p>
-          </li>
-        </ol>
-      </div>
-    </section>
-
-    <!-- ===== PERSONAS ===== -->
-    <section id="audience" class="py-24">
-      <div class="max-w-6xl mx-auto px-6">
-        <div class="max-w-2xl mb-14">
-          <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-600">Who it's for</span>
-          <h2 class="mt-3 text-4xl font-black tracking-tight text-ink">One platform, five perspectives</h2>
-          <p class="mt-4 text-slate-500 text-lg">Every role gets its own focused menu — on shared data, with access decided by the database, not the screen.</p>
-        </div>
-        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-          <div class="bg-white rounded-3xl border border-slate-100 p-7 shadow-sm flex flex-col">
-            <div class="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-5"><i data-lucide="graduation-cap" class="w-6 h-6"></i></div>
-            <h3 class="text-lg font-black text-ink">Applicants & students</h3>
-            <ul class="mt-4 space-y-2 text-sm text-slate-600 flex-1">
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Apply, book an interview, pay with a reference</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Courses and anonymous course evaluation</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Feed, housing, calendar and webshop</li>
-            </ul>
-            <button onclick="openAuth('register','student')" class="mt-6 w-full py-3 rounded-xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 transition-colors">Sign up as applicant</button>
-          </div>
-          <div class="bg-white rounded-3xl border border-slate-100 p-7 shadow-sm flex flex-col">
-            <div class="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-5"><i data-lucide="presentation" class="w-6 h-6"></i></div>
-            <h3 class="text-lg font-black text-ink">Teachers</h3>
-            <ul class="mt-4 space-y-2 text-sm text-slate-600 flex-1">
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Own courses and student lists</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Evaluation results above the privacy threshold</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Reply to feedback in a comment window</li>
-            </ul>
-            <button onclick="openAuth('login')" class="mt-6 w-full py-3 rounded-xl text-sm font-bold text-ink bg-slate-100 hover:bg-slate-200 transition-colors">Teacher sign in</button>
-          </div>
-          <div class="bg-white rounded-3xl border border-slate-100 p-7 shadow-sm flex flex-col">
-            <div class="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-5"><i data-lucide="briefcase" class="w-6 h-6"></i></div>
-            <h3 class="text-lg font-black text-ink">Agents & partners</h3>
-            <ul class="mt-4 space-y-2 text-sm text-slate-600 flex-1">
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Submit and follow your applicants</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Commission periods and statements</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Agency approved before any data is shown</li>
-            </ul>
-            <button onclick="openAuth('register','agent')" class="mt-6 w-full py-3 rounded-xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 transition-colors">Sign up as agent</button>
-          </div>
-          <div class="bg-ink rounded-3xl p-7 shadow-sm flex flex-col text-white">
-            <div class="w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center mb-5"><i data-lucide="building-2" class="w-6 h-6"></i></div>
-            <h3 class="text-lg font-black">University staff</h3>
-            <ul class="mt-4 space-y-2 text-sm text-slate-300 flex-1">
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-400 shrink-0 mt-0.5"></i> Admissions, interviews and decisions</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-400 shrink-0 mt-0.5"></i> Students, teachers, campaigns and the shop</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-400 shrink-0 mt-0.5"></i> Permissions by role, group or person</li>
-            </ul>
-            <button onclick="openAuth('login')" class="mt-6 w-full py-3 rounded-xl text-sm font-bold text-ink bg-white hover:bg-primary-50 transition-colors">Staff sign in</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== DEMOS ===== -->
-    <section id="demos" class="py-24 bg-slate-50/60 border-y border-slate-100">
-      <div class="max-w-6xl mx-auto px-6">
-        <div class="max-w-2xl mb-14">
-          <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-600">See it in action</span>
-          <h2 class="mt-3 text-4xl font-black tracking-tight text-ink">Short guided demos</h2>
-          <p class="mt-4 text-slate-500 text-lg">Watch the key features at work — pick a topic to play its quick walkthrough.</p>
-        </div>
-
-        <div class="grid lg:grid-cols-[300px_1fr] gap-8 items-start">
-          <div class="flex lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0" id="demoTabs"></div>
-          <div>
-            <div class="relative rounded-[1.4rem] bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden">
-              <div class="flex items-center gap-2 px-4 h-9 bg-slate-800/60">
-                <span class="w-2.5 h-2.5 rounded-full bg-slate-600"></span>
-                <span class="w-2.5 h-2.5 rounded-full bg-slate-600"></span>
-                <span class="w-2.5 h-2.5 rounded-full bg-slate-600"></span>
-                <span class="ml-2 text-[10px] font-bold text-slate-500 tracking-wide flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-primary-500"></span> Auto-playing demo</span>
-                <span class="ml-auto text-[10px] font-bold text-slate-500" id="demoLabel">Admissions review</span>
-              </div>
-              <div class="p-6 sm:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-[21rem] flex items-center justify-center">
-                <div class="w-full max-w-md" id="demoStages">
-
-                  <!-- Demo: review with scoring criteria -->
-                  <div class="demo-stage" data-demo="review">
-                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
-                      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Interview scoring sheet</div>
-                      <div class="flex items-center gap-3 mb-4">
-                        <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 font-black flex items-center justify-center text-sm">AO</div>
-                        <div>
-                          <div class="text-sm font-black text-ink">Amara Okafor</div>
-                          <div class="text-[11px] text-slate-400 font-semibold">BSc Computer Science · <span data-noi18n>FV-00042</span></div>
-                        </div>
-                        <div class="ml-auto relative w-24 h-7">
-                          <span class="fo absolute inset-0 flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-wide">Interviewed</span>
-                          <span class="fi absolute inset-0 flex items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wide">Accepted</span>
-                        </div>
-                      </div>
-                      <div class="space-y-2">
-                        <div class="flex justify-between text-[11px] font-bold"><span class="text-slate-500">Motivation</span><span class="text-ink">4 / 5</span></div>
-                        <div class="flex justify-between text-[11px] font-bold"><span class="text-slate-500">Mathematical thinking</span><span class="text-ink">5 / 5</span></div>
-                        <div class="flex justify-between text-[11px] font-bold"><span class="text-slate-500">English communication</span><span class="text-ink">4 / 5</span></div>
-                        <div class="pt-1">
-                          <div class="flex justify-between text-[11px] font-bold mb-1"><span class="text-slate-500">Total, calculated by the server</span><span class="text-primary-600">88 / 100</span></div>
-                          <div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="gr h-full rounded-full bg-primary-500" style="width:14%"></div></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Demo: interview calendar -->
-                  <div class="demo-stage hidden" data-demo="interview">
-                    <div class="relative rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
-                      <div class="cur absolute z-10 w-4 h-4" style="top:8px;left:64%"><i data-lucide="mouse-pointer-2" class="w-4 h-4 text-ink fill-white"></i></div>
-                      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Interview calendar · 25 March</div>
-                      <div class="space-y-2">
-                        <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100"><span class="text-xs font-bold text-ink" data-noi18n>09:00 – 09:15</span><span class="text-[9px] font-black uppercase text-slate-400">Available</span></div>
-                        <div class="relative flex items-center justify-between p-3 rounded-xl border border-primary-200 bg-primary-50/40">
-                          <span class="text-xs font-bold text-ink" data-noi18n>09:15 – 09:30</span>
-                          <span class="relative w-20 h-5">
-                            <span class="fo absolute inset-0 flex items-center justify-end text-[9px] font-black uppercase text-slate-400">Available</span>
-                            <span class="fi absolute inset-0 flex items-center justify-end gap-1 text-[9px] font-black uppercase text-emerald-600"><i data-lucide="video" class="w-3 h-3"></i> Booked</span>
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100"><span class="text-xs font-bold text-ink" data-noi18n>09:30 – 09:45</span><span class="text-[9px] font-black uppercase text-slate-400">Available</span></div>
-                      </div>
-                      <div class="fi dl mt-3 text-[10px] text-emerald-600 font-bold flex items-center gap-1.5"><i data-lucide="calendar-plus" class="w-3 h-3"></i> Added to both calendars, with the meeting link</div>
-                    </div>
-                  </div>
-
-                  <!-- Demo: anonymous course evaluation -->
-                  <div class="demo-stage hidden" data-demo="echo">
-                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
-                      <div class="flex items-center justify-between mb-4">
-                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Course evaluation</div>
-                        <span class="text-[10px] font-black font-mono text-slate-500 bg-slate-100 rounded px-1.5 py-0.5" data-noi18n># K-0014</span>
-                      </div>
-                      <div class="text-sm font-black text-ink">Programming II</div>
-                      <div class="text-[11px] text-slate-400 font-semibold mb-3">How clearly were the requirements explained?</div>
-                      <div class="grid grid-cols-5 gap-1.5">
-                        <div class="h-8 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">1</div>
-                        <div class="h-8 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">2</div>
-                        <div class="h-8 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">3</div>
-                        <div class="relative h-8">
-                          <span class="fo absolute inset-0 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">4</span>
-                          <span class="fi absolute inset-0 rounded-lg bg-primary-600 text-white flex items-center justify-center text-xs font-black">4</span>
-                        </div>
-                        <div class="h-8 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">5</div>
-                      </div>
-                      <div class="ri dl mt-4 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2 text-[10px] font-bold text-emerald-700 flex items-center gap-1.5"><i data-lucide="lock" class="w-3 h-3"></i> Submitted without your name — not even the administrators can link it to you.</div>
-                    </div>
-                  </div>
-
-                  <!-- Demo: webshop / parking card -->
-                  <div class="demo-stage hidden" data-demo="shop">
-                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
-                      <div class="flex items-center justify-between mb-3">
-                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">University shop</div>
-                        <div class="relative w-28 h-6">
-                          <span class="fo absolute inset-0 flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[9px] font-black uppercase">Awaiting approval</span>
-                          <span class="fi absolute inset-0 flex items-center justify-center rounded-full bg-sky-100 text-sky-700 text-[9px] font-black uppercase">Ready to pay</span>
-                        </div>
-                      </div>
-                      <div class="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50">
-                        <div class="w-9 h-9 rounded-lg bg-primary-100 text-primary-700 flex items-center justify-center"><i data-lucide="car" class="w-4 h-4"></i></div>
-                        <div class="min-w-0"><div class="text-xs font-black text-ink">Parking card · autumn term</div><div class="text-[10px] text-slate-400 font-semibold">Plate <span data-noi18n>ABC-123</span> · 12 000 Ft</div></div>
-                      </div>
-                      <div class="ri dl mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                        <div class="text-[9px] font-black text-amber-700 uppercase tracking-widest">Payment reference</div>
-                        <div class="text-sm font-black font-mono text-ink tracking-wider" data-noi18n>NJE-WS-00012-43</div>
-                      </div>
-                      <div class="mt-3 text-[10px] text-slate-400 font-semibold flex items-center gap-1.5"><i data-lucide="landmark" class="w-3 h-3"></i> Approved first, paid second — no refunds for rejected requests.</div>
-                    </div>
-                  </div>
-
-                  <!-- Demo: targeted feed -->
-                  <div class="demo-stage hidden" data-demo="feed">
-                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
-                      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">New post · who should see it?</div>
-                      <div class="flex flex-wrap gap-1.5 mb-3">
-                        <span class="text-[10px] font-bold px-2.5 py-1 rounded-xl border border-primary-300 bg-primary-50 text-primary-700">Full-time</span>
-                        <span class="text-[10px] font-bold px-2.5 py-1 rounded-xl border border-slate-200 text-slate-500">Part-time</span>
-                        <span class="relative">
-                          <span class="fo text-[10px] font-bold px-2.5 py-1 rounded-xl border border-slate-200 text-slate-500 inline-block">GAMF faculty</span>
-                          <span class="fi absolute inset-0 text-[10px] font-bold px-2.5 py-1 rounded-xl border border-primary-300 bg-primary-50 text-primary-700 inline-block">GAMF faculty</span>
-                        </span>
-                      </div>
-                      <div class="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 flex items-center gap-2 text-sm font-black text-ink">
-                        <i data-lucide="eye" class="w-4 h-4 text-slate-400"></i>
-                        <span class="relative inline-block w-28 h-5">
-                          <span class="fo absolute inset-0">338 people</span>
-                          <span class="fi absolute inset-0 text-primary-600">211 people</span>
-                        </span>
-                      </div>
-                      <div class="mt-3 text-[10px] text-slate-400 font-semibold flex items-center gap-1.5"><i data-lucide="shield" class="w-3 h-3"></i> Filtered in the database — others cannot read the post at all.</div>
-                    </div>
-                  </div>
-
-                  <!-- Demo: admission chat + letter -->
-                  <div class="demo-stage hidden" data-demo="chat">
-                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg overflow-hidden">
-                      <div class="flex items-center gap-2.5 px-4 py-3 bg-primary-600 text-white">
-                        <div class="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center"><i data-lucide="messages-square" class="w-4 h-4"></i></div>
-                        <div><div class="text-xs font-black">International Office</div><div class="text-[9px] text-white/75 font-semibold">Messages about your application</div></div>
-                      </div>
-                      <div class="p-4 bg-slate-50 min-h-[9rem] flex flex-col justify-end gap-2">
-                        <div class="self-end max-w-[80%] px-3 py-2 rounded-2xl rounded-br-sm bg-primary-50 border border-primary-100 text-[11px] text-ink">When will I receive my offer letter?</div>
-                        <div class="fo self-start flex items-center gap-1 px-3 py-2 rounded-2xl rounded-bl-sm bg-white shadow-sm">
-                          <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span><span class="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
-                        </div>
-                        <div class="ri self-start max-w-[85%] px-3 py-2 rounded-2xl rounded-bl-sm bg-white shadow-sm">
-                          <p class="text-[11px] text-ink leading-snug">It has just been issued — you will find it attached below.</p>
-                          <div class="mt-1.5 flex items-center gap-2 rounded-lg border border-slate-100 px-2 py-1.5"><i data-lucide="file-text" class="w-3.5 h-3.5 text-red-500"></i><span class="text-[10px] font-bold text-ink">Conditional acceptance letter.pdf</span></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-              <div class="h-1 bg-slate-800"></div>
-            </div>
-            <p class="mt-4 text-sm text-slate-500 font-medium flex items-center gap-2" id="demoCaption">
-              <i data-lucide="info" class="w-4 h-4 text-primary-500 shrink-0"></i>
-              <span>Reviewers score each criterion; the server adds up the total and the decision follows.</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== MODULES ===== -->
-    <section id="modules" class="py-24 bg-ink text-white relative overflow-hidden">
-      <div class="absolute -bottom-32 -left-32 w-[34rem] h-[34rem] rounded-full bg-primary-600/20 blur-3xl"></div>
-      <div class="max-w-6xl mx-auto px-6 relative">
-        <div class="max-w-2xl mb-12">
-          <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-400">Modules</span>
-          <h2 class="mt-3 text-4xl font-black tracking-tight">Twenty-four modules in four areas</h2>
-          <p class="mt-4 text-slate-400 text-lg">Grouped the same way as the menu inside the platform. The ones marked new arrived this semester.</p>
-        </div>
-        <div class="grid md:grid-cols-2 gap-6" id="moduleGrid"></div>
-      </div>
-    </section>
-
-    <!-- ===== TRUST ===== -->
-    <section id="trust" class="py-24">
-      <div class="max-w-6xl mx-auto px-6">
-        <div class="max-w-2xl mb-12">
-          <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-600">Privacy & security</span>
-          <h2 class="mt-3 text-4xl font-black tracking-tight text-ink" style="text-wrap:balance">Built for a public university</h2>
-          <p class="mt-4 text-slate-500 text-lg">The rules are enforced where the data lives, not only in the interface.</p>
-        </div>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          <div class="rounded-3xl border border-slate-100 p-6">
-            <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4"><i data-lucide="user-x" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Anonymous course evaluation</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Answers carry no name, and results appear only above a minimum number of respondents.</p>
-          </div>
-          <div class="rounded-3xl border border-slate-100 p-6">
-            <div class="w-10 h-10 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mb-4"><i data-lucide="database" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Access decided by the database</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Role, group and individual permissions; a hidden menu item is never the only lock.</p>
-          </div>
-          <div class="rounded-3xl border border-slate-100 p-6">
-            <div class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-4"><i data-lucide="file-check-2" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Consent log</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Every accepted notice and consent is recorded with its version and can be withdrawn.</p>
-          </div>
-          <div class="rounded-3xl border border-slate-100 p-6">
-            <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4"><i data-lucide="landmark" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Payments to the university</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Transfers go to the university's own account with a checkable reference. Card payment via SimplePay is coming.</p>
-          </div>
-          <div class="rounded-3xl border border-slate-100 p-6">
-            <div class="w-10 h-10 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center mb-4"><i data-lucide="user-check" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Every account approved</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">New registrations and partner agencies are reviewed before they see any data.</p>
-          </div>
-          <div class="rounded-3xl border border-slate-100 p-6">
-            <div class="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center mb-4"><i data-lucide="languages" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Hungarian and English</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">The whole interface switches language; course questionnaires follow the language of the programme.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== CTA ===== -->
-    <section class="pb-24">
-      <div class="max-w-4xl mx-auto px-6">
-        <div class="rounded-[2rem] bg-primary-600 grain px-10 py-16 text-center shadow-2xl shadow-primary-600/25 relative overflow-hidden">
-          <div class="absolute inset-0 bg-gradient-to-br from-primary-500/0 to-primary-800/30"></div>
-          <div class="relative">
-            <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight" style="text-wrap:balance">Ready to get started?</h2>
-            <p class="mt-4 text-primary-50/90 max-w-md mx-auto">Create your account in seconds, or sign in as staff.</p>
-            <div class="mt-8 flex flex-wrap justify-center gap-3">
-              <button onclick="openAuth('register')" class="px-7 py-3.5 rounded-2xl text-sm font-bold text-primary-700 bg-white hover:bg-primary-50 transition-all active:scale-95">Create account</button>
-              <button onclick="openAuth('login')" class="px-7 py-3.5 rounded-2xl text-sm font-bold text-white bg-white/15 border border-white/25 hover:bg-white/25 transition-all active:scale-95">Sign in</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
   </main>
-
-  <!-- ===== FOOTER ===== -->
-  <footer class="border-t border-slate-100 py-12">
-    <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-      <div class="flex items-center gap-2">
-        <span class="text-xl font-black tracking-tight text-primary-600">NJE</span>
-        <span class="w-px h-6 bg-slate-200"></span>
-        <span class="text-xs font-bold tracking-wide text-slate-400">John von Neumann University · UniPortal Pro</span>
-      </div>
-      <p class="text-xs text-slate-400">© 2026 John von Neumann University. Demo interface. · <a href="privacy.html" class="hover:text-primary-600 underline-offset-2 hover:underline">Privacy Notice</a> · <a href="terms.html" class="hover:text-primary-600 underline-offset-2 hover:underline">Terms of Use</a></p>
-    </div>
-  </footer>
-
-
-  <!-- ===== AUTH MODAL ===== -->
-  <!-- A háttérre kattintás SZÁNDÉKOSAN nem zár: a belépőűrlapba már beírt
-       adatot veszítené el egy véletlen kattintás. Bezárni az X-szel lehet
-       (a fejlécben), illetve Escape-pel — az utóbbi tudatos gesztus, és a
-       billentyűvel dolgozóknak ez az egyetlen kiútja. -->
-  <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" id="authModal">
-    <div class="modal-card w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
-      <div class="flex items-center justify-between px-7 pt-6">
-        <div class="flex items-center gap-2">
-          <span class="text-xl font-black tracking-tight text-primary-600">NJE</span>
-          <span class="w-px h-6 bg-slate-200"></span>
-          <span class="text-[11px] font-black tracking-[0.16em] text-ink">UNIPORTAL</span>
-        </div>
-        <button onclick="closeAuth()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
-      </div>
-
-      <div class="px-7 mt-6">
-        <div class="flex p-1 bg-slate-100 rounded-2xl text-sm font-bold">
-          <button id="tabLogin" onclick="switchTab('login')" class="flex-1 py-2.5 rounded-xl transition-all">Sign in</button>
-          <button id="tabRegister" onclick="switchTab('register')" class="flex-1 py-2.5 rounded-xl transition-all">Sign up</button>
-        </div>
-      </div>
-
-      <!-- LOGIN -->
-      <form id="formLogin" class="px-7 py-7 space-y-4" onsubmit="return doLogin(event)">
-        <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Email address</label>
-          <div class="relative">
-            <i data-lucide="mail" class="w-4 h-4 text-slate-300 absolute left-4 top-1/2 -translate-y-1/2"></i>
-            <input id="loginEmail" type="email" required placeholder="e.g. admin@uni.hu" class="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-11 pr-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
-          </div>
-        </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Password</label>
-          <div class="relative">
-            <i data-lucide="lock" class="w-4 h-4 text-slate-300 absolute left-4 top-1/2 -translate-y-1/2"></i>
-            <input id="loginPassword" type="password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-11 pr-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
-          </div>
-        </div>
-        <div class="flex justify-end -mt-1">
-          <button type="button" id="forgotLink" onclick="showForgot()" class="text-[12px] font-bold text-primary-600 hover:text-primary-700 focus:outline-none focus-visible:underline">Forgot password?</button>
-        </div>
-        <div id="loginError" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
-        <button id="loginBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Sign in</button>
-        <p class="text-center text-[11px] text-slate-400"><a href="privacy.html" target="_blank" rel="noopener" class="hover:text-primary-600">Privacy Notice</a> · <a href="terms.html" target="_blank" rel="noopener" class="hover:text-primary-600">Terms of Use</a></p>
-      </form>
-
-      <!-- FORGOT PASSWORD — a Supabase egyszer használható linket küld, ami a reset-password.html-re visz -->
-      <form id="formForgot" class="px-7 py-7 space-y-4 hidden" onsubmit="return doForgot(event)">
-        <div>
-          <h3 class="text-lg font-black text-ink">Reset your password</h3>
-          <p class="mt-1 text-sm text-slate-500 leading-relaxed">Enter the email address you sign in with. We'll send you a link to set a new password.</p>
-        </div>
-        <div>
-          <label for="forgotEmail" class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Email address</label>
-          <div class="relative">
-            <i data-lucide="mail" class="w-4 h-4 text-slate-300 absolute left-4 top-1/2 -translate-y-1/2"></i>
-            <input id="forgotEmail" type="email" required autocomplete="email" placeholder="e.g. anna@example.com" class="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-11 pr-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
-          </div>
-        </div>
-        <div id="forgotError" role="alert" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
-        <div id="forgotOk" aria-live="polite" class="hidden text-[12px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5"></div>
-        <button id="forgotBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95 disabled:opacity-60">Send reset link</button>
-        <button type="button" onclick="switchTab('login')" class="w-full text-center text-[12px] font-bold text-slate-400 hover:text-primary-600">← Back to sign in</button>
-      </form>
-
-      <!-- REGISTER -->
-      <form id="formRegister" class="px-7 py-7 space-y-4 hidden" onsubmit="return doRegister(event)">
-        <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">I'm signing up as</label>
-          <div class="grid grid-cols-2 gap-2" id="personaPick">
-            <button type="button" data-persona="student" class="persona-btn py-2.5 rounded-xl text-sm font-bold border transition-all">Applicant</button>
-            <button type="button" data-persona="agent" class="persona-btn py-2.5 rounded-xl text-sm font-bold border transition-all">Agent</button>
-          </div>
-        </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Full name</label>
-          <input id="regName" type="text" required placeholder="e.g. Anna Kovács" class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
-        </div>
-        <!-- Ügynökségi önregisztráció (29_agency.sql, 1./7. tétel).
-             Ezek a mezők a signUp metaadatába kerülnek, és a handle_new_user()
-             trigger ebből nyitja meg a FÜGGŐBEN LÉVŐ agencies sort — enélkül
-             az önregisztrált ügynökség nem jelenik meg az admin listájában. -->
-        <div id="agencyFields" class="hidden space-y-4 rounded-2xl border border-primary-100 bg-primary-50/40 p-4">
-          <p class="text-[11px] font-semibold text-primary-700 leading-relaxed">
-            Your agency is created in a pending state. An administrator reviews it before you can see any applicant.
-          </p>
-          <div>
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Agency name</label>
-            <input id="regAgencyName" type="text" placeholder="e.g. Global Study Ltd." class="w-full bg-white border border-slate-100 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Country of origin</label>
-            <input id="regAgencyCountry" type="text" placeholder="e.g. Nigeria" class="w-full bg-white border border-slate-100 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Countries of recruitment</label>
-            <input id="regAgencyCountries" type="text" placeholder="e.g. Nigeria, Ghana, Kenya" class="w-full bg-white border border-slate-100 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
-            <p class="text-[10px] text-slate-400 mt-1.5">Separate several countries with commas.</p>
-          </div>
-        </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Email address</label>
-          <input id="regEmail" type="email" required placeholder="e.g. anna@example.com" class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
-        </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Password</label>
-          <input id="regPassword" type="password" required minlength="6" placeholder="At least 6 characters" class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-300 transition-all" />
-        </div>
-        <!-- Jogi elfogadások (59_legal_consents.sql). A lista a legal_document katalógusból
-             jön (az anon olvashatja); ha nem érhető el, a lenti beégetett tartalék látszik.
-             Külön jelölőnégyzetek, a választhatók alapból üresen — nem összecsomagolva. -->
-        <div id="regLegal" class="space-y-2"></div>
-        <div id="regError" class="hidden text-[12px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5"></div>
-        <button id="regBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all active:scale-95">Create account</button>
-        <p class="text-[11px] text-slate-400 text-center leading-relaxed">
-          You will need to confirm your email address, and an administrator approves every new account before it can be used.
-        </p>
-      </form>
-
-      <!-- REGISTER SUCCESS -->
-      <div id="regSuccess" class="px-7 py-9 hidden text-center">
-        <div class="w-16 h-16 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center mx-auto mb-5"><i data-lucide="check" class="w-8 h-8"></i></div>
-        <h3 class="text-xl font-black text-ink">Welcome, <span id="regSuccessName">Anna</span>!</h3>
-        <p id="regSuccessMsg" class="mt-3 text-sm text-slate-500 leading-relaxed">Your account is ready.</p>
-        <button id="regSuccessEnter" class="mt-7 w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 transition-all active:scale-95">Enter the platform</button>
-        <button onclick="switchTab('login')" class="mt-2 w-full py-2.5 text-xs font-bold text-slate-400 hover:text-ink transition-colors">Back to sign in</button>
-      </div>
-    </div>
-  </div>
+  <div class="credit" data-t="kep"></div>
 
   <script>
-    /* ---- Modules: négy terület, ugyanúgy csoportosítva, mint az alkalmazás menüje ---- */
-    const MODULE_GROUPS = [
-      ['file-text', 'Admissions', [
-        ['Application & admissions', 'Programme catalogue, online form and documents.', false],
-        ['Review & scoring criteria', 'An editable criteria sheet; the server adds up the score.', true],
-        ['Interview calendar', 'Staff availability, bookable slots, calendar invites.', true],
-        ['Offer letters & payment reference', 'Acceptance letter as PDF; a checkable reference on every transfer.', true],
-        ['Messages with applicants', 'Conversation per application, with attachments.', true],
-        ['Visa & compliance', 'Visa checklist and follow-up.', false],
-      ]],
-      ['book-open', 'Studies', [
-        ['Courses', 'Course registry, enrolments and student lists.', false],
-        ['Teachers', 'Teacher registry with courses, student numbers and campaigns.', true],
-        ['Students', 'Searchable directory with classification, groups and statistics.', true],
-        ['Course evaluation (ECHO)', 'Anonymous questionnaires, goal setting, numbered campaigns.', false],
-        ['Teacher results', 'Results above the privacy threshold, with a comment window.', false],
-        ['Student calendar', 'Interviews, deadlines and events in one calendar.', true],
-      ]],
-      ['home', 'Campus life', [
-        ['Campus feed', 'Posts for chosen audiences, with a view counter.', true],
-        ['University shop', 'Notes, parking cards and merchandise; staff edit products from templates.', true],
-        ['Dormitory', 'Rooms, beds, applications and occupancy.', false],
-        ['Maintenance', 'Fault reports and follow-up for the dormitory.', false],
-        ['AI assistant', 'Answers from the university knowledge base.', false],
-        ['Programmes', 'Short programmes and courses to apply for.', false],
-      ]],
-      ['settings', 'Operations', [
-        ['Finance', 'Fees, payments and invoice numbers.', false],
-        ['Agent & partner portal', 'Applicants, commission periods and statements.', false],
-        ['CRM & marketing', 'Communication, campaigns and leads.', false],
-        ['Reports & insights', 'Dashboards and exports.', false],
-        ['Permissions', 'Menu access by role, group or individual, plus job titles.', true],
-        ['Registrations & consent log', 'Account approval and a versioned record of consents.', false],
-      ]],
-    ];
-    document.getElementById('moduleGrid').innerHTML = MODULE_GROUPS.map(([icon, group, items]) => `
-      <div class="rounded-3xl bg-white/[0.04] border border-white/10 p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="w-10 h-10 rounded-xl bg-primary-600/25 text-primary-300 flex items-center justify-center"><i data-lucide="${icon}" class="w-5 h-5"></i></span>
-          <h3 class="font-black text-white text-lg">${group}</h3>
-        </div>
-        <ul class="divide-y divide-white/10">
-          ${items.map(([name, desc, uj]) => `
-            <li class="py-3 flex items-start justify-between gap-3">
-              <span class="min-w-0">
-                <span class="block text-sm font-bold text-white">${name}</span>
-                <span class="block text-xs text-slate-400 leading-relaxed mt-0.5">${desc}</span>
-              </span>
-              ${uj ? '<span class="shrink-0 text-[9px] font-black uppercase tracking-widest text-primary-200 bg-primary-600/30 rounded-md px-1.5 py-0.5">New</span>' : ''}
-            </li>`).join('')}
-        </ul>
-      </div>`).join('');
-
-    /* ---- Demo tabs ---- */
-    const DEMOS = [
-      ['review', 'pie-chart', 'Admissions review', 'Reviewers score each criterion; the server adds up the total and the decision follows.'],
-      ['interview', 'calendar', 'Interview booking', 'Applicants pick a 15-minute slot; the invitation lands in both calendars.'],
-      ['echo', 'clipboard-list', 'Course evaluation', 'Students rate their courses anonymously; every campaign has its own number.'],
-      ['shop', 'shopping-bag', 'University shop', 'A parking card is approved first, then paid with a unique reference.'],
-      ['feed', 'newspaper', 'Targeted feed', 'Choose who sees a post and watch the audience size update before publishing.'],
-      ['chat', 'messages-square', 'Messages', 'Applicants and the International Office talk in one thread; the offer letter arrives as a PDF.'],
-    ];
-    const demoMap = Object.fromEntries(DEMOS.map(d => [d[0], d]));
-    document.getElementById('demoTabs').innerHTML = DEMOS.map(([key, icon, label]) => `
-      <button data-key="${key}" onclick="showDemo('${key}', true)" class="demo-tab shrink-0 lg:w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border text-left transition-all">
-        <span class="demo-tab-ic w-9 h-9 rounded-xl flex items-center justify-center shrink-0"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
-        <span class="text-sm font-bold whitespace-nowrap lg:whitespace-normal">${label}</span>
-      </button>`).join('');
-
-    let demoTimer = null, userPicked = false, demoIdx = 0;
-    function styleTabs(active){
-      document.querySelectorAll('.demo-tab').forEach(t => {
-        const on = t.dataset.key === active;
-        t.className = 'demo-tab shrink-0 lg:w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border text-left transition-all ' +
-          (on ? 'bg-primary-50 border-primary-200 text-primary-800 shadow-sm' : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200');
-        const ic = t.querySelector('.demo-tab-ic');
-        ic.className = 'demo-tab-ic w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ' + (on ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400');
-      });
-    }
-    function playStage(key){
-      const stages = document.querySelectorAll('.demo-stage');
-      stages.forEach(s => { s.classList.toggle('hidden', s.dataset.demo !== key); s.classList.remove('played'); });
-      const active = [...stages].find(s => s.dataset.demo === key);
-      // Trigger the one-shot transition on the next frame, then rest in the end state.
-      requestAnimationFrame(() => requestAnimationFrame(() => { if (active) active.classList.add('played'); }));
-      styleTabs(key);
-      demoIdx = DEMOS.findIndex(d => d[0] === key);
-      document.getElementById('demoLabel').textContent = demoMap[key][2];
-      document.querySelector('#demoCaption span').textContent = demoMap[key][3];
-      lucide.createIcons();
-    }
-    function showDemo(key, fromClick){
-      if (fromClick) { userPicked = true; if (demoTimer) clearInterval(demoTimer); }
-      playStage(key);
-    }
-    function startDemoCycle(){
-      demoTimer = setInterval(() => {
-        if (userPicked) return;
-        demoIdx = (demoIdx + 1) % DEMOS.length;
-        playStage(DEMOS[demoIdx][0]);
-      }, 5200);
-    }
-
-    /* A demó-fiókok gyorsgombjai innen KIKERÜLTEK. Ez nyilvános oldal: a
-       gombok beégetett jelszóval töltötték ki az űrlapot, tehát bárki
-       bejuthatott velük. A tesztfiókok adatai a tesztelési kézikönyvben
-       vannak, azokat kézzel kell begépelni. */
-    function enterApp(){ window.location.href = 'app.html'; }
-    function showErr(id, msg){ const el = document.getElementById(id); el.textContent = msg; el.classList.remove('hidden'); }
-    function hideErr(id){ document.getElementById(id).classList.add('hidden'); }
-
-    /* ---- Auth modal ---- */
-    const modal = document.getElementById('authModal');
-    let persona = 'student';
-    function openAuth(tab, p){
-      if (p) persona = p;
-      modal.classList.remove('hidden'); modal.classList.add('flex');
-      switchTab(tab || 'login');
-      document.body.style.overflow = 'hidden';
-      setTimeout(() => lucide.createIcons(), 0);
-    }
-    function closeAuth(){ modal.classList.add('hidden'); modal.classList.remove('flex'); document.body.style.overflow = ''; }
-    function switchTab(tab){
-      const login = tab === 'login';
-      document.getElementById('formLogin').classList.toggle('hidden', !login);
-      document.getElementById('formRegister').classList.toggle('hidden', login);
-      document.getElementById('regSuccess').classList.add('hidden');
-      document.getElementById('formForgot').classList.add('hidden');
-      const active = 'bg-white text-ink shadow-sm';
-      document.getElementById('tabLogin').className = 'flex-1 py-2.5 rounded-xl transition-all ' + (login ? active : 'text-slate-400');
-      document.getElementById('tabRegister').className = 'flex-1 py-2.5 rounded-xl transition-all ' + (!login ? active : 'text-slate-400');
-      if (!login) setPersona(persona);
-    }
-    function setPersona(p){
-      persona = p;
-      document.querySelectorAll('.persona-btn').forEach(b => {
-        const on = b.dataset.persona === p;
-        b.className = 'persona-btn py-2.5 rounded-xl text-sm font-bold border transition-all ' +
-          (on ? 'bg-primary-50 border-primary-300 text-primary-700' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300');
-      });
-      // Az ügynökségi blokk csak az 'agent' személynél látszik.
-      const af = document.getElementById('agencyFields');
-      if (af) af.classList.toggle('hidden', p !== 'agent');
-      renderLegal();   // az ügynöknek a partnerfeltételek is kötelezők
-    }
-    document.querySelectorAll('.persona-btn').forEach(b => b.addEventListener('click', () => setPersona(b.dataset.persona)));
-    async function doLogin(e){
-      e.preventDefault();
-      hideErr('loginError');
-      const email = document.getElementById('loginEmail').value.trim();
-      const password = document.getElementById('loginPassword').value;
-      const btn = document.getElementById('loginBtn');
-      btn.disabled = true; const label = btn.textContent; btn.textContent = 'Signing in…';
-      try {
-        const { error } = await window.sb.auth.signInWithPassword({ email, password });
-        if (error) { showErr('loginError', error.message || 'Sign-in failed.'); btn.disabled = false; btn.textContent = label; return false; }
-        enterApp();
-      } catch (err) {
-        showErr('loginError', 'Connection error. Please try again.'); btn.disabled = false; btn.textContent = label;
-      }
-      return false;
-    }
-    /* ---- NJE SAML SSO ----
-       A saját SAML SP-nk (deploy/saml-sp) visz az NJE IdP-re; a sikeres
-       belépés után az app.html-re jön vissza egy egyszer használható tokennel
-       (#sso_token_hash), amit ott váltunk munkamenetre. Az első belépő fiókja
-       automatikusan létrejön. Hiba esetén ide jön vissza: #sso_error=<kód>. */
-    function doNjeSso(){
-      hideErr('loginError');
-      document.getElementById('njeSsoBtn').disabled = true;
-      window.location.assign(new URL('saml/login?next=app.html', window.location.href).href);
-    }
-    // Vissza gombbal (bfcache) ne maradjon letiltva a gomb.
-    window.addEventListener('pageshow', () => { const b = document.getElementById('njeSsoBtn'); if (b) b.disabled = false; });
-    const SSO_ERRORS = {
-      expired: 'The NJE sign-in took too long or was already used. Please try again.',
-      invalid_response: 'The NJE sign-in response could not be verified. Please try again.',
-      missing_eppn: 'The NJE identity provider did not send your username. Please contact IT.',
-      missing_email: 'The NJE identity provider did not send your email address. Please contact IT.',
-      provision_failed: 'Your account could not be set up. Please try again later.',
-      start_failed: 'NJE sign-in could not be started.',
-      session_failed: 'NJE sign-in succeeded, but the session could not be started. Please try again.',
+    /* ---- Szövegek (a forrás magyar; az angol a nyelvváltóval) ---- */
+    var T = {
+      hu: { cim: 'Belépés', alcim: 'Lépj be a Neumann János Egyetem UniPortal fiókodba.', email: 'E-mail-cím', jelszo: 'Jelszó',
+            elfelejtett: 'Elfelejtett jelszó?', belepes: 'Belépés', belepesFolyamatban: 'Belépés…', fcim: 'Jelszó visszaállítása',
+            falcim: 'Add meg az e-mail-címet, amellyel belépsz. Küldünk egy linket, amellyel új jelszót állíthatsz be.',
+            kuldes: 'Visszaállító link küldése', kuldesFolyamatban: 'Küldés…', vissza: '← Vissza a belépéshez',
+            regisztracio: 'Nincs még fiókod? Regisztráció', rolunk: 'A UniPortalról', vagy: 'vagy', sso: 'Belépés NJE-fiókkal',
+            ssoHibak: { expired: 'Az NJE-belépés túl sokáig tartott, vagy már felhasználták. Kérjük, próbáld újra.',
+              invalid_response: 'Az NJE-belépés válasza nem ellenőrizhető. Kérjük, próbáld újra.',
+              missing_eppn: 'Az NJE azonosító szolgáltatás nem küldte el a felhasználónevedet. Kérjük, fordulj az informatikához.',
+              missing_email: 'Az NJE azonosító szolgáltatás nem küldte el az e-mail-címedet. Kérjük, fordulj az informatikához.',
+              provision_failed: 'A fiókodat nem sikerült létrehozni. Kérjük, próbáld újra később.',
+              start_failed: 'Az NJE-belépést nem sikerült elindítani.',
+              session_failed: 'Az NJE-belépés sikerült, de a munkamenet nem indult el. Kérjük, próbáld újra.' },
+            ssoHiba: 'Az NJE-belépés nem sikerült. Kérjük, próbáld újra.', adatvedelem: 'Adatkezelési tájékoztató', feltetelek: 'Felhasználási feltételek',
+            kep: 'Neumann János Egyetem · Kecskemét', mutat: 'Jelszó megjelenítése', elrejt: 'Jelszó elrejtése',
+            hianyzik: 'Add meg az e-mail-címet és a jelszót.', hibas: 'Hibás e-mail-cím vagy jelszó.',
+            nincsMegerositve: 'Az e-mail-cím még nincs megerősítve. Nézd meg a postafiókodat.',
+            kapcsolat: 'Kapcsolódási hiba. Kérjük, próbáld újra.', sikertelen: 'A belépés nem sikerült.',
+            tulSok: 'Túl sok kérés. Várj egy percet, mielőtt új linket kérsz.', keresHiba: 'A kérés nem sikerült. Kérjük, próbáld újra.',
+            elkuldve: function (e) { return 'Ha létezik fiók a(z) ' + e + ' címhez, elküldtük rá az új jelszó beállításához szükséges linket. Nézd meg a postafiókodat (és a levélszemét mappát is).'; },
+            lejart: 'Ez az e-mailes link érvénytelen vagy lejárt — minden link csak egyszer és korlátozott ideig működik. Ha jelszót állítottál vissza, kérj új linket.' },
+      en: { cim: 'Sign in', alcim: 'Sign in to your John von Neumann University UniPortal account.', email: 'Email address', jelszo: 'Password',
+            elfelejtett: 'Forgot password?', belepes: 'Sign in', belepesFolyamatban: 'Signing in…', fcim: 'Reset your password',
+            falcim: "Enter the email address you sign in with. We'll send you a link to set a new password.",
+            kuldes: 'Send reset link', kuldesFolyamatban: 'Sending…', vissza: '← Back to sign in',
+            regisztracio: 'No account yet? Sign up', rolunk: 'About UniPortal', vagy: 'or', sso: 'Sign in with NJE account',
+            ssoHibak: { expired: 'The NJE sign-in took too long or was already used. Please try again.',
+              invalid_response: 'The NJE sign-in response could not be verified. Please try again.',
+              missing_eppn: 'The NJE identity provider did not send your username. Please contact IT.',
+              missing_email: 'The NJE identity provider did not send your email address. Please contact IT.',
+              provision_failed: 'Your account could not be set up. Please try again later.',
+              start_failed: 'NJE sign-in could not be started.',
+              session_failed: 'NJE sign-in succeeded, but the session could not be started. Please try again.' },
+            ssoHiba: 'NJE sign-in failed. Please try again.', adatvedelem: 'Privacy Notice', feltetelek: 'Terms of Use',
+            kep: 'John von Neumann University · Kecskemét', mutat: 'Show password', elrejt: 'Hide password',
+            hianyzik: 'Enter your email address and password.', hibas: 'Incorrect email address or password.',
+            nincsMegerositve: 'Your email address is not confirmed yet. Check your inbox.',
+            kapcsolat: 'Connection error. Please try again.', sikertelen: 'Sign-in failed.',
+            tulSok: 'Too many requests. Please wait a minute before requesting another link.', keresHiba: 'The request failed. Please try again.',
+            elkuldve: function (e) { return 'If an account exists for ' + e + ', we have sent it a link to set a new password. Check your inbox (and the spam folder).'; },
+            lejart: 'This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link.' }
     };
-    (function showSsoError(){
-      const m = /(^|[#&])sso_error=([\w-]+)/.exec(location.hash);
-      if (!m) return;
-      history.replaceState(null, '', location.pathname + location.search);
-      openAuth('login');
-      showErr('loginError', SSO_ERRORS[m[2]] || 'NJE sign-in failed. Please try again.');
-    })();
-    /* ---- Elfelejtett jelszó ----
-       A válasz szándékosan ugyanaz, akár létezik a fiók, akár nem: a felületről
-       így nem deríthető ki, ki van regisztrálva (a Supabase is így válaszol). */
-    const FORGOT_LABEL = 'Send reset link';
-    function showForgot(){
-      document.getElementById('formLogin').classList.add('hidden');
-      document.getElementById('formRegister').classList.add('hidden');
-      document.getElementById('regSuccess').classList.add('hidden');
-      document.getElementById('formForgot').classList.remove('hidden');
-      const fe = document.getElementById('forgotEmail');
-      const le = document.getElementById('loginEmail').value.trim();
-      if (le && !fe.value) fe.value = le;
-      hideErr('forgotError'); document.getElementById('forgotOk').classList.add('hidden');
-      setTimeout(() => { lucide.createIcons(); fe.focus(); }, 0);
+    var L = T[window.NJE_LANG] || T.hu;
+    function $(id) { return document.getElementById(id); }
+    function alkalmaz() {
+      document.documentElement.lang = window.NJE_LANG;
+      document.title = (window.NJE_LANG === 'en' ? 'Sign in' : 'Belépés') + ' — UniPortal · ' + (window.NJE_LANG === 'en' ? 'John von Neumann University' : 'Neumann János Egyetem');
+      document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = L[el.dataset.t]; });
+      $('lang').textContent = window.NJE_LANG === 'en' ? 'EN' : 'HU';
+      $('mutat').setAttribute('aria-label', L.mutat);
     }
-    function forgotCooldown(btn){
-      let s = 60;
-      btn.disabled = true; btn.textContent = FORGOT_LABEL + ' (' + s + ')';
-      const iv = setInterval(() => {
-        s -= 1;
-        if (s <= 0) { clearInterval(iv); btn.disabled = false; btn.textContent = FORGOT_LABEL; }
-        else btn.textContent = FORGOT_LABEL + ' (' + s + ')';
-      }, 1000);
-    }
-    async function doForgot(e){
-      e.preventDefault();
-      hideErr('forgotError');
-      const ok = document.getElementById('forgotOk'); ok.classList.add('hidden');
-      const email = document.getElementById('forgotEmail').value.trim();
-      const btn = document.getElementById('forgotBtn');
-      if (!email) return false;
-      btn.disabled = true; btn.textContent = 'Sending…';
-      try {
-        const { error } = await window.sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('reset-password.html', window.location.href).href });
-        if (error) {
-          const rate = error.status === 429 || /rate limit|only request this after/i.test(error.message || '');
-          showErr('forgotError', rate ? 'Too many requests. Please wait a minute before requesting another link.' : (error.message || 'The request failed. Please try again.'));
-          btn.disabled = false; btn.textContent = FORGOT_LABEL;
-          return false;
-        }
-        ok.textContent = 'If an account exists for ' + email + ', we have sent it a link to set a new password. Check your inbox (and the spam folder). The link works once and expires after a while.';
-        ok.classList.remove('hidden');
-        forgotCooldown(btn);
-      } catch (err) {
-        showErr('forgotError', 'Connection error. Please try again.');
-        btn.disabled = false; btn.textContent = FORGOT_LABEL;
-      }
-      return false;
-    }
-    /* ---- Jogi elfogadások a regisztrációnál ----
-       A bejelölt tételek a signUp metaadatába kerülnek (consents: { id: verzió });
-       a 59-es migráció auth.users-triggere ebből naplóz. A szövegek textContent-tel
-       kerülnek az oldalra (a katalógus tartalma nem kerül HTML-ként értelmezésre). */
-    const LEGAL_FALLBACK = [
-      { id: 'terms', label_hu: "Elolvastam és elfogadom a Felhasználási feltételeket.", kind: 'terms', version: '2026-09-11', required: true, roles: [], label_en: 'I have read and accept the Terms of Use.', url: 'terms.html' },
-      { id: 'privacy', label_hu: "Megismertem az Adatkezelési tájékoztatót.", kind: 'notice', version: '2026-09-11', required: true, roles: [], label_en: 'I have read the Privacy Notice.', url: 'privacy.html' },
-      { id: 'age16', label_hu: "Kijelentem, hogy elmúltam 16 éves.", kind: 'declaration', version: '2026-09-11', required: true, roles: [], label_en: 'I confirm that I am at least 16 years old.', url: 'privacy.html#kiskoru' },
-      { id: 'agent_terms', label_hu: "Elfogadom a Partnerügynökségi feltételeket, és kijelentem, hogy a jelentkezők adatait az ő tájékoztatásuk és felhatalmazásuk alapján adom meg.", kind: 'terms', version: '2026-09-11', required: true, roles: ['AGENT'], label_en: "I accept the Partner Agency Terms and confirm that I submit applicants' data only after informing them and with their authorisation.", url: 'terms.html#partner' },
-      { id: 'marketing', label_hu: "Hozzájárulok, hogy az egyetem képzési ajánlatairól és eseményeiről e-mailben tájékoztatást kapjak. Bármikor visszavonhatom.", kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: "I agree to receive emails about the university's programmes and events. I can withdraw this at any time.", url: 'privacy.html#marketing' },
-      { id: 'whatsapp', label_hu: "Hozzájárulok, hogy a Nemzetközi Iroda WhatsAppon is felvegye velem a kapcsolatot (a Meta Platforms szolgáltatásán keresztül). Bármikor visszavonhatom.", kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: 'I agree that the International Office may also contact me via WhatsApp (a Meta Platforms service). I can withdraw this at any time.', url: 'privacy.html#whatsapp' },
-    ];
-    let legalDocs = LEGAL_FALLBACK;
-    async function loadLegalDocs(){
-      try {
-        const { data, error } = await window.sb.from('legal_document').select('id,kind,version,required,roles,label_hu,label_en,url,sort_order').eq('active', true).order('sort_order');
-        if (!error && Array.isArray(data) && data.length) legalDocs = data;
-      } catch (e) { /* tartalék marad */ }
-      renderLegal();
-    }
-    function renderLegal(){
-      const box = document.getElementById('regLegal'); if (!box) return;
-      const role = persona === 'agent' ? 'AGENT' : 'STUDENT';
-      const list = legalDocs.filter(d => !d.roles || !d.roles.length || d.roles.indexOf(role) >= 0);
-      const prev = {}; box.querySelectorAll('input[data-legal]').forEach(i => { prev[i.dataset.legal] = i.checked; });
-      box.innerHTML = '';
-      const row = (d) => {
-        const lab = document.createElement('label');
-        lab.className = 'flex items-start gap-2.5 text-[12px] text-slate-600 leading-relaxed cursor-pointer';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox'; cb.className = 'mt-0.5 w-4 h-4 accent-primary-600 flex-none';
-        cb.dataset.legal = d.id; cb.dataset.version = d.version; cb.dataset.required = d.required ? '1' : '';
-        cb.checked = !!prev[d.id];
-        const span = document.createElement('span');
-        span.appendChild(document.createTextNode(((window.NJE_LANG === 'hu' && d.label_hu) || d.label_en) + ' '));
-        if (d.required) { const st = document.createElement('b'); st.className = 'text-red-500'; st.textContent = '*'; span.appendChild(st); span.appendChild(document.createTextNode(' ')); }
-        if (d.url) { const a = document.createElement('a'); a.href = d.url; a.target = '_blank'; a.rel = 'noopener'; a.className = 'font-bold text-primary-600 hover:underline whitespace-nowrap'; a.textContent = 'Read'; a.addEventListener('click', ev => ev.stopPropagation()); span.appendChild(a); }
-        lab.appendChild(cb); lab.appendChild(span); return lab;
-      };
-      list.filter(d => d.required).forEach(d => box.appendChild(row(d)));
-      const opt = list.filter(d => !d.required);
-      if (opt.length) {
-        const h = document.createElement('p');
-        h.className = 'pt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest';
-        h.textContent = 'Optional — you can change these later in your profile';
-        box.appendChild(h);
-        opt.forEach(d => box.appendChild(row(d)));
-      }
-    }
-    async function doRegister(e){
-      e.preventDefault();
-      hideErr('regError');
-      const name = document.getElementById('regName').value.trim() || 'there';
-      const email = document.getElementById('regEmail').value.trim();
-      const password = document.getElementById('regPassword').value;
-      const role = persona === 'agent' ? 'AGENT' : 'STUDENT';
-      const btn = document.getElementById('regBtn');
-      btn.disabled = true; const label = btn.textContent; btn.textContent = 'Creating…';
-      // Az ügynökségi mezők a signUp metaadatába mennek; a handle_new_user()
-      // trigger (29_agency.sql, 6. szakasz) ebből nyitja a pending agencies sort.
-      // Kötelező elfogadások: mind be kell legyen jelölve. A bejelöltek verzióval mennek a naplóba.
-      const boxes = Array.from(document.querySelectorAll('#regLegal input[data-legal]'));
-      if (boxes.some(b => b.dataset.required && !b.checked)) {
-        showErr('regError', 'Please accept the required items marked with *.');
-        btn.disabled = false; btn.textContent = label; return false;
-      }
-      const consents = {};
-      boxes.filter(b => b.checked).forEach(b => { consents[b.dataset.legal] = b.dataset.version; });
-      const meta = { name, role, consents };
-      if (role === 'AGENT') {
-        const agName = (document.getElementById('regAgencyName') || {}).value || '';
-        const agCountry = (document.getElementById('regAgencyCountry') || {}).value || '';
-        const agCountries = (document.getElementById('regAgencyCountries') || {}).value || '';
-        meta.agencyName = agName.trim() || name;
-        meta.agencyCountry = agCountry.trim();
-        meta.agencyCountries = agCountries.split(',').map(s => s.trim()).filter(Boolean);
-      }
-      try {
-        const { data, error } = await window.sb.auth.signUp({ email, password, options: { data: meta, emailRedirectTo: new URL('app.html', window.location.href).href } });
-        if (error) { showErr('regError', error.message || 'Sign-up failed.'); btn.disabled = false; btn.textContent = label; return false; }
-        document.getElementById('regSuccessName').textContent = name.split(' ')[0];
-        document.getElementById('formRegister').classList.add('hidden');
-        document.getElementById('regSuccess').classList.remove('hidden');
-        const enterBtn = document.getElementById('regSuccessEnter');
-        // Two gates stand between signing up and using the platform: the
-        // applicant must confirm their email address, and an administrator
-        // must then approve the account (migration 07). Say so plainly —
-        // otherwise the pending screen after sign-in reads as a failure.
-        if (data.session) {
-          // Email confirmation is switched off on the project: signed in
-          // already, but still waiting for approval.
-          document.getElementById('regSuccessMsg').textContent =
-            'Your account has been created and is now waiting for administrator approval. You can sign in, but the platform stays locked until it is approved.';
-          enterBtn.textContent = 'Continue';
-          enterBtn.onclick = () => enterApp();
-        } else {
-          document.getElementById('regSuccessMsg').textContent =
-            'Check your inbox and confirm your email address. After that an administrator reviews your registration — you will be able to sign in once it is approved.';
-          enterBtn.textContent = 'Back to sign in';
-          enterBtn.onclick = () => switchTab('login');
-        }
-        setTimeout(() => lucide.createIcons(), 0);
-      } catch (err) {
-        showErr('regError', 'Connection error. Please try again.'); btn.disabled = false; btn.textContent = label;
-      }
-      return false;
-    }
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAuth(); });
+    alkalmaz();
+    $('lang').addEventListener('click', function () {
+      window.NJE_LANG = window.NJE_LANG === 'en' ? 'hu' : 'en';
+      try { localStorage.setItem('nje_lang', window.NJE_LANG); } catch (e) {}
+      L = T[window.NJE_LANG]; alkalmaz();
+    });
 
-    /* ---- Init ---- */
-    showDemo('review', false);
-    startDemoCycle();
-    lucide.createIcons();
-    loadLegalDocs();
-    // A visszaállító oldal „Új link kérése” gombja ide mutat: index.html#forgot
-    if (location.hash === '#forgot') { openAuth('login'); showForgot(); }
-    /* Egy lejárt vagy már felhasznált e-mailes link hibával ide jöhet vissza
-       (#error_code=otp_expired…). Eddig ilyenkor semmi nem történt; most
-       megmondjuk, mi a teendő, és eltüntetjük a hibát a címsorból. */
-    (() => {
-      const hp = new URLSearchParams(location.hash.replace(/^#/, ''));
-      if (!hp.get('error_code') && !hp.get('error')) return;
-      openAuth('login');
-      showErr('loginError', 'This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link with “Forgot password?”.');
-      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-    })();
-  </script>
-  <script>
-    /* ---- Magyar nézet ----
-       Az oldal forrásnyelve angol. Magyar beállításnál (nje_lang = 'hu', vagy ha nincs beállítás,
-       magyar böngésző) a szövegcsomópontokat és a helykitöltőket szótárból cseréljük; a figyelő a
-       később beírt szövegeket (demófeliratok, hibaüzenetek, gombállapotok) is lefordítja.
-       A nyelvváltó ugyanazt a kulcsot írja, amit az alkalmazás és a jogi oldalak olvasnak. */
-    function njeNyelvValtas(){
-      try { localStorage.setItem('nje_lang', window.NJE_LANG === 'hu' ? 'en' : 'hu'); } catch (e) {}
-      location.reload();
+    function hiba(id, szoveg) { var el = $(id); el.textContent = szoveg; el.classList.add('on'); }
+    function tisztit(id) { $(id).classList.remove('on'); }
+    function belep() { window.location.href = 'app.html'; }
+
+    /* Aki már be van lépve, azt nem tartjuk fel itt. */
+    if (window.sb && !window.__RECOVERY_REDIRECT) {
+      window.sb.auth.getSession().then(function (r) { if (r && r.data && r.data.session) belep(); }).catch(function () {});
     }
-    (function(){
-      var gomb = document.getElementById('langToggle');
-      if (gomb) gomb.textContent = window.NJE_LANG === 'hu' ? 'HU' : 'EN';
-      if (window.NJE_LANG !== 'hu') return;
-      var HU = {
-      "Who it's for": "Kiknek szól",
-      "See it in action": "Működés közben",
-      "Process": "Folyamat",
-      "Modules": "Modulok",
-      "Sign in": "Belépés",
-      "Sign up": "Regisztráció",
-      "John von Neumann University · International Admissions": "Neumann János Egyetem · Nemzetközi felvételi",
-      "The entire admissions journey on": "A teljes felvételi folyamat",
-      "one platform": "egy platformon",
-      "From application through review and visa to enrollment. Built for applicants, agents, and university staff — in one transparent system.": "A jelentkezéstől a bírálaton és a vízumon át a beiratkozásig. Jelentkezőknek, ügynököknek és egyetemi munkatársaknak — egyetlen átlátható rendszerben.",
-      "Create account": "Fiók létrehozása",
-      "Watch demos": "Bemutatók megtekintése",
-      "Try it instantly": "Próbáld ki azonnal",
-      "12 integrated modules": "12 integrált modul",
-      "Finance": "Pénzügyek",
-      "Admissions": "Felvételi",
-      "Visa": "Vízum",
-      "Reports": "Riportok",
-      "Revenue & receivables": "Bevételek és kintlévőségek",
-      "Revenue (monthly)": "Bevétel (havi)",
-      "Pending": "Függőben",
-      "3 items": "3 tétel",
-      "One platform, three perspectives": "Egy platform, három nézőpont",
-      "Every role gets its own focused interface — on shared, real-time data.": "Minden szerepkör saját, fókuszált felületet kap — közös, valós idejű adatokon.",
-      "For applicants": "Jelentkezőknek",
-      "Apply and track your progress transparently, from admission to enrollment.": "Jelentkezz, és kövesd átláthatóan a folyamatot a felvételtől a beiratkozásig.",
-      "Online application & document upload": "Online jelentkezés és dokumentumfeltöltés",
-      "Video interview & status tracking": "Videóinterjú és státuszkövetés",
-      "Visa checklist & online payment": "Vízum-ellenőrzőlista és online fizetés",
-      "Sign up as applicant": "Regisztráció jelentkezőként",
-      "For agents & partners": "Ügynököknek és partnereknek",
-      "Manage your submitted applicants and commission in a single portal.": "Kezeld a beküldött jelentkezőidet és a jutalékodat egyetlen portálon.",
-      "Manage applicants in one place": "Jelentkezők kezelése egy helyen",
-      "Track commission & performance": "Jutalék és teljesítmény követése",
-      "Shared admissions pipeline": "Közös felvételi folyamat",
-      "Sign up as agent": "Regisztráció ügynökként",
-      "For university staff": "Egyetemi munkatársaknak",
-      "Review, finance, CRM and reporting — full end-to-end administration.": "Bírálat, pénzügyek, CRM és riportok — teljes körű ügyintézés.",
-      "Admissions review & finance": "Felvételi bírálat és pénzügyek",
-      "CRM, communication & marketing": "CRM, kommunikáció és marketing",
-      "Reports & system administration": "Riportok és rendszerkezelés",
-      "Staff sign in": "Munkatársi belépés",
-      "Short guided demos": "Rövid bemutatók",
-      "Watch the key features at work — pick a topic to play its quick walkthrough.": "Nézd meg működés közben a fő funkciókat — válassz egy témát a rövid bemutatóhoz.",
-      "Auto-playing demo": "Automatikusan futó bemutató",
-      "Admissions review": "Felvételi bírálat",
-      "Applicant evaluation": "Jelentkező értékelése",
-      "BSc Business Admin": "BSc Gazdálkodás és menedzsment",
-      "Submitted": "Beadva",
-      "Accepted": "Felvéve",
-      "Overall score": "Összpontszám",
-      "Motivation": "Motiváció",
-      "GPA": "Tanulmányi átlag",
-      "Language": "Nyelvtudás",
-      "Payments": "Befizetések",
-      "Application Fee · €50": "Jelentkezési díj · €50",
-      "Chen Wei · Bank transfer": "Chen Wei · Banki átutalás",
-      "Paid": "Fizetve",
-      "Verify": "Jóváhagyás",
-      "Verified transfers post to revenue instantly.": "A jóváhagyott átutalások azonnal megjelennek a bevételben.",
-      "Interview slots · Mar 25": "Interjúidőpontok · márc. 25.",
-      "Available": "Szabad",
-      "Booked": "Foglalt",
-      "Teams meeting link generated automatically": "A Teams-link automatikusan elkészül",
-      "Dear Chen Wei, your application has been": "Kedves Chen Wei! A jelentkezésedet",
-      "accepted": "elfogadtuk",
-      "! Please complete enrollment by Apr 1. 🎓": ". Kérjük, április 1-ig fejezd be a beiratkozást. 🎓",
-      "Reviewers score an applicant — the status updates to Accepted in real time.": "A bírálók pontozzák a jelentkezőt — a státusz valós időben Felvételre vált.",
-      "The process": "A folyamat",
-      "The admission journey, end to end": "A felvételi út, elejétől a végéig",
-      "Application": "Jelentkezés",
-      "Online form, documents and recommendation letters.": "Online űrlap, dokumentumok és ajánlólevelek.",
-      "Review & interview": "Bírálat és interjú",
-      "Scoring, video interview and slot booking in one place.": "Pontozás, videóinterjú és időpontfoglalás egy helyen.",
-      "Offer & visa": "Ajánlat és vízum",
-      "Conditional offer, visa checklist and compliance.": "Feltételes ajánlat, vízum-ellenőrzőlista és megfelelőség.",
-      "Enrollment": "Beiratkozás",
-      "Payment, invoicing and finalized enrollment.": "Fizetés, számlázás és véglegesített beiratkozás.",
-      "One system, twelve modules": "Egy rendszer, tizenkét modul",
-      "Everything you need for international admissions and the student lifecycle.": "Minden, ami a nemzetközi felvételihez és a hallgatói életúthoz kell.",
-      "Ready to get started?": "Kezdhetjük?",
-      "Create your account in seconds, or sign in as staff.": "Hozd létre a fiókodat pár másodperc alatt, vagy lépj be munkatársként.",
-      "John von Neumann University · UniPortal Pro": "Neumann János Egyetem · UniPortal Pro",
-      "© 2026 John von Neumann University. Demo interface. ·": "© 2026 Neumann János Egyetem. Bemutató felület. ·",
-      "Privacy Notice": "Adatkezelési tájékoztató",
-      "Terms of Use": "Felhasználási feltételek",
-      "Email address": "E-mail-cím",
-      "Password": "Jelszó",
-      "Forgot password?": "Elfelejtett jelszó?",
-      "Reset your password": "Jelszó visszaállítása",
-      "Enter the email address you sign in with. We'll send you a link to set a new password.": "Add meg az e-mail-címet, amellyel belépsz. Küldünk egy linket, amellyel új jelszót állíthatsz be.",
-      "Send reset link": "Visszaállító link küldése",
-      "← Back to sign in": "← Vissza a belépéshez",
-      "I'm signing up as": "Így regisztrálok",
-      "Applicant": "Jelentkező",
-      "Agent": "Ügynök",
-      "Full name": "Teljes név",
-      "Your agency is created in a pending state. An administrator reviews it before you can see any applicant.": "Az ügynökséged függő állapotban jön létre. Egy adminisztrátor átnézi, mielőtt bármely jelentkezőt látnál.",
-      "Agency name": "Ügynökség neve",
-      "Country of origin": "Székhely szerinti ország",
-      "Countries of recruitment": "Toborzási országok",
-      "Separate several countries with commas.": "Több országot vesszővel válassz el.",
-      "You will need to confirm your email address, and an administrator approves every new account before it can be used.": "Meg kell erősítened az e-mail-címedet, és minden új fiókot egy adminisztrátor hagy jóvá, mielőtt használható lenne.",
-      "Welcome,": "Üdv,",
-      "Your account is ready.": "A fiókod elkészült.",
-      "Enter the platform": "Belépés a platformra",
-      "Back to sign in": "Vissza a belépéshez",
-      "At least 6 characters": "Legalább 6 karakter",
-      "e.g. Anna Kovács": "pl. Kovács Anna",
-      "e.g. Global Study Ltd.": "pl. Global Study Kft.",
-      "e.g. Nigeria": "pl. Nigéria",
-      "e.g. Nigeria, Ghana, Kenya": "pl. Nigéria, Ghána, Kenya",
-      "e.g. admin@uni.hu": "pl. admin@uni.hu",
-      "e.g. anna@example.com": "pl. anna@example.com",
-      "Agent & partner portal": "Ügynök- és partnerportál",
-      "Manage applicants and commissions.": "Jelentkezők és jutalékok kezelése.",
-      "Application & admissions": "Jelentkezés és felvételi",
-      "Handle applications and documents.": "Jelentkezések és dokumentumok kezelése.",
-      "Communication & CRM": "Kommunikáció és CRM",
-      "Email, WhatsApp and campaigns.": "E-mail, WhatsApp és kampányok.",
-      "Revenue, fees and invoicing.": "Bevételek, díjak és számlázás.",
-      "Visa & compliance": "Vízum és megfelelőség",
-      "Visa checklist and risk management.": "Vízum-ellenőrzőlista és kockázatkezelés.",
-      "Scoring and reviewer collaboration.": "Pontozás és bírálói együttműködés.",
-      "Interview scheduling": "Interjúszervezés",
-      "Slots and video interviews.": "Időpontok és videóinterjúk.",
-      "Marketing & leads": "Marketing és érdeklődők",
-      "Leads and campaign performance.": "Érdeklődők és kampányeredmények.",
-      "Student portal": "Hallgatói portál",
-      "A dedicated space for applicants.": "Saját felület a jelentkezőknek.",
-      "Dashboards and exports.": "Irányítópultok és exportok.",
-      "Intelligence": "Elemzések",
-      "Automations and insights.": "Automatizmusok és kimutatások.",
-      "System administration": "Rendszerkezelés",
-      "Permissions and integrations.": "Jogosultságok és integrációk.",
-      "Verify a bank transfer and watch monthly revenue update instantly.": "Hagyj jóvá egy banki átutalást, és nézd, ahogy a havi bevétel azonnal frissül.",
-      "Interview booking": "Interjúfoglalás",
-      "Applicants book an interview slot; a Teams link is generated automatically.": "A jelentkező interjúidőpontot foglal; a Teams-link automatikusan elkészül.",
-      "Communication": "Kommunikáció",
-      "Send templated WhatsApp messages to applicants without leaving the platform.": "Sablonos WhatsApp-üzenetek a jelentkezőknek, a platform elhagyása nélkül.",
-      "Signing in…": "Belépés…",
-      "Sign-in failed.": "A belépés nem sikerült.",
-      "Sign in with NJE ID": "Belépés NJE azonosítóval",
-      "NJE sign-in could not be started.": "Az NJE bejelentkezés nem indítható el.",
-      "Connection error. Please try again.": "Kapcsolódási hiba. Kérjük, próbáld újra.",
-      "Sending…": "Küldés…",
-      "Too many requests. Please wait a minute before requesting another link.": "Túl sok kérés. Várj egy percet, mielőtt új linket kérsz.",
-      "The request failed. Please try again.": "A kérés nem sikerült. Kérjük, próbáld újra.",
-      "Read": "Elolvasom",
-      "Optional — you can change these later in your profile": "Nem kötelező — később a profilodban módosíthatod",
-      "Creating…": "Létrehozás…",
-      "Please accept the required items marked with *.": "Fogadd el a *-gal jelölt kötelező tételeket.",
-      "Sign-up failed.": "A regisztráció nem sikerült.",
-      "Your account has been created and is now waiting for administrator approval. You can sign in, but the platform stays locked until it is approved.": "A fiókod létrejött, és adminisztrátori jóváhagyásra vár. Be tudsz lépni, de a platform a jóváhagyásig zárolva marad.",
-      "Check your inbox and confirm your email address. After that an administrator reviews your registration — you will be able to sign in once it is approved.": "Nézd meg a postafiókodat, és erősítsd meg az e-mail-címedet. Ezután egy adminisztrátor átnézi a regisztrációdat — a jóváhagyás után tudsz belépni.",
-      "Continue": "Tovább",
-      "This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link with “Forgot password?”.": "Ez az e-mailes link érvénytelen vagy lejárt — minden link csak egyszer és korlátozott ideig működik. Ha jelszót állítottál vissza, kérj új linket az „Elfelejtett jelszó?” gombbal.",
-      "Invalid login credentials": "Hibás e-mail-cím vagy jelszó.",
-      "Email not confirmed": "Az e-mail-cím még nincs megerősítve.",
-      "User already registered": "Ezzel az e-mail-címmel már van fiók.",
-      "The journey": "Az életút",
-      "Privacy": "Adatvédelem",
-      "John von Neumann University · Kecskemét": "Neumann János Egyetem · Kecskemét",
-      "From first application to campus life —": "Az első jelentkezéstől a kampuszéletig —",
-      "Admissions, interviews and offers; courses and anonymous course evaluation; the campus feed, the dormitory and the university shop. For applicants, students, teachers, agents and staff — in Hungarian and English.": "Felvételi, interjúk és ajánlatok; kurzusok és névtelen kurzusértékelés; a kampusz hírfolyama, a kollégium és az egyetemi bolt. Jelentkezőknek, hallgatóknak, oktatóknak, ügynököknek és munkatársaknak — magyarul és angolul.",
-      "Roles": "Szerepkör",
-      "Languages": "Nyelv",
-      "Evaluation": "Értékelés",
-      "Anonymous": "Névtelen",
-      "Feed": "Hírfolyam",
-      "Courses": "Kurzusok",
-      "Course evaluation": "Kurzusértékelés",
-      "Webshop": "Webshop",
-      "My housing": "Szállásom",
-      "Calendar": "Naptár",
-      "Campus feed": "Kampusz hírfolyam",
-      "Welcome back, Anna": "Üdv újra itt, Anna",
-      "2 tasks waiting": "2 teendő vár rád",
-      "Mathematics I": "Matematika I.",
-      "Goal setting": "Célmeghatározás",
-      "Set goals": "Célok megadása",
-      "Programming II": "Programozás II.",
-      "Evaluation ·": "Értékelés ·",
-      "Fill in": "Kitöltés",
-      "Event": "Esemény",
-      "Freshers' ball — tickets on sale": "Gólyabál — a jegyek már kaphatók",
-      "For full-time students · 10 Oct": "Nappali tagozatosoknak · okt. 10.",
-      "Parking card approved": "Parkolókártya jóváhagyva",
-      "One account from the first form to the last semester": "Egy fiók az első űrlaptól az utolsó félévig",
-      "The same profile carries a person from applicant to enrolled student — no re-registration, no second system.": "Ugyanaz a profil kíséri végig a jelentkezőt a beiratkozott hallgatóig — nincs újraregisztráció, nincs második rendszer.",
-      "Apply": "Jelentkezés",
-      "Programme catalogue, online form, document upload and the mathematics placement test.": "Képzéskínálat, online űrlap, dokumentumfeltöltés és matematikai szintfelmérő.",
-      "Interview & review": "Interjú és bírálat",
-      "Book a slot in the interview calendar; reviewers score against an agreed set of criteria.": "Időpontfoglalás az interjúnaptárban; a bírálók egységes szempontrendszer szerint pontoznak.",
-      "Offer & payment": "Ajánlat és fizetés",
-      "Conditional acceptance letter as PDF, and a unique payment reference so every transfer finds its applicant.": "Feltételes felvételi levél PDF-ben, és egyedi utalási közlemény, hogy minden befizetés megtalálja a jelentkezőjét.",
-      "Visa & enrolment": "Vízum és beiratkozás",
-      "Visa checklist, messages with the International Office, and the move to student status.": "Vízum-ellenőrzőlista, üzenetváltás a Nemzetközi Irodával, és átlépés hallgatói státuszba.",
-      "Study": "Tanulás",
-      "Courses, start-of-term goals and the anonymous end-of-term course evaluation.": "Kurzusok, félév eleji célok és a névtelen félév végi kurzusértékelés.",
-      "Campus life": "Kampuszélet",
-      "The campus feed, dormitory and maintenance requests, a personal calendar and the university shop.": "Kampusz hírfolyam, kollégium és hibabejelentés, saját naptár és az egyetemi bolt.",
-      "One platform, five perspectives": "Egy platform, öt nézőpont",
-      "Every role gets its own focused menu — on shared data, with access decided by the database, not the screen.": "Minden szerepkör saját, fókuszált menüt kap — közös adatokon, és a hozzáférésről az adatbázis dönt, nem a képernyő.",
-      "Applicants & students": "Jelentkezők és hallgatók",
-      "Apply, book an interview, pay with a reference": "Jelentkezés, interjúfoglalás, fizetés közleménnyel",
-      "Courses and anonymous course evaluation": "Kurzusok és névtelen kurzusértékelés",
-      "Feed, housing, calendar and webshop": "Hírfolyam, szállás, naptár és webshop",
-      "Teachers": "Oktatók",
-      "Own courses and student lists": "Saját kurzusok és hallgatói névsorok",
-      "Evaluation results above the privacy threshold": "Értékelési eredmények az adatvédelmi küszöb felett",
-      "Reply to feedback in a comment window": "Válasz a visszajelzésekre észrevételi ablakban",
-      "Teacher sign in": "Oktatói belépés",
-      "Agents & partners": "Ügynökök és partnerek",
-      "Submit and follow your applicants": "Jelentkezők beküldése és követése",
-      "Commission periods and statements": "Jutalékidőszakok és elszámolások",
-      "Agency approved before any data is shown": "Az ügynökséget jóváhagyják, mielőtt bármilyen adatot látna",
-      "University staff": "Egyetemi munkatársak",
-      "Admissions, interviews and decisions": "Felvételi, interjúk és döntések",
-      "Students, teachers, campaigns and the shop": "Hallgatók, oktatók, kampányok és a bolt",
-      "Permissions by role, group or person": "Jogosultságok szerepkör, csoport vagy személy szerint",
-      "Interview scoring sheet": "Interjú értékelőlap",
-      "BSc Computer Science ·": "BSc Mérnökinformatikus ·",
-      "Interviewed": "Interjú lezajlott",
-      "Mathematical thinking": "Matematikai gondolkodás",
-      "English communication": "Angol nyelvű kommunikáció",
-      "Total, calculated by the server": "Összpontszám, a szerver számolja",
-      "Interview calendar · 25 March": "Interjúnaptár · márc. 25.",
-      "Added to both calendars, with the meeting link": "Mindkét naptárba bekerült, a meeting-linkkel",
-      "How clearly were the requirements explained?": "Mennyire volt világos a követelmények ismertetése?",
-      "Submitted without your name — not even the administrators can link it to you.": "Név nélkül küldted be — még az adminisztrátorok sem tudják hozzád kötni.",
-      "University shop": "Egyetemi bolt",
-      "Awaiting approval": "Jóváhagyásra vár",
-      "Ready to pay": "Fizethető",
-      "Parking card · autumn term": "Parkolókártya · őszi félév",
-      "Plate": "Rendszám",
-      "Payment reference": "Utalási közlemény",
-      "Approved first, paid second — no refunds for rejected requests.": "Előbb jóváhagyás, aztán fizetés — elutasított igénylésnél nincs visszautalás.",
-      "New post · who should see it?": "Új bejegyzés · kinek jelenjen meg?",
-      "Full-time": "Nappali",
-      "Part-time": "Levelező",
-      "GAMF faculty": "GAMF kar",
-      "338 people": "338 fő",
-      "211 people": "211 fő",
-      "Filtered in the database — others cannot read the post at all.": "Az adatbázis szűr — mások egyáltalán nem olvashatják a bejegyzést.",
-      "International Office": "Nemzetközi Iroda",
-      "Messages about your application": "Üzenetek a jelentkezésedről",
-      "When will I receive my offer letter?": "Mikor kapom meg a felvételi levelet?",
-      "It has just been issued — you will find it attached below.": "Épp most állítottuk ki — lent csatolva megtalálod.",
-      "Conditional acceptance letter.pdf": "Feltételes felvételi levél.pdf",
-      "Reviewers score each criterion; the server adds up the total and the decision follows.": "A bírálók szempontonként pontoznak; az összesítést a szerver végzi, ezután jön a döntés.",
-      "Twenty-four modules in four areas": "Huszonnégy modul, négy területen",
-      "Grouped the same way as the menu inside the platform. The ones marked new arrived this semester.": "Ugyanúgy csoportosítva, mint a platform menüje. Az „Új” jelzésűek ebben a félévben érkeztek.",
-      "New": "Új",
-      "Studies": "Tanulmányok",
-      "Operations": "Működés",
-      "Programme catalogue, online form and documents.": "Képzéskínálat, online űrlap és dokumentumok.",
-      "Review & scoring criteria": "Bírálat és szempontrendszer",
-      "An editable criteria sheet; the server adds up the score.": "Szerkeszthető szempontrendszer; a pontszámot a szerver összesíti.",
-      "Interview calendar": "Interjúnaptár",
-      "Staff availability, bookable slots, calendar invites.": "Munkatársi elérhetőség, foglalható idősávok, naptármeghívók.",
-      "Offer letters & payment reference": "Felvételi levél és utalási közlemény",
-      "Acceptance letter as PDF; a checkable reference on every transfer.": "Felvételi levél PDF-ben; ellenőrizhető közlemény minden utaláson.",
-      "Messages with applicants": "Üzenetváltás a jelentkezőkkel",
-      "Conversation per application, with attachments.": "Jelentkezésenkénti beszélgetés, csatolmányokkal.",
-      "Visa checklist and follow-up.": "Vízum-ellenőrzőlista és nyomon követés.",
-      "Course registry, enrolments and student lists.": "Kurzusnyilvántartás, kurzusfelvételek és névsorok.",
-      "Teacher registry with courses, student numbers and campaigns.": "Oktatói nyilvántartás kurzusokkal, hallgatói létszámmal és kampányokkal.",
-      "Students": "Hallgatók",
-      "Searchable directory with classification, groups and statistics.": "Kereshető névsor besorolással, csoportokkal és statisztikákkal.",
-      "Course evaluation (ECHO)": "Kurzusértékelés (ECHO)",
-      "Anonymous questionnaires, goal setting, numbered campaigns.": "Névtelen kérdőívek, célmeghatározás, sorszámozott kampányok.",
-      "Teacher results": "Oktatói eredmények",
-      "Results above the privacy threshold, with a comment window.": "Eredmények az adatvédelmi küszöb felett, észrevételi ablakkal.",
-      "Student calendar": "Hallgatói naptár",
-      "Interviews, deadlines and events in one calendar.": "Interjúk, határidők és események egy naptárban.",
-      "Posts for chosen audiences, with a view counter.": "Bejegyzések kiválasztott célközönségnek, megtekintés-számlálóval.",
-      "Notes, parking cards and merchandise; staff edit products from templates.": "Jegyzetek, parkolókártya és ajándéktárgyak; a termékeket sablonból viszik fel.",
-      "Dormitory": "Kollégium",
-      "Rooms, beds, applications and occupancy.": "Szobák, ágyak, jelentkezések és elhelyezés.",
-      "Maintenance": "Karbantartás",
-      "Fault reports and follow-up for the dormitory.": "Hibabejelentés és követés a kollégiumban.",
-      "AI assistant": "AI asszisztens",
-      "Answers from the university knowledge base.": "Válaszok az egyetemi tudásbázisból.",
-      "Programmes": "Programok",
-      "Short programmes and courses to apply for.": "Rövid képzések és kurzusok, amelyekre jelentkezni lehet.",
-      "Fees, payments and invoice numbers.": "Díjak, befizetések és számlaszámok.",
-      "Applicants, commission periods and statements.": "Jelentkezők, jutalékidőszakok és elszámolások.",
-      "CRM & marketing": "CRM és marketing",
-      "Communication, campaigns and leads.": "Kommunikáció, kampányok és érdeklődők.",
-      "Reports & insights": "Riportok és elemzések",
-      "Permissions": "Jogosultságok",
-      "Menu access by role, group or individual, plus job titles.": "Menühozzáférés szerepkör, csoport vagy személy szerint, munkakörökkel.",
-      "Registrations & consent log": "Regisztrációk és hozzájárulási napló",
-      "Account approval and a versioned record of consents.": "Fiókjóváhagyás és a hozzájárulások verziózott nyilvántartása.",
-      "Privacy & security": "Adatvédelem és biztonság",
-      "Built for a public university": "Állami egyetemre tervezve",
-      "The rules are enforced where the data lives, not only in the interface.": "A szabályokat ott érvényesítjük, ahol az adat van — nem csak a felületen.",
-      "Anonymous course evaluation": "Névtelen kurzusértékelés",
-      "Answers carry no name, and results appear only above a minimum number of respondents.": "A válaszokon nincs név, és eredmény csak egy minimális kitöltőszám felett jelenik meg.",
-      "Access decided by the database": "A hozzáférésről az adatbázis dönt",
-      "Role, group and individual permissions; a hidden menu item is never the only lock.": "Szerepkör, csoport és egyéni jogosultság; egy elrejtett menüpont soha nem az egyetlen zár.",
-      "Consent log": "Hozzájárulási napló",
-      "Every accepted notice and consent is recorded with its version and can be withdrawn.": "Minden elfogadott tájékoztatót és hozzájárulást verzióval rögzítünk, és visszavonható.",
-      "Payments to the university": "Fizetés az egyetemnek",
-      "Transfers go to the university's own account with a checkable reference. Card payment via SimplePay is coming.": "Az utalások az egyetem saját számlájára érkeznek, ellenőrizhető közleménnyel. A SimplePay-es kártyás fizetés hamarosan jön.",
-      "Every account approved": "Minden fiókot jóváhagyunk",
-      "New registrations and partner agencies are reviewed before they see any data.": "Az új regisztrációkat és partnerügynökségeket átnézzük, mielőtt bármilyen adatot látnának.",
-      "Hungarian and English": "Magyarul és angolul",
-      "The whole interface switches language; course questionnaires follow the language of the programme.": "A teljes felület nyelvet vált; a kurzuskérdőív a képzés nyelvét követi.",
-      "Applicants pick a 15-minute slot; the invitation lands in both calendars.": "A jelentkező 15 perces idősávot választ; a meghívó mindkét naptárba bekerül.",
-      "Students rate their courses anonymously; every campaign has its own number.": "A hallgatók névtelenül értékelik a kurzusaikat; minden kampánynak saját sorszáma van.",
-      "A parking card is approved first, then paid with a unique reference.": "A parkolókártyát előbb jóváhagyják, aztán egyedi közleménnyel fizethető.",
-      "Targeted feed": "Célzott hírfolyam",
-      "Choose who sees a post and watch the audience size update before publishing.": "Válaszd ki, kinek szól a bejegyzés, és közzététel előtt lásd, hány főt ér el.",
-      "Messages": "Üzenetek",
-      "Applicants and the International Office talk in one thread; the offer letter arrives as a PDF.": "A jelentkező és a Nemzetközi Iroda egy szálban beszél; a felvételi levél PDF-ben érkezik."
-      };
-      var MINTAK = [
-        [/^If an account exists for (.+), we have sent it a link to set a new password\. Check your inbox \(and the spam folder\)\. The link works once and expires after a while\.$/,
-         'Ha létezik fiók a(z) $1 címhez, elküldtük rá az új jelszó beállításához szükséges linket. Nézd meg a postafiókodat (és a levélszemét mappát is). A link egyszer használható, és egy idő után lejár.'],
-        [/^Send reset link \((\d+)\)$/, 'Visszaállító link küldése ($1)'],
-      ];
-      var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1 };
-      function forditas(t){
-        var k = t.replace(/\s+/g, ' ').trim();
-        if (!k) return null;
-        if (Object.prototype.hasOwnProperty.call(HU, k)) return HU[k];
-        for (var i = 0; i < MINTAK.length; i++) if (MINTAK[i][0].test(k)) return k.replace(MINTAK[i][0], MINTAK[i][1]);
-        return null;
-      }
-      function szoveg(n){
-        var p = n.parentNode;
-        if (!p || SKIP[p.nodeName] || (p.closest && p.closest('[data-noi18n]'))) return;
-        var uj = forditas(n.nodeValue);
-        if (uj === null) return;
-        var m = n.nodeValue.match(/^(\s*)[\s\S]*?(\s*)$/);
-        n.nodeValue = m[1] + uj + m[2];
-      }
-      function bejar(gyoker){
-        if (gyoker.nodeType === 3) { szoveg(gyoker); return; }
-        if (gyoker.nodeType !== 1 || SKIP[gyoker.nodeName]) return;
-        ['placeholder', 'title', 'aria-label'].forEach(function(a){
-          var el = gyoker.querySelectorAll ? [gyoker].concat([].slice.call(gyoker.querySelectorAll('[' + a + ']'))) : [];
-          el.forEach(function(e){ var v = e.getAttribute && e.getAttribute(a); if (v && !e.closest('[data-noi18n]')) { var u = forditas(v); if (u !== null) e.setAttribute(a, u); } });
-        });
-        var w = document.createTreeWalker(gyoker, NodeFilter.SHOW_TEXT), n, lista = [];
-        while ((n = w.nextNode())) lista.push(n);
-        lista.forEach(szoveg);
-      }
-      document.documentElement.lang = 'hu';
-      document.title = 'UniPortal Pro — Neumann János Egyetem | Felvételi, tanulmányok és kampuszélet';
-      bejar(document.body);
-      new MutationObserver(function(ms){
-        ms.forEach(function(m){
-          if (m.type === 'characterData') szoveg(m.target);
-          else m.addedNodes.forEach(bejar);
-        });
-      }).observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    $('mutat').addEventListener('click', function () {
+      var i = $('jelszo'); var lathato = i.type === 'text';
+      i.type = lathato ? 'password' : 'text';
+      $('mutat').setAttribute('aria-label', lathato ? L.mutat : L.elrejt);
+    });
+
+    $('fLogin').addEventListener('submit', async function (e) {
+      e.preventDefault(); tisztit('eLogin');
+      var email = $('email').value.trim(), jelszo = $('jelszo').value;
+      if (!email || !jelszo) { hiba('eLogin', L.hianyzik); return; }
+      var b = $('bLogin'); b.disabled = true; b.textContent = L.belepesFolyamatban;
+      try {
+        var r = await window.sb.auth.signInWithPassword({ email: email, password: jelszo });
+        if (r.error) {
+          var m = r.error.message || '';
+          hiba('eLogin', /Invalid login credentials/i.test(m) ? L.hibas : /Email not confirmed/i.test(m) ? L.nincsMegerositve : (m || L.sikertelen));
+          b.disabled = false; b.textContent = L.belepes; return;
+        }
+        belep();
+      } catch (err) { hiba('eLogin', L.kapcsolat); b.disabled = false; b.textContent = L.belepes; }
+    });
+
+    function nezet(forgot) {
+      $('fLogin').hidden = forgot; $('fForgot').hidden = !forgot;
+      tisztit('eLogin'); tisztit('eForgot'); tisztit('oForgot');
+      if (forgot) { if (!$('femail').value) $('femail').value = $('email').value.trim(); setTimeout(function () { $('femail').focus(); }, 0); }
+      else setTimeout(function () { $('email').focus(); }, 0);
+    }
+    $('toForgot').addEventListener('click', function () { nezet(true); });
+    $('toLogin').addEventListener('click', function () { nezet(false); });
+
+    /* A válasz szándékosan ugyanaz, akár létezik a fiók, akár nem — a felületről
+       így nem deríthető ki, ki van regisztrálva. */
+    $('fForgot').addEventListener('submit', async function (e) {
+      e.preventDefault(); tisztit('eForgot'); tisztit('oForgot');
+      var email = $('femail').value.trim(); if (!email) return;
+      var b = $('bForgot'); b.disabled = true; b.textContent = L.kuldesFolyamatban;
+      try {
+        var r = await window.sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('reset-password.html', window.location.href).href });
+        if (r.error) {
+          var rate = r.error.status === 429 || /rate limit|only request this after/i.test(r.error.message || '');
+          hiba('eForgot', rate ? L.tulSok : (r.error.message || L.keresHiba));
+        } else {
+          var ok = $('oForgot'); ok.textContent = L.elkuldve(email); ok.classList.add('on');
+        }
+      } catch (err) { hiba('eForgot', L.kapcsolat); }
+      b.disabled = false; b.textContent = L.kuldes;
+    });
+
+    /* NJE SAML belépés — ugyanaz, mint a régi nyitóoldalon (home.html): belépés
+       után az app.html-re jön vissza egy egyszer használható tokennel. */
+    $('bSso').addEventListener('click', function () {
+      tisztit('eLogin'); $('bSso').disabled = true;
+      window.location.assign(new URL('saml/login?next=app.html', window.location.href).href);
+    });
+    // Vissza gombbal (bfcache) ne maradjon letiltva a gomb.
+    window.addEventListener('pageshow', function () { $('bSso').disabled = false; });
+    (function () {
+      var m = /(^|[#&])sso_error=([\w-]+)/.exec(location.hash);
+      if (!m) return;
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      hiba('eLogin', L.ssoHibak[m[2]] || L.ssoHiba);
+    })();
+
+    /* Lejárt vagy már felhasznált e-mailes link (#error_code=…): megmondjuk, mi a teendő. */
+    (function () {
+      var hp = new URLSearchParams(location.hash.replace(/^#/, ''));
+      if (location.hash === '#forgot') { nezet(true); return; }
+      if (!hp.get('error_code') && !hp.get('error')) return;
+      hiba('eLogin', L.lejart);
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
     })();
   </script>
 </body>

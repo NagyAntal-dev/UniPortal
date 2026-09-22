@@ -34,7 +34,8 @@ kap `profiles` sort a `handle_new_user` triggeren keresztül.
 
 | URL | Tartalom |
 |---|---|
-| `/` (`index.html`) | Publikus landing page: pozicionálás, animált modul-demók, be-/regisztrálás |
+| `/` (`index.html`) | Belépőoldal előadótermi háttérrel (e-mail/jelszó, NJE SSO, elfelejtett jelszó) |
+| `/home.html` | Publikus landing page: pozicionálás, animált modul-demók, regisztráció (`home.html#register`) |
 | `/app.html` | A teljes alkalmazás — 12+ modul, szerepkör szerinti menüvel |
 | `/Felveteli-Prototipus.html` | Külön, magyar nyelvű jelentkezői folyamat-prototípus (7 lépés, `localStorage`) |
 | `/Felveteli-Fejlesztesi-ToDo.html` | A felvételi modul fejlesztési terve / ToDo dokumentum |
@@ -49,7 +50,8 @@ Rendszerkezelés. A fejlécben HU/EN nyelvváltó van.
 ## Architektúra
 
 ```
-index.html   landing (Tailwind CDN + lucide UMD + supabase-js UMD)
+index.html   belépőoldal (assets/eloadoterem.jpg háttér)
+home.html    landing (Tailwind CDN + lucide UMD + supabase-js UMD)
 app.html     app shell: importmap (React, lucide-react, recharts) + Supabase init
   └─ app.bundle.js      ← esbuild-del előfordítva (build lépés, lásd lentebb)
      ├─ app.jsx         a teljes alkalmazás (~9 400 sor, TSX)
