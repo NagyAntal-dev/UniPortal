@@ -96,6 +96,8 @@
 71_student_directory.sql
 72_teacher_stats.sql
 73_user_access.sql
+74_webshop.sql
+75_webshop_editor.sql
 77_echo_exclusion_rule_reseed.sql
 78_echo_config_reseed.sql
 79_saml_import_match.sql
