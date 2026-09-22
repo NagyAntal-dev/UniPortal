@@ -162,48 +162,123 @@ function SHOP_TermekModal({ termek, onClose, onKosarba }) {
   const [adatok, setAdatok] = useState({});
   const [menny, setMenny] = useState(1);
   const [hiba, setHiba] = useState('');
-  useEffect(() => { setAdatok({}); setMenny(1); setHiba(''); }, [termek && termek.id]);
+  const [kepI, setKepI] = useState(0);
+  const [valaszt, setValaszt] = useState({});   // tulajdonság -> érték
+  useEffect(() => { setAdatok({}); setMenny(1); setHiba(''); setKepI(0); setValaszt({}); }, [termek && termek.id]);
   if (!termek) return null;
   const mezok = Array.isArray(termek.mezok) ? termek.mezok : [];
-  const max = Math.min(termek.max_rendelesenkent || 99, termek.keszlet == null ? 99 : termek.keszlet);
+  const valt = Array.isArray(termek.valtozatok) ? termek.valtozatok : [];
+  const kepek = (Array.isArray(termek.kepek) && termek.kepek.length) ? termek.kepek : (termek.kep_url ? [{ url: termek.kep_url }] : []);
+  // A tulajdonságok és értékeik a változatokból
+  const tul = {}; valt.forEach(v => Object.entries(v.tulajdonsagok || {}).forEach(([k, e]) => { (tul[k] = tul[k] || []).includes(e) || tul[k].push(e); }));
+  const tulKulcsok = Object.keys(tul);
+  const illik = (v, extra) => Object.entries({ ...valaszt, ...(extra || {}) }).every(([k, e]) => (v.tulajdonsagok || {})[k] === e);
+  const kivalasztott = valt.length === 0 ? null
+    : (tulKulcsok.length ? (tulKulcsok.every(k => valaszt[k]) ? valt.find(v => illik(v)) : null) : valt.find(v => v.id === valaszt.__id));
+  const ar = kivalasztott && kivalasztott.ar_huf != null ? kivalasztott.ar_huf : termek.ar_huf;
+  const keszlet = kivalasztott ? kivalasztott.keszlet : termek.keszlet;
+  const max = Math.min(termek.max_rendelesenkent || 99, keszlet == null ? 99 : keszlet);
+  const r = termek.reszletek || {};
+  const reszletSorok = [['Szerző', r.szerzo], ['Kiadás', r.kiadas], ['Oldalszám', r.oldalszam], ['ISBN', r.isbn], ['Időpont', r.datum],
+    ['Helyszín', r.helyszin], ['Telephely', r.telephely], ['Érvényes', r.ervenyes_tol || r.ervenyes_ig ? (r.ervenyes_tol || '…') + ' – ' + (r.ervenyes_ig || '…') : null],
+    ['Érvényesség', r.ervenyesseg], ['Anyag', r.anyag], ['Mérettáblázat', r.merettablazat]].filter(x => x[1]);
+
   const kosarba = () => {
+    if (valt.length && !kivalasztott) { setHiba('Válaszd ki a változatot' + (tulKulcsok.length ? ' (' + tulKulcsok.join(', ').toLowerCase() + ')' : '') + '.'); return; }
+    if (kivalasztott && kivalasztott.elfogyott) { setHiba('Ez a változat elfogyott.'); return; }
     const hianyzik = mezok.find(m => m.kotelezo && !String(adatok[m.kulcs] || '').trim());
     if (hianyzik) { setHiba('Hiányzó adat: ' + (hianyzik.cimke || hianyzik.kulcs) + '.'); return; }
-    onKosarba({ product_id: termek.id, mennyiseg: menny, adatok });
+    onKosarba({ product_id: termek.id, variant_id: kivalasztott ? kivalasztott.id : null, variant_nev: kivalasztott ? kivalasztott.nev : null,
+                egysegar: ar, mennyiseg: menny, adatok });
   };
   return (
-    <UModal open={!!termek} onClose={onClose} max="max-w-xl" title={termek.nev}
-      subtitle={(SHOP_TIPUS[termek.tipus] || SHOP_TIPUS.fizikai)[0] + ' · ' + SHOP_ft(termek.ar_huf)} icon={<SHOP_Ikon tipus={termek.tipus} size={20} />}>
-      <div className="space-y-4" data-shop-termek-modal={termek.id}>
-        {termek.kep_url && typeof FEED_img === 'function' && (
-          <div className="aspect-[16/9] rounded-2xl overflow-hidden bg-slate-100">{FEED_img(termek.kep_url, 'w-full h-full object-cover')}</div>
-        )}
-        {termek.leiras && <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{termek.leiras}</p>}
-        {termek.jovahagyas_kell && (
-          <p className="text-[12px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-            Ez a tétel jóváhagyáshoz kötött: fizetni csak az ügyintéző jóváhagyása után kell.
-          </p>
-        )}
-        {mezok.map(m => (
-          <UField key={m.kulcs} label={(m.cimke || m.kulcs) + (m.kotelezo ? ' *' : '')}>
-            <input className={U_input} value={adatok[m.kulcs] || ''} data-shop-mezo={m.kulcs}
-              type={m.tipus === 'datum' ? 'date' : 'text'}
-              placeholder={m.tipus === 'rendszam' ? 'pl. ABC-123' : ''}
-              onChange={e => setAdatok(p => ({ ...p, [m.kulcs]: e.target.value }))} />
-          </UField>
-        ))}
-        {max > 1 && (
-          <UField label="Mennyiség">
-            <input type="number" min="1" max={max} className={U_input + ' w-28'} value={menny}
-              onChange={e => setMenny(Math.max(1, Math.min(max, Number(e.target.value) || 1)))} />
-          </UField>
-        )}
-        {hiba && <p className="text-[12px] font-bold text-red-600" role="alert">{hiba}</p>}
-        <div className="flex justify-end gap-2">
-          <button className={U_btnGhost} onClick={onClose}>Mégse</button>
-          <button className={U_btnPrimary} onClick={kosarba} disabled={termek.elfogyott} data-shop-kosarba-gomb="1">
-            <Lucide.ShoppingCart size={16} /> Kosárba
-          </button>
+    <UModal open={!!termek} onClose={onClose} max="max-w-3xl" title={termek.nev}
+      subtitle={(SHOP_SABLONOK[termek.sablon] || {}).cimke || (SHOP_TIPUS[termek.tipus] || SHOP_TIPUS.fizikai)[0]} icon={<SHOP_SablonIkon sablon={termek.sablon} size={20} />}>
+      <div className="grid md:grid-cols-2 gap-5" data-shop-termek-modal={termek.id}>
+        <div className="space-y-2">
+          <div className="aspect-[4/3] rounded-2xl overflow-hidden bg-slate-50 flex items-center justify-center text-slate-300">
+            {kepek[kepI] && typeof FEED_img === 'function' ? FEED_img(kepek[kepI].url, 'w-full h-full object-cover', kepek[kepI].alt || termek.nev) : <SHOP_SablonIkon sablon={termek.sablon} size={48} />}
+          </div>
+          {kepek.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto">
+              {kepek.map((k, i) => (
+                <button key={i} type="button" onClick={() => setKepI(i)} className={'w-14 h-14 rounded-xl overflow-hidden border-2 flex-none ' + (i === kepI ? 'border-primary' : 'border-transparent')}>
+                  {typeof FEED_img === 'function' ? FEED_img(k.url, 'w-full h-full object-cover') : null}
+                </button>
+              ))}
+            </div>
+          )}
+          {termek.leiras && <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{termek.leiras}</p>}
+          {reszletSorok.length > 0 && (
+            <div className="rounded-2xl border border-slate-100 p-3 text-[12px] space-y-1">
+              {reszletSorok.map(([c, v]) => <p key={c} className="flex justify-between gap-3"><span className="text-slate-400 font-bold">{c}</span><span className="text-slate-700 font-bold text-right">{v}</span></p>)}
+            </div>
+          )}
+        </div>
+        <div className="space-y-4">
+          <div>
+            <p className="text-2xl font-black text-slate-900 tabular-nums" data-shop-modal-ar="1">{SHOP_ft(ar)}</p>
+            {termek.kurzusodhoz && termek.kurzus && <p className="text-[11px] font-bold text-sky-700 mt-1">A felvett kurzusodhoz: {termek.kurzus.kod} · {termek.kurzus.nev}</p>}
+          </div>
+          {tulKulcsok.map(k => (
+            <div key={k}>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{k}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {tul[k].map(e => {
+                  // Az érték elérhető, ha van hozzá (a többi választással összeférő) nem elfogyott változat
+                  const van = valt.some(v => (v.tulajdonsagok || {})[k] === e && !v.elfogyott && Object.entries(valaszt).every(([k2, e2]) => k2 === k || (v.tulajdonsagok || {})[k2] === e2));
+                  const on = valaszt[k] === e;
+                  return (
+                    <button key={e} type="button" disabled={!van && !on} onClick={() => setValaszt(p => ({ ...p, [k]: on ? undefined : e }))}
+                      data-shop-valaszto={k + ':' + e}
+                      className={'px-3 py-1.5 rounded-xl border text-[12px] font-bold transition-all disabled:opacity-35 disabled:line-through '
+                        + (on ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 text-slate-600 hover:border-slate-400')}>{e}</button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {valt.length > 0 && tulKulcsok.length === 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {valt.map(v => (
+                <button key={v.id} type="button" disabled={v.elfogyott} onClick={() => setValaszt({ __id: v.id })}
+                  className={'px-3 py-1.5 rounded-xl border text-[12px] font-bold disabled:opacity-35 ' + (valaszt.__id === v.id ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 text-slate-600')}>{v.nev}</button>
+              ))}
+            </div>
+          )}
+          {kivalasztott && kivalasztott.keszlet != null && kivalasztott.keszlet <= 5 && !kivalasztott.elfogyott && (
+            <p className="text-[11px] font-bold text-red-600">Ebből a változatból már csak {kivalasztott.keszlet} db van.</p>
+          )}
+          {termek.jovahagyas_kell && (
+            <p className="text-[12px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+              Ez a tétel jóváhagyáshoz kötött: fizetni csak az ügyintéző jóváhagyása után kell.
+            </p>
+          )}
+          {mezok.map(m => (
+            <UField key={m.kulcs} label={(m.cimke || m.kulcs) + (m.kotelezo ? ' *' : '')}>
+              <input className={U_input} value={adatok[m.kulcs] || ''} data-shop-mezo={m.kulcs}
+                type={m.tipus === 'datum' ? 'date' : 'text'} placeholder={m.tipus === 'rendszam' ? 'pl. ABC-123' : ''}
+                onChange={e => setAdatok(p => ({ ...p, [m.kulcs]: e.target.value }))} />
+            </UField>
+          ))}
+          {max > 1 && (
+            <UField label="Mennyiség">
+              <input type="number" min="1" max={max} className={U_input + ' w-28'} value={menny}
+                onChange={e => setMenny(Math.max(1, Math.min(max, Number(e.target.value) || 1)))} />
+            </UField>
+          )}
+          {termek.teljesites === 'atvetel' && termek.atveteli_hely && (
+            <p className="text-[12px] text-slate-600 flex items-start gap-2"><Lucide.MapPin size={14} className="flex-none mt-0.5 text-slate-400" /> Átvétel: {termek.atveteli_hely}</p>
+          )}
+          {termek.teljesites === 'letoltes' && <p className="text-[12px] text-slate-600 flex items-start gap-2"><Lucide.Download size={14} className="flex-none mt-0.5 text-slate-400" /> Letölthető a fizetés után, a Rendeléseim alatt.</p>}
+          {termek.ertekesites_ig && <p className="text-[11px] font-bold text-slate-400">Rendelhető eddig: {SHOP_ido(termek.ertekesites_ig)}</p>}
+          {hiba && <p className="text-[12px] font-bold text-red-600" role="alert">{hiba}</p>}
+          <div className="flex justify-end gap-2">
+            <button className={U_btnGhost} onClick={onClose}>Mégse</button>
+            <button className={U_btnPrimary} onClick={kosarba} disabled={termek.elfogyott} data-shop-kosarba-gomb="1">
+              <Lucide.ShoppingCart size={16} /> Kosárba
+            </button>
+          </div>
         </div>
       </div>
     </UModal>
@@ -224,13 +299,13 @@ function SHOP_Penztar({ open, onClose, kosar, termekMap, fizetes, user, onKesz }
     setMod(bankVan ? 'atutalas' : (fizetes && fizetes.kartya ? 'kartya' : 'atutalas'));
   }, [open]);
   const bankVan = !!(fizetes && fizetes.bank && (fizetes.bank.szamlaszam || fizetes.bank.iban));
-  const osszeg = kosar.reduce((s, t) => s + ((termekMap[t.product_id] || {}).ar_huf || 0) * t.mennyiseg, 0);
+  const osszeg = kosar.reduce((s, t) => s + (t.egysegar != null ? t.egysegar : ((termekMap[t.product_id] || {}).ar_huf || 0)) * t.mennyiseg, 0);
   const leadas = async () => {
     if (!szaml.nev.trim()) { setHiba('A számlázási név kötelező.'); return; }
     setBusy(true); setHiba('');
     try {
       const r = await SHOP_rpc('shop_order_create', {
-        p_items: kosar.map(t => ({ product_id: t.product_id, mennyiseg: t.mennyiseg, adatok: t.adatok || {} })),
+        p_items: kosar.map(t => ({ product_id: t.product_id, variant_id: t.variant_id || null, mennyiseg: t.mennyiseg, adatok: t.adatok || {} })),
         p_szamlazas: { nev: szaml.nev.trim(), cim: szaml.cim.trim() || null, adoszam: szaml.adoszam.trim() || null },
         p_fizetesi_mod: mod, p_megjegyzes: megj || null });
       onKesz(r);
@@ -314,7 +389,7 @@ function SHOP_RendelesKartya({ r, fizetes, onFrissit }) {
         {(r.tetelek || []).map(t => (
           <div key={t.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-50 bg-slate-50/60 px-3 py-2">
             <div className="min-w-0">
-              <p className="text-[12px] font-bold text-slate-700 truncate">{t.mennyiseg > 1 ? t.mennyiseg + ' × ' : ''}{t.nev}</p>
+              <p className="text-[12px] font-bold text-slate-700 truncate">{t.mennyiseg > 1 ? t.mennyiseg + ' × ' : ''}{t.nev}{t.variant_nev ? ' — ' + t.variant_nev : ''}</p>
               {t.adatok && Object.keys(t.adatok).length > 0 && (
                 <p className="text-[11px] text-slate-400 font-mono">{Object.entries(t.adatok).map(([k, v]) => k + ': ' + v).join(' · ')}</p>
               )}
@@ -377,7 +452,12 @@ function SHOP_StudentView({ user }) {
   // A kosárból kiesik, ami közben eltűnt a katalógusból (inaktív lett, elfogyott a láthatóság).
   useEffect(() => {
     if (!kat) return;
-    setKosar(k => k.filter(t => termekMap[t.product_id]));
+    setKosar(k => k.filter(t => {
+      const tm = termekMap[t.product_id];
+      if (!tm) return false;
+      if (t.variant_id) return (tm.valtozatok || []).some(v => v.id === t.variant_id);
+      return !(tm.valtozatok || []).length;
+    }));
   }, [kat]);
 
   if (nincs) {
@@ -386,19 +466,23 @@ function SHOP_StudentView({ user }) {
   }
 
   const termekek = ((kat && kat.termekek) || []).filter(t =>
-    (!szuro || t.category_id === szuro) &&
+    (!szuro || (szuro === '__neked' ? t.neked : t.category_id === szuro)) &&
     (!q.trim() || (t.nev + ' ' + (t.leiras || '')).toLowerCase().includes(q.trim().toLowerCase())));
   const kosarDb = kosar.reduce((s, t) => s + t.mennyiseg, 0);
-  const kosarOssz = kosar.reduce((s, t) => s + ((termekMap[t.product_id] || {}).ar_huf || 0) * t.mennyiseg, 0);
+  const tetelAr = (t) => (t.egysegar != null ? t.egysegar : ((termekMap[t.product_id] || {}).ar_huf || 0));
+  const kosarOssz = kosar.reduce((s, t) => s + tetelAr(t) * t.mennyiseg, 0);
+  const vanNeked = ((kat && kat.termekek) || []).some(t => t.neked);
   const kosarba = (tetel) => {
     setKosar(k => {
       const t = termekMap[tetel.product_id];
       const vanMezo = t && Array.isArray(t.mezok) && t.mezok.length > 0;
       // Adatos tétel (pl. rendszám) mindig külön sor; a többi összevonódik.
       if (!vanMezo) {
-        const i = k.findIndex(x => x.product_id === tetel.product_id);
+        const i = k.findIndex(x => x.product_id === tetel.product_id && (x.variant_id || null) === (tetel.variant_id || null));
         if (i >= 0) {
-          const max = Math.min(t.max_rendelesenkent || 99, t.keszlet == null ? 99 : t.keszlet);
+          const v = (t.valtozatok || []).find(x => x.id === tetel.variant_id);
+          const kesz = v ? v.keszlet : t.keszlet;
+          const max = Math.min(t.max_rendelesenkent || 99, kesz == null ? 99 : kesz);
           return k.map((x, j) => j === i ? { ...x, mennyiseg: Math.min(max, x.mennyiseg + tetel.mennyiseg) } : x);
         }
       }
@@ -451,7 +535,7 @@ function SHOP_StudentView({ user }) {
               </div>
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
-              {[['', 'Összes']].concat(((kat && kat.kategoriak) || []).map(c => [c.id, c.nev])).map(([id, nev]) => (
+              {[['', 'Összes']].concat(vanNeked ? [['__neked', 'Neked']] : []).concat(((kat && kat.kategoriak) || []).map(c => [c.id, c.nev])).map(([id, nev]) => (
                 <button key={id || 'mind'} onClick={() => setSzuro(id)}
                   className={'px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all ' + (szuro === id ? 'bg-slate-900 text-white' : 'bg-white border border-slate-100 text-slate-500 hover:border-slate-300')}>
                   {nev}
@@ -466,15 +550,17 @@ function SHOP_StudentView({ user }) {
                   <button key={t.id} onClick={() => setNyitott(t)} disabled={t.elfogyott} data-shop-termek={t.id}
                     className="text-left bg-white rounded-3xl border border-slate-100 overflow-hidden hover:border-slate-200 hover:shadow-sm transition-all disabled:opacity-60">
                     <div className="aspect-[4/3] bg-slate-50 flex items-center justify-center text-slate-300 overflow-hidden">
-                      {t.kep_url && typeof FEED_img === 'function' ? FEED_img(t.kep_url, 'w-full h-full object-cover') : <SHOP_Ikon tipus={t.tipus} size={40} />}
+                      {t.kep_url && typeof FEED_img === 'function' ? FEED_img(t.kep_url, 'w-full h-full object-cover') : <SHOP_SablonIkon sablon={t.sablon} size={40} />}
                     </div>
                     <div className="p-4">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(SHOP_TIPUS[t.tipus] || SHOP_TIPUS.fizikai)[0]}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(SHOP_SABLONOK[t.sablon] || {}).cimke || (SHOP_TIPUS[t.tipus] || SHOP_TIPUS.fizikai)[0]}{t.kurzus ? ' · ' + t.kurzus.kod : ''}</p>
                       <p className="text-[15px] font-black text-slate-900 leading-snug mt-0.5">{t.nev}</p>
                       <div className="flex items-center justify-between gap-2 mt-3">
-                        <span className="text-lg font-black text-slate-900 tabular-nums">{SHOP_ft(t.ar_huf)}</span>
+                        <span className="text-lg font-black text-slate-900 tabular-nums">{SHOP_ft(t.ar_tol != null ? t.ar_tol : t.ar_huf)}{(t.valtozatok || []).some(v => v.ar_huf != null && v.ar_huf !== t.ar_tol) ? '-tól' : ''}</span>
                         {t.elfogyott ? <UBadge tone="slate">elfogyott</UBadge>
+                          : t.kurzusodhoz ? <UBadge tone="blue">kurzusodhoz</UBadge>
                           : t.jovahagyas_kell ? <UBadge tone="amber">jóváhagyással</UBadge>
+                          : (t.valtozatok || []).length > 1 ? <UBadge tone="slate">{(t.valtozatok || []).length + ' változat'}</UBadge>
                           : t.keszlet != null && t.keszlet <= 5 ? <UBadge tone="red">{'még ' + t.keszlet + ' db'}</UBadge> : null}
                       </div>
                     </div>
@@ -497,13 +583,13 @@ function SHOP_StudentView({ user }) {
                   return (
                     <div key={k.kulcs || k.product_id} className="flex items-start justify-between gap-2 border-b border-slate-50 pb-2">
                       <div className="min-w-0">
-                        <p className="text-[12px] font-bold text-slate-700 truncate">{k.mennyiseg > 1 ? k.mennyiseg + ' × ' : ''}{t.nev}</p>
+                        <p className="text-[12px] font-bold text-slate-700 truncate">{k.mennyiseg > 1 ? k.mennyiseg + ' × ' : ''}{t.nev}{k.variant_nev ? ' — ' + k.variant_nev : ''}</p>
                         {k.adatok && Object.keys(k.adatok).length > 0 && (
                           <p className="text-[10px] text-slate-400 font-mono truncate">{Object.values(k.adatok).join(' · ')}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-none">
-                        <span className="text-[12px] font-black text-slate-600 tabular-nums">{SHOP_ft((t.ar_huf || 0) * k.mennyiseg)}</span>
+                        <span className="text-[12px] font-black text-slate-600 tabular-nums">{SHOP_ft(tetelAr(k) * k.mennyiseg)}</span>
                         <button onClick={() => setKosar(x => x.filter(y => y !== k))} className="text-slate-300 hover:text-red-500" title="Törlés"><Lucide.X size={14} /></button>
                       </div>
                     </div>
@@ -600,7 +686,7 @@ function SHOP_RendelesReszlet({ id, onClose, onValtozott }) {
               <div key={t.id} className="rounded-2xl border border-slate-100 p-3" data-shop-tetel={t.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[13px] font-black text-slate-800">{t.mennyiseg > 1 ? t.mennyiseg + ' × ' : ''}{t.nev}</p>
+                    <p className="text-[13px] font-black text-slate-800">{t.mennyiseg > 1 ? t.mennyiseg + ' × ' : ''}{t.nev}{t.variant_nev ? ' — ' + t.variant_nev : ''}</p>
                     <p className="text-[11px] text-slate-400">{(SHOP_TIPUS[t.tipus] || [t.tipus])[0]} · ÁFA {t.afa_kulcs}{/^\d+$/.test(t.afa_kulcs) ? '%' : ''}</p>
                     {t.adatok && Object.keys(t.adatok).length > 0 && (
                       <p className="text-[12px] font-mono font-bold text-slate-600 mt-1">{Object.entries(t.adatok).map(([k, v]) => k + ': ' + v).join(' · ')}</p>
@@ -825,8 +911,65 @@ function SHOP_Rendelesek() {
   );
 }
 
-const SHOP_URES_TERMEK = { nev: '', sku: '', leiras: '', category_id: '', tipus: 'fizikai', ar_huf: '', afa_kulcs: '27', keszlet: '',
-  max_rendelesenkent: '', jovahagyas_kell: false, mezok: [], kep_url: '', fajl_utvonal: '', aktiv: true, sorrend: 100, celkozonseg: null };
+/* ------------------------------------------------------------------ */
+/* TERMÉK-SABLONOK (75_webshop_editor.sql)                              */
+/* A sablon a jó kiindulás: előtölti a bekért adatokat, a teljesítést,  */
+/* a jóváhagyást és a sablonfüggő részleteket. Minden átírható; a       */
+/* közzétételkor a SZERVER ellenőrzi a sablon kötelező adatait.         */
+/* ------------------------------------------------------------------ */
+const SHOP_SABLONOK = {
+  digitalis_jegyzet: { cimke: 'Digitális jegyzet', ikon: 'FileDown', leiras: 'PDF letöltés fizetés után, kurzushoz köthető.',
+    alap: { afa_kulcs: '5', teljesites: 'letoltes', max_rendelesenkent: '1', jovahagyas_kell: false, mezok: [] },
+    reszletek: [['szerzo', 'Szerző'], ['kiadas', 'Kiadás / év'], ['oldalszam', 'Oldalszám']] },
+  nyomtatott: { cimke: 'Nyomtatott termék', ikon: 'Package', leiras: 'Jegyzet, tankönyv, bögre — készlettel, átvétellel.',
+    alap: { afa_kulcs: '27', teljesites: 'atvetel', jovahagyas_kell: false, mezok: [] },
+    reszletek: [['isbn', 'ISBN (könyvnél)'], ['kiadas', 'Kiadás / év']] },
+  ruhazat: { cimke: 'Ruházat', ikon: 'Shirt', leiras: 'Méret × szín változatok, saját készlettel.',
+    alap: { afa_kulcs: '27', teljesites: 'atvetel', jovahagyas_kell: false, mezok: [], tulajdonsagok: [['Méret', 'S, M, L, XL'], ['Szín', '']] },
+    reszletek: [['merettablazat', 'Mérettáblázat (pl. M: mellbőség 100 cm)'], ['anyag', 'Anyag']] },
+  parkolokartya: { cimke: 'Parkolókártya', ikon: 'Car', leiras: 'Rendszám, jóváhagyás a fizetés előtt.',
+    alap: { afa_kulcs: '27', teljesites: 'automatikus', max_rendelesenkent: '1', jovahagyas_kell: true,
+            mezok: [{ kulcs: 'rendszam', cimke: 'Rendszám', kotelezo: true, tipus: 'rendszam' }] },
+    reszletek: [['telephely', 'Telephely'], ['ervenyes_tol', 'Érvényes ettől (dátum)'], ['ervenyes_ig', 'Érvényes eddig (dátum)']] },
+  rendezvenyjegy: { cimke: 'Rendezvényjegy', ikon: 'Ticket', leiras: 'Dátum, helyszín, létszámkeret, névre szóló jegy.',
+    alap: { afa_kulcs: '27', teljesites: 'kezi', max_rendelesenkent: '2', jovahagyas_kell: false,
+            mezok: [{ kulcs: 'nev_a_jegyre', cimke: 'Név a jegyre', kotelezo: true, tipus: 'szoveg' }] },
+    reszletek: [['datum', 'Időpont (pl. 2026-10-10 20:00)'], ['helyszin', 'Helyszín']] },
+  berlet: { cimke: 'Bérlet', ikon: 'CalendarRange', leiras: 'Időszakos jogosultság (edzőterem, tároló).',
+    alap: { afa_kulcs: '27', teljesites: 'kezi', max_rendelesenkent: '1', jovahagyas_kell: false,
+            mezok: [{ kulcs: 'kezdo_nap', cimke: 'Érvényesség kezdete', kotelezo: true, tipus: 'datum' }] },
+    reszletek: [['ervenyesseg', 'Érvényesség hossza (pl. 1 hónap)'], ['helyszin', 'Létesítmény']] },
+  szolgaltatas: { cimke: 'Szolgáltatás', ikon: 'Sparkles', leiras: 'Szabadon definiálható, kézi teljesítés.',
+    alap: { afa_kulcs: '27', teljesites: 'kezi', jovahagyas_kell: false, mezok: [] }, reszletek: [] },
+};
+const SHOP_TELJESITES = { letoltes: 'Letöltés fizetés után', atvetel: 'Személyes átvétel', automatikus: 'Automatikus (pl. kártya aktiválása)', kezi: 'Kézi teljesítés (ügyintéző jelöli)' };
+const SHOP_STATUSZ = { vazlat: ['Vázlat', 'amber'], kozzetett: ['Közzétéve', 'green'], archivalt: ['Archivált', 'slate'] };
+const SHOP_HIANY_NEV = { nev: 'név', ar: 'ár', letoltheto_fajl: 'letölthető fájl', valtozatok: 'legalább egy változat', kep: 'kép',
+  datum_helyszin: 'időpont és helyszín', rendszam_mezo: 'rendszám-mező', atveteli_hely: 'átvételi hely' };
+const SHOP_SablonIkon = ({ sablon, size }) => {
+  const I = Lucide[(SHOP_SABLONOK[sablon] || SHOP_SABLONOK.szolgaltatas).ikon] || Lucide.Package;
+  return <I size={size || 18} />;
+};
+
+/* A közzététel akadályai a felületen is — ugyanaz a szabály, mint a
+   szerver shop.kozzetetel_hianyok() függvényéé, hogy az ügyintéző MENTÉS
+   előtt lássa, mi hiányzik. A végső szót a szerver mondja. */
+function SHOP_hianyok(f) {
+  const h = [];
+  if (!String(f.nev || '').trim()) h.push('nev');
+  if (f.ar_huf === '' || f.ar_huf == null) h.push('ar');
+  if (f.sablon === 'digitalis_jegyzet' && !f.fajl_utvonal) h.push('letoltheto_fajl');
+  if (f.sablon === 'ruhazat' && !(f.valtozatok || []).some(v => v.aktiv !== false && String(v.nev || '').trim())) h.push('valtozatok');
+  if ((f.sablon === 'ruhazat' || f.sablon === 'nyomtatott') && !(f.kepek || []).some(k => String(k.url || '').trim())) h.push('kep');
+  if (f.sablon === 'rendezvenyjegy' && (!(f.reszletek || {}).datum || !(f.reszletek || {}).helyszin)) h.push('datum_helyszin');
+  if (f.sablon === 'parkolokartya' && !(f.mezok || []).some(m => m.tipus === 'rendszam')) h.push('rendszam_mezo');
+  if (f.teljesites === 'atvetel' && !String(f.atveteli_hely || '').trim()) h.push('atveteli_hely');
+  return h;
+}
+
+const SHOP_URES_TERMEK = { nev: '', sku: '', leiras: '', category_id: '', sablon: 'nyomtatott', ar_huf: '', afa_kulcs: '27', keszlet: '',
+  max_rendelesenkent: '', jovahagyas_kell: false, mezok: [], kepek: [], valtozatok: [], reszletek: {}, fajl_utvonal: '', teljesites: 'atvetel',
+  atveteli_hely: '', ertekesites_tol: '', ertekesites_ig: '', kurzus_id: '', kurzus: null, statusz: 'vazlat', sorrend: 100, celkozonseg: null };
 
 /* A tárolt célközönség-JSON visszaalakítása a hírfolyam választójának állapotává. */
 function SHOP_celAllapot(aud) {
@@ -836,34 +979,113 @@ function SHOP_celAllapot(aud) {
   return { ...u, mod: 'celzott', szerep: aud.szerep || [], tagozat: aud.tagozat || [], kepzesi_szint: aud.kepzesi_szint || [],
            kar: aud.kar || [], szak: aud.szak || [], kurzus: tet('kurzus'), csoport: tet('csoport'), szemely: tet('szemely') };
 }
+const SHOP_helyiIdo = (iso) => { if (!iso) return ''; try { const d = new Date(iso); const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); } catch (e) { return ''; } };
+
+/* A változatmátrix: a tulajdonságok értékeinek minden kombinációja egy sor.
+   A meglévő sorok (azonos tulajdonságokkal) megtartják a cikkszámukat,
+   árukat és készletüket — újragenerálás nem töröl adatot. */
+function SHOP_valtozatMatrix(tulajdonsagok, meglevo) {
+  const tul = (tulajdonsagok || []).map(([nev, ertekek]) => [String(nev || '').trim(),
+    String(ertekek || '').split(',').map(x => x.trim()).filter(Boolean)]).filter(([n, e]) => n && e.length);
+  if (!tul.length) return meglevo || [];
+  let kombok = [{}];
+  tul.forEach(([nev, ertekek]) => { kombok = kombok.flatMap(k => ertekek.map(e => ({ ...k, [nev]: e }))); });
+  const kulcs = (t) => JSON.stringify(Object.keys(t).sort().map(k => [k, t[k]]));
+  const regi = {}; (meglevo || []).forEach(v => { regi[kulcs(v.tulajdonsagok || {})] = v; });
+  return kombok.map((t, i) => regi[kulcs(t)] ? { ...regi[kulcs(t)], sorrend: i + 1 }
+    : { nev: Object.values(t).join(' · '), tulajdonsagok: t, sku: '', ar_huf: '', keszlet: '', aktiv: true, sorrend: i + 1 });
+}
+
+/* Élő előnézet: pontosan az a kártya és termékoldal-fej, amit a hallgató lát. */
+function SHOP_Elonezet({ f, kategoriak }) {
+  const kep = (f.kepek || []).find(k => String(k.url || '').trim());
+  const aktivValt = (f.valtozatok || []).filter(v => v.aktiv !== false && String(v.nev || '').trim());
+  const arak = [Number(f.ar_huf) || 0].concat(aktivValt.map(v => v.ar_huf === '' || v.ar_huf == null ? Number(f.ar_huf) || 0 : Number(v.ar_huf)));
+  const tol = aktivValt.length ? Math.min.apply(null, arak.slice(1)) : Number(f.ar_huf) || 0;
+  const r = f.reszletek || {};
+  return (
+    <div className="space-y-3" data-shop-elonezet="1">
+      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Élő előnézet — így látja a hallgató</p>
+      <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden">
+        <div className="aspect-[4/3] bg-slate-50 flex items-center justify-center text-slate-300 overflow-hidden">
+          {kep && typeof FEED_img === 'function' ? FEED_img(kep.url, 'w-full h-full object-cover') : <SHOP_SablonIkon sablon={f.sablon} size={40} />}
+        </div>
+        <div className="p-4">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(SHOP_SABLONOK[f.sablon] || {}).cimke}{f.kurzus ? ' · ' + (f.kurzus.kod || '') : ''}</p>
+          <p className="text-[15px] font-black text-slate-900 leading-snug mt-0.5">{f.nev || 'Névtelen termék'}</p>
+          <div className="flex items-center justify-between gap-2 mt-3">
+            <span className="text-lg font-black text-slate-900 tabular-nums">{SHOP_ft(tol)}{aktivValt.length > 1 && new Set(arak.slice(1)).size > 1 ? '-tól' : ''}</span>
+            {f.jovahagyas_kell ? <UBadge tone="amber">jóváhagyással</UBadge> : aktivValt.length > 1 ? <UBadge tone="blue">{aktivValt.length + ' változat'}</UBadge> : null}
+          </div>
+        </div>
+      </div>
+      {(r.datum || r.helyszin || r.szerzo || r.telephely) && (
+        <div className="text-[11px] text-slate-500 font-medium space-y-0.5">
+          {r.datum && <p><b>Időpont:</b> {r.datum}</p>}{r.helyszin && <p><b>Helyszín:</b> {r.helyszin}</p>}
+          {r.szerzo && <p><b>Szerző:</b> {r.szerzo}</p>}{r.telephely && <p><b>Telephely:</b> {r.telephely}</p>}
+        </div>
+      )}
+      {f.teljesites === 'atvetel' && f.atveteli_hely && <p className="text-[11px] text-slate-500"><b>Átvétel:</b> {f.atveteli_hely}</p>}
+    </div>
+  );
+}
 
 function SHOP_TermekSzerkeszto({ termek, kategoriak, onClose, onMentve }) {
   const [f, setF] = useState(SHOP_URES_TERMEK);
+  const [tul, setTul] = useState([]);
   const [cel, setCel] = useState(() => SHOP_celAllapot(null));
+  const [ful, setFul] = useState('alap');
   const [busy, setBusy] = useState(false);
   const [hiba, setHiba] = useState('');
+  const [ok, setOk] = useState('');
   const [feltolt, setFeltolt] = useState('');
+  const [valaszt, setValaszt] = useState(false);   // új terméknél: sablonválasztó
+  const [kurzQ, setKurzQ] = useState('');
+  const [kurzOpc, setKurzOpc] = useState(null);
+
   useEffect(() => {
     if (!termek) return;
-    setF({ ...SHOP_URES_TERMEK, ...termek, ar_huf: termek.ar_huf == null ? '' : String(termek.ar_huf),
-           keszlet: termek.keszlet == null ? '' : String(termek.keszlet),
-           max_rendelesenkent: termek.max_rendelesenkent == null ? '' : String(termek.max_rendelesenkent),
-           category_id: termek.category_id || '', mezok: Array.isArray(termek.mezok) ? termek.mezok : [] });
-    setCel(SHOP_celAllapot(termek.celkozonseg)); setHiba(''); setFeltolt('');
+    const uj = !termek.id;
+    const valt = Array.isArray(termek.valtozatok) ? termek.valtozatok.map(v => ({ ...v,
+      ar_huf: v.ar_huf == null ? '' : String(v.ar_huf), keszlet: v.keszlet == null ? '' : String(v.keszlet) })) : [];
+    setF({ ...SHOP_URES_TERMEK, ...termek,
+      ar_huf: termek.ar_huf == null ? '' : String(termek.ar_huf), keszlet: termek.keszlet == null ? '' : String(termek.keszlet),
+      max_rendelesenkent: termek.max_rendelesenkent == null ? '' : String(termek.max_rendelesenkent),
+      category_id: termek.category_id || '', kurzus_id: termek.kurzus_id || '', mezok: Array.isArray(termek.mezok) ? termek.mezok : [],
+      kepek: Array.isArray(termek.kepek) && termek.kepek.length ? termek.kepek : (termek.kep_url ? [{ url: termek.kep_url }] : []),
+      valtozatok: valt, reszletek: termek.reszletek || {}, ertekesites_tol: SHOP_helyiIdo(termek.ertekesites_tol),
+      ertekesites_ig: SHOP_helyiIdo(termek.ertekesites_ig), atveteli_hely: termek.atveteli_hely || '', fajl_utvonal: termek.fajl_utvonal || '' });
+    // A tulajdonságok a meglévő változatokból olvashatók vissza.
+    const kulcsok = {}; valt.forEach(v => Object.entries(v.tulajdonsagok || {}).forEach(([k, e]) => { (kulcsok[k] = kulcsok[k] || []).includes(e) || kulcsok[k].push(e); }));
+    setTul(Object.keys(kulcsok).length ? Object.entries(kulcsok).map(([k, e]) => [k, e.join(', ')]) : []);
+    setCel(SHOP_celAllapot(termek.celkozonseg)); setHiba(''); setOk(''); setFeltolt(''); setFul('alap'); setValaszt(uj);
   }, [termek]);
+
+  useEffect(() => {
+    if (!termek || ful !== 'alap') return;
+    let el = true;
+    const t = setTimeout(() => {
+      SHOP_rpc('shop_course_options', { p_q: kurzQ || null }).then(d => { if (el) setKurzOpc(Array.isArray(d) ? d : []); }).catch(() => { if (el) setKurzOpc([]); });
+    }, 300);
+    return () => { el = false; clearTimeout(t); };
+  }, [kurzQ, ful, termek]);
+
   if (!termek) return null;
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-  const tipusValt = (t) => {
-    setF(p => {
-      const uj = { ...p, tipus: t };
-      // A parkolókártyánál a rendszám és a jóváhagyás az észszerű kiindulás.
-      if (t === 'parkolokartya' && !(p.mezok || []).length) {
-        uj.mezok = [{ kulcs: 'rendszam', cimke: 'Rendszám', kotelezo: true, tipus: 'rendszam' }];
-        uj.jovahagyas_kell = true; uj.max_rendelesenkent = p.max_rendelesenkent || '1';
-      }
-      return uj;
-    });
+  const setR = (k, v) => setF(p => ({ ...p, reszletek: { ...(p.reszletek || {}), [k]: v } }));
+  const sablon = SHOP_SABLONOK[f.sablon] || SHOP_SABLONOK.szolgaltatas;
+  const hianyok = SHOP_hianyok(f);
+
+  const sablonValaszt = (k) => {
+    const s = SHOP_SABLONOK[k];
+    setF(p => ({ ...p, sablon: k, ...s.alap, max_rendelesenkent: s.alap.max_rendelesenkent || '', mezok: s.alap.mezok.map(m => ({ ...m })) }));
+    setTul(s.alap.tulajdonsagok ? s.alap.tulajdonsagok.map(x => x.slice()) : []);
+    setValaszt(false);
   };
+  const matrix = () => setF(p => ({ ...p, valtozatok: SHOP_valtozatMatrix(tul, p.valtozatok) }));
+  const setV = (i, k, v) => setF(p => ({ ...p, valtozatok: p.valtozatok.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
+
   const fajlFeltolt = async (e) => {
     const file = e.target.files && e.target.files[0]; if (!file) return;
     setFeltolt('Feltöltés…');
@@ -874,104 +1096,270 @@ function SHOP_TermekSzerkeszto({ termek, kategoriak, onClose, onMentve }) {
       set('fajl_utvonal', ut); setFeltolt('Feltöltve.');
     } catch (err) { setFeltolt('A feltöltés nem sikerült: ' + ((err && err.message) || '')); }
   };
-  const ment = async () => {
-    setBusy(true); setHiba('');
+
+  const ment = async (statusz) => {
+    setBusy(true); setHiba(''); setOk('');
     try {
       const aud = typeof FEED_celNormal === 'function' ? FEED_celNormal(cel) : null;
-      const d = await SHOP_rpc('shop_product_save', { p: { ...f,
-        ar_huf: f.ar_huf === '' ? null : Number(f.ar_huf), keszlet: f.keszlet === '' ? null : Number(f.keszlet),
-        max_rendelesenkent: f.max_rendelesenkent === '' ? null : Number(f.max_rendelesenkent),
-        category_id: f.category_id || null, celkozonseg: aud,
-        mezok: (f.mezok || []).filter(m => m.cimke).map(m => ({ ...m, kulcs: m.kulcs || m.cimke.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_') })) } });
-      onMentve(d);
-    } catch (e) { setHiba(SHOP_msg(e)); } finally { setBusy(false); }
+      const szam = (x) => (x === '' || x == null ? null : Number(x));
+      const d = await SHOP_rpc('shop_product_save', { p: {
+        id: f.id || null, nev: f.nev, sku: f.sku, leiras: f.leiras, category_id: f.category_id || null, sablon: f.sablon,
+        ar_huf: szam(f.ar_huf), afa_kulcs: f.afa_kulcs, keszlet: szam(f.keszlet), max_rendelesenkent: szam(f.max_rendelesenkent),
+        jovahagyas_kell: !!f.jovahagyas_kell, fajl_utvonal: f.fajl_utvonal || null, celkozonseg: aud, sorrend: szam(f.sorrend) || 100,
+        reszletek: f.reszletek || {}, teljesites: f.teljesites, atveteli_hely: f.atveteli_hely || null, kurzus_id: f.kurzus_id || null,
+        ertekesites_tol: f.ertekesites_tol ? new Date(f.ertekesites_tol).toISOString() : null,
+        ertekesites_ig: f.ertekesites_ig ? new Date(f.ertekesites_ig).toISOString() : null,
+        statusz,
+        mezok: (f.mezok || []).filter(m => m.cimke).map(m => ({ ...m, kulcs: m.kulcs || m.cimke.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_') })),
+        kepek: (f.kepek || []).filter(k => String(k.url || '').trim()).map(k => ({ url: k.url.trim(), alt: k.alt || null })),
+        valtozatok: (f.valtozatok || []).map(v => ({ id: v.id || null, nev: v.nev, tulajdonsagok: v.tulajdonsagok || {}, sku: v.sku || null,
+          ar_huf: szam(v.ar_huf), keszlet: szam(v.keszlet), aktiv: v.aktiv !== false, sorrend: v.sorrend || 100 })) } });
+      setOk(statusz === 'kozzetett' ? 'Közzétéve — a hallgatók már látják.' : statusz === 'archivalt' ? 'Archiválva.' : 'Vázlat mentve.');
+      onMentve(d, statusz === 'vazlat');
+      if (d && d.id) setF(p => ({ ...p, id: d.id, statusz: d.statusz,
+        valtozatok: (d.valtozatok || []).map(v => ({ ...v, ar_huf: v.ar_huf == null ? '' : String(v.ar_huf), keszlet: v.keszlet == null ? '' : String(v.keszlet) })) }));
+    } catch (e) {
+      const m = (e && e.message) || '';
+      const t = m.match(/SHOP_PUBLISH_MISSING: (.+)/);
+      setHiba(t ? 'A közzétételhez még hiányzik: ' + t[1].split(', ').map(x => SHOP_HIANY_NEV[x] || x).join(', ') + '.' : SHOP_msg(e));
+    } finally { setBusy(false); }
   };
-  return (
-    <UModal open={!!termek} onClose={onClose} max="max-w-3xl" icon={<Lucide.Package size={20} />}
-      title={termek.id ? 'Termék szerkesztése' : 'Új termék'} subtitle={termek.id ? termek.nev : ''}>
-      <div className="space-y-4" data-shop-termek-szerkeszto="1">
-        <div className="grid sm:grid-cols-2 gap-3">
-          <UField label="Név *"><input className={U_input} value={f.nev} onChange={e => set('nev', e.target.value)} /></UField>
-          <UField label="Cikkszám (SKU)"><input className={U_input} value={f.sku || ''} onChange={e => set('sku', e.target.value)} /></UField>
-        </div>
-        <UField label="Leírás"><textarea className={U_input + ' min-h-[80px]'} value={f.leiras || ''} onChange={e => set('leiras', e.target.value)} /></UField>
-        <div className="grid sm:grid-cols-3 gap-3">
-          <UField label="Típus">
-            <select className={U_input} value={f.tipus} onChange={e => tipusValt(e.target.value)}>
-              {Object.keys(SHOP_TIPUS).map(k => <option key={k} value={k}>{SHOP_TIPUS[k][0]}</option>)}
-            </select>
-          </UField>
-          <UField label="Kategória">
-            <select className={U_input} value={f.category_id} onChange={e => set('category_id', e.target.value)}>
-              <option value="">— nincs —</option>
-              {(kategoriak || []).map(c => <option key={c.id} value={c.id}>{c.nev}</option>)}
-            </select>
-          </UField>
-          <UField label="Sorrend"><input type="number" className={U_input} value={f.sorrend} onChange={e => set('sorrend', e.target.value)} /></UField>
-        </div>
-        <div className="grid sm:grid-cols-4 gap-3">
-          <UField label="Bruttó ár (Ft) *"><input type="number" min="0" className={U_input} value={f.ar_huf} onChange={e => set('ar_huf', e.target.value)} /></UField>
-          <UField label="ÁFA">
-            <select className={U_input} value={f.afa_kulcs} onChange={e => set('afa_kulcs', e.target.value)}>
-              {['27', '18', '5', '0', 'AAM', 'TAM'].map(k => <option key={k} value={k}>{/^\d+$/.test(k) ? k + '%' : k}</option>)}
-            </select>
-          </UField>
-          <UField label="Készlet" hint="üres = korlátlan"><input type="number" min="0" className={U_input} value={f.keszlet} onChange={e => set('keszlet', e.target.value)} /></UField>
-          <UField label="Max / rendelés"><input type="number" min="1" className={U_input} value={f.max_rendelesenkent} onChange={e => set('max_rendelesenkent', e.target.value)} /></UField>
-        </div>
-        <label className="flex items-center gap-2.5 text-sm font-bold text-slate-600 cursor-pointer">
-          <input type="checkbox" checked={!!f.jovahagyas_kell} onChange={e => set('jovahagyas_kell', e.target.checked)} className="w-4 h-4 accent-primary" />
-          Jóváhagyáshoz kötött (a vevő csak jóváhagyás után fizet — pl. parkolókártya)
-        </label>
 
-        {/* bekérendő adatok */}
-        <div className="rounded-2xl border border-slate-100 p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] font-black text-slate-800">Vásárláskor bekérendő adatok</p>
-            <button type="button" className="text-[11px] font-black text-primary hover:underline"
-              onClick={() => set('mezok', (f.mezok || []).concat([{ kulcs: '', cimke: '', kotelezo: true, tipus: 'szoveg' }]))}>+ Mező</button>
+  const fulek = [['alap', 'Alapadatok'], ['ar', 'Ár és ÁFA'], ['valtozat', 'Változatok és készlet'], ['adatok', 'Bekért adatok'],
+                 ['teljesites', 'Teljesítés'], ['lathatosag', 'Láthatóság']];
+  const [stC, stT] = SHOP_STATUSZ[f.statusz] || SHOP_STATUSZ.vazlat;
+
+  return (
+    <UModal open={!!termek} onClose={onClose} max="max-w-6xl" icon={<SHOP_SablonIkon sablon={f.sablon} size={20} />}
+      title={f.id ? 'Termék szerkesztése' : 'Új termék'} subtitle={sablon.cimke + ' sablon'}>
+      {valaszt ? (
+        <div className="space-y-4" data-shop-sablonvalaszto="1">
+          <p className="text-sm text-slate-500">Válaszd ki, milyen terméket viszel fel. A sablon előtölti a szükséges mezőket — minden átírható.</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.entries(SHOP_SABLONOK).map(([k, s]) => (
+              <button key={k} type="button" onClick={() => sablonValaszt(k)} data-shop-sablon={k}
+                className="text-left rounded-2xl border border-slate-100 p-4 hover:border-primary hover:bg-primary/5 transition-all">
+                <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-2"><SHOP_SablonIkon sablon={k} size={17} /></span>
+                <span className="block text-sm font-black text-slate-800">{s.cimke}</span>
+                <span className="block text-[11px] text-slate-400 mt-0.5">{s.leiras}</span>
+              </button>
+            ))}
           </div>
-          {(f.mezok || []).length === 0 && <p className="text-[11px] text-slate-300 font-bold italic">nincs — a vevőtől nem kérünk külön adatot</p>}
-          {(f.mezok || []).map((m, i) => (
-            <div key={i} className="grid grid-cols-[1fr,auto,auto,auto] gap-2 items-center">
-              <input className={U_input + ' py-1.5 text-[12px]'} value={m.cimke} placeholder="pl. Rendszám"
-                onChange={e => set('mezok', f.mezok.map((x, j) => j === i ? { ...x, cimke: e.target.value } : x))} />
-              <select className={U_input + ' py-1.5 text-[12px]'} value={m.tipus || 'szoveg'}
-                onChange={e => set('mezok', f.mezok.map((x, j) => j === i ? { ...x, tipus: e.target.value } : x))}>
-                <option value="szoveg">szöveg</option><option value="rendszam">rendszám</option><option value="datum">dátum</option>
-              </select>
-              <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                <input type="checkbox" checked={!!m.kotelezo} onChange={e => set('mezok', f.mezok.map((x, j) => j === i ? { ...x, kotelezo: e.target.checked } : x))} /> kötelező
-              </label>
-              <button type="button" className="text-slate-300 hover:text-red-500" onClick={() => set('mezok', f.mezok.filter((_, j) => j !== i))}><Lucide.X size={14} /></button>
-            </div>
+        </div>
+      ) : (
+      <div className="space-y-4" data-shop-termek-szerkeszto="1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span data-shop-statusz={f.statusz}><UBadge tone={stT}>{stC}</UBadge></span>
+          <span className="flex-1" />
+          <button className={U_btnGhost + ' py-2 text-[12px]'} disabled={busy} onClick={() => ment('vazlat')} data-shop-ment-vazlat="1"><Lucide.Save size={14} /> Mentés vázlatként</button>
+          {f.id && f.statusz === 'kozzetett' && (
+            <button className={U_btnGhost + ' py-2 text-[12px]'} disabled={busy} onClick={() => ment('archivalt')}><Lucide.Archive size={14} /> Archiválás</button>
+          )}
+          <button className={U_btnPrimary + ' py-2 text-[12px]'} disabled={busy} onClick={() => ment('kozzetett')} data-shop-kozzetesz="1">
+            <Lucide.Send size={14} /> {f.statusz === 'kozzetett' ? 'Mentés és közzétéve marad' : 'Közzététel'}
+          </button>
+        </div>
+        {hiba && <p className="text-[12px] font-bold text-red-600" role="alert" data-shop-szerk-hiba="1">{hiba}</p>}
+        {ok && <p className="text-[12px] font-bold text-emerald-700" data-shop-szerk-ok="1">{ok}</p>}
+
+        <div className="flex flex-wrap gap-1 border-b border-slate-100">
+          {fulek.map(([k, c]) => (
+            <button key={k} type="button" onClick={() => setFul(k)} data-shop-szerk-ful={k}
+              className={'px-3 py-2 text-[12px] font-black border-b-2 transition-colors ' + (ful === k ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600')}>{c}</button>
           ))}
         </div>
 
-        <UField label="Kép URL"><input className={U_input} value={f.kep_url || ''} onChange={e => set('kep_url', e.target.value)} placeholder="https://…" /></UField>
-        {f.tipus === 'digitalis' && (
-          <div className="rounded-2xl border border-slate-100 p-4 space-y-2">
-            <p className="text-[12px] font-black text-slate-800">Letölthető fájl</p>
-            <p className="text-[11px] text-slate-400">Privát tárolóba kerül; csak a kifizetett rendelés vevője töltheti le, rövid lejáratú linkkel.</p>
-            <div className="flex items-center gap-3 flex-wrap">
-              <label className={U_btnGhost + ' cursor-pointer text-[12px]'}><Lucide.Upload size={14} /> Fájl feltöltése<input type="file" className="hidden" onChange={fajlFeltolt} /></label>
-              <span className="text-[11px] font-mono text-slate-500 break-all">{f.fajl_utvonal || 'nincs fájl'}</span>
-              {feltolt && <span className="text-[11px] font-bold text-slate-500">{feltolt}</span>}
+        <div className="grid lg:grid-cols-[minmax(0,1fr),300px] gap-6">
+          <div className="space-y-4 min-w-0">
+            {ful === 'alap' && (<>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <UField label="Név *"><input className={U_input} value={f.nev} onChange={e => set('nev', e.target.value)} data-shop-f-nev="1" /></UField>
+                <UField label="Cikkszám (SKU)"><input className={U_input} value={f.sku || ''} onChange={e => set('sku', e.target.value)} /></UField>
+              </div>
+              <UField label="Leírás"><textarea className={U_input + ' min-h-[90px]'} value={f.leiras || ''} onChange={e => set('leiras', e.target.value)} /></UField>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <UField label="Sablon">
+                  <select className={U_input} value={f.sablon} onChange={e => set('sablon', e.target.value)}>
+                    {Object.entries(SHOP_SABLONOK).map(([k, s]) => <option key={k} value={k}>{s.cimke}</option>)}
+                  </select>
+                </UField>
+                <UField label="Kategória">
+                  <select className={U_input} value={f.category_id} onChange={e => set('category_id', e.target.value)}>
+                    <option value="">— nincs —</option>
+                    {(kategoriak || []).map(c => <option key={c.id} value={c.id}>{c.nev}</option>)}
+                  </select>
+                </UField>
+                <UField label="Sorrend a boltban"><input type="number" className={U_input} value={f.sorrend} onChange={e => set('sorrend', e.target.value)} /></UField>
+              </div>
+              {sablon.reszletek.length > 0 && (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {sablon.reszletek.map(([k, c]) => (
+                    <UField key={k} label={c}><input className={U_input} value={(f.reszletek || {})[k] || ''} onChange={e => setR(k, e.target.value)} data-shop-r={k} /></UField>
+                  ))}
+                </div>
+              )}
+              <div className="rounded-2xl border border-slate-100 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[12px] font-black text-slate-800">Képek <span className="text-slate-400 font-bold">— az első a borítókép</span></p>
+                  <button type="button" className="text-[11px] font-black text-primary hover:underline" onClick={() => set('kepek', (f.kepek || []).concat([{ url: '' }]))} data-shop-uj-kep="1">+ Kép</button>
+                </div>
+                {(f.kepek || []).length === 0 && <p className="text-[11px] text-slate-300 font-bold italic">nincs kép</p>}
+                {(f.kepek || []).map((k, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <input className={U_input + ' py-1.5 text-[12px] flex-1'} value={k.url} placeholder="https://…" data-shop-kep={i}
+                      onChange={e => set('kepek', f.kepek.map((x, j) => j === i ? { ...x, url: e.target.value } : x))} />
+                    <button type="button" disabled={i === 0} className="text-slate-300 hover:text-slate-600 disabled:opacity-30" title="Előre"
+                      onClick={() => set('kepek', [f.kepek[i]].concat(f.kepek.filter((_, j) => j !== i)))}><Lucide.ArrowUpToLine size={14} /></button>
+                    <button type="button" className="text-slate-300 hover:text-red-500" onClick={() => set('kepek', f.kepek.filter((_, j) => j !== i))}><Lucide.X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-2xl border border-slate-100 p-4 space-y-2">
+                <p className="text-[12px] font-black text-slate-800">Kurzus <span className="text-slate-400 font-bold">— a kurzus hallgatóinak „Neked” ajánlás</span></p>
+                {f.kurzus_id ? (
+                  <div className="flex items-center gap-2">
+                    <UBadge tone="blue">{f.kurzus ? (f.kurzus.kod || f.kurzus.cimke) + (f.kurzus.nev ? ' · ' + f.kurzus.nev : '') : f.kurzus_id.slice(0, 8)}</UBadge>
+                    <button type="button" className="text-[11px] font-black text-slate-400 hover:text-red-500" onClick={() => setF(p => ({ ...p, kurzus_id: '', kurzus: null }))}>eltávolítás</button>
+                  </div>
+                ) : (<>
+                  <input className={U_input + ' py-1.5 text-[12px]'} value={kurzQ} onChange={e => setKurzQ(e.target.value)} placeholder="Keresés kurzuskód vagy név szerint…" />
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {(kurzOpc || []).slice(0, 8).map(k => (
+                      <button key={k.id} type="button" className="w-full text-left px-3 py-1.5 rounded-xl border border-slate-100 hover:border-primary text-[12px] font-bold text-slate-600"
+                        onClick={() => setF(p => ({ ...p, kurzus_id: k.id, kurzus: { kod: k.cimke.split(' · ')[0], nev: k.cimke.split(' · ').slice(1).join(' · ') } }))}>
+                        {k.cimke} <span className="text-slate-400 font-medium">· {k.reszlet}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>)}
+              </div>
+            </>)}
+
+            {ful === 'ar' && (
+              <div className="grid sm:grid-cols-3 gap-3">
+                <UField label="Bruttó ár (Ft) *"><input type="number" min="0" className={U_input} value={f.ar_huf} onChange={e => set('ar_huf', e.target.value)} data-shop-f-ar="1" /></UField>
+                <UField label="ÁFA-kulcs" hint="a Pénzügy határozza meg">
+                  <select className={U_input} value={f.afa_kulcs} onChange={e => set('afa_kulcs', e.target.value)}>
+                    {['27', '18', '5', '0', 'AAM', 'TAM'].map(k => <option key={k} value={k}>{/^\d+$/.test(k) ? k + '%' : k}</option>)}
+                  </select>
+                </UField>
+                <UField label="Max / rendelés"><input type="number" min="1" className={U_input} value={f.max_rendelesenkent} onChange={e => set('max_rendelesenkent', e.target.value)} /></UField>
+              </div>
+            )}
+
+            {ful === 'valtozat' && (<>
+              <div className="rounded-2xl border border-slate-100 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[12px] font-black text-slate-800">Tulajdonságok</p>
+                  <button type="button" className="text-[11px] font-black text-primary hover:underline" onClick={() => setTul(tul.concat([['', '']]))}>+ Tulajdonság</button>
+                </div>
+                {tul.length === 0 && <p className="text-[11px] text-slate-400">Nincs változat — a termék egy darabban árulható, a készlet lent állítható.</p>}
+                {tul.map(([n, e], i) => (
+                  <div key={i} className="grid grid-cols-[140px,1fr,auto] gap-2 items-center">
+                    <input className={U_input + ' py-1.5 text-[12px]'} value={n} placeholder="pl. Méret" onChange={x => setTul(tul.map((t, j) => j === i ? [x.target.value, t[1]] : t))} />
+                    <input className={U_input + ' py-1.5 text-[12px]'} value={e} placeholder="értékek vesszővel: S, M, L" data-shop-tul={i} onChange={x => setTul(tul.map((t, j) => j === i ? [t[0], x.target.value] : t))} />
+                    <button type="button" className="text-slate-300 hover:text-red-500" onClick={() => setTul(tul.filter((_, j) => j !== i))}><Lucide.X size={14} /></button>
+                  </div>
+                ))}
+                {tul.length > 0 && (
+                  <button type="button" className={U_btnGhost + ' py-1.5 text-[12px]'} onClick={matrix} data-shop-matrix="1"><Lucide.Grid3x3 size={14} /> Változatok létrehozása / frissítése</button>
+                )}
+              </div>
+              {(f.valtozatok || []).length > 0 ? (
+                <div className="rounded-2xl border border-slate-100 overflow-x-auto" data-shop-valtozatok="1">
+                  <table className="w-full text-left text-[12px]">
+                    <thead><tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      <th className="px-3 py-2">Változat</th><th className="px-3 py-2">Cikkszám</th><th className="px-3 py-2">Ár (üres = alapár)</th><th className="px-3 py-2">Készlet (üres = ∞)</th><th className="px-3 py-2">Árulva</th>
+                    </tr></thead>
+                    <tbody>
+                      {f.valtozatok.map((v, i) => (
+                        <tr key={i} className={'border-t border-slate-50 ' + (v.aktiv === false ? 'opacity-50' : '')}>
+                          <td className="px-3 py-2 font-bold text-slate-700">{v.nev}</td>
+                          <td className="px-3 py-2"><input className={U_input + ' py-1 text-[12px] font-mono'} value={v.sku || ''} onChange={e => setV(i, 'sku', e.target.value)} /></td>
+                          <td className="px-3 py-2"><input type="number" min="0" className={U_input + ' py-1 text-[12px] w-28'} value={v.ar_huf} onChange={e => setV(i, 'ar_huf', e.target.value)} /></td>
+                          <td className="px-3 py-2"><input type="number" min="0" className={U_input + ' py-1 text-[12px] w-24'} value={v.keszlet} onChange={e => setV(i, 'keszlet', e.target.value)} data-shop-v-keszlet={i} /></td>
+                          <td className="px-3 py-2"><input type="checkbox" checked={v.aktiv !== false} onChange={e => setV(i, 'aktiv', e.target.checked)} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <UField label="Készlet" hint="üres = korlátlan"><input type="number" min="0" className={U_input + ' w-40'} value={f.keszlet} onChange={e => set('keszlet', e.target.value)} /></UField>
+              )}
+              <p className="text-[11px] text-slate-400">A már megrendelt változat nem törlődik, csak kikerül az árulásból — a régi rendelések így hiánytalanok maradnak.</p>
+            </>)}
+
+            {ful === 'adatok' && (
+              <div className="rounded-2xl border border-slate-100 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[12px] font-black text-slate-800">Vásárláskor bekérendő adatok</p>
+                  <button type="button" className="text-[11px] font-black text-primary hover:underline"
+                    onClick={() => set('mezok', (f.mezok || []).concat([{ kulcs: '', cimke: '', kotelezo: true, tipus: 'szoveg' }]))}>+ Mező</button>
+                </div>
+                {(f.mezok || []).length === 0 && <p className="text-[11px] text-slate-300 font-bold italic">nincs — a vevőtől nem kérünk külön adatot</p>}
+                {(f.mezok || []).map((m, i) => (
+                  <div key={i} className="grid grid-cols-[1fr,auto,auto,auto] gap-2 items-center">
+                    <input className={U_input + ' py-1.5 text-[12px]'} value={m.cimke} placeholder="pl. Rendszám"
+                      onChange={e => set('mezok', f.mezok.map((x, j) => j === i ? { ...x, cimke: e.target.value } : x))} />
+                    <select className={U_input + ' py-1.5 text-[12px]'} value={m.tipus || 'szoveg'}
+                      onChange={e => set('mezok', f.mezok.map((x, j) => j === i ? { ...x, tipus: e.target.value } : x))}>
+                      <option value="szoveg">szöveg</option><option value="rendszam">rendszám</option><option value="datum">dátum</option>
+                    </select>
+                    <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                      <input type="checkbox" checked={!!m.kotelezo} onChange={e => set('mezok', f.mezok.map((x, j) => j === i ? { ...x, kotelezo: e.target.checked } : x))} /> kötelező
+                    </label>
+                    <button type="button" className="text-slate-300 hover:text-red-500" onClick={() => set('mezok', f.mezok.filter((_, j) => j !== i))}><Lucide.X size={14} /></button>
+                  </div>
+                ))}
+                <label className="flex items-center gap-2.5 text-sm font-bold text-slate-600 cursor-pointer pt-2">
+                  <input type="checkbox" checked={!!f.jovahagyas_kell} onChange={e => set('jovahagyas_kell', e.target.checked)} className="w-4 h-4 accent-primary" />
+                  Jóváhagyáshoz kötött — a vevő csak jóváhagyás után fizet
+                </label>
+              </div>
+            )}
+
+            {ful === 'teljesites' && (<>
+              <UField label="Teljesítés módja">
+                <select className={U_input} value={f.teljesites} onChange={e => set('teljesites', e.target.value)} data-shop-f-teljesites="1">
+                  {Object.entries(SHOP_TELJESITES).map(([k, c]) => <option key={k} value={k}>{c}</option>)}
+                </select>
+              </UField>
+              {f.teljesites === 'atvetel' && (
+                <UField label="Átvételi hely és nyitvatartás *"><input className={U_input} value={f.atveteli_hely} onChange={e => set('atveteli_hely', e.target.value)}
+                  placeholder="pl. Jegyzetbolt, A épület földszint · H–Cs 9–15" data-shop-f-atvetel="1" /></UField>
+              )}
+              {(f.sablon === 'digitalis_jegyzet' || f.teljesites === 'letoltes') && (
+                <div className="rounded-2xl border border-slate-100 p-4 space-y-2">
+                  <p className="text-[12px] font-black text-slate-800">Letölthető fájl</p>
+                  <p className="text-[11px] text-slate-400">Privát tárolóba kerül; csak a kifizetett rendelés vevője töltheti le, rövid lejáratú linkkel.</p>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <label className={U_btnGhost + ' cursor-pointer text-[12px]'}><Lucide.Upload size={14} /> Fájl feltöltése<input type="file" className="hidden" onChange={fajlFeltolt} /></label>
+                    <span className="text-[11px] font-mono text-slate-500 break-all">{f.fajl_utvonal || 'nincs fájl'}</span>
+                    {feltolt && <span className="text-[11px] font-bold text-slate-500">{feltolt}</span>}
+                  </div>
+                </div>
+              )}
+            </>)}
+
+            {ful === 'lathatosag' && (<>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <UField label="Árulás kezdete" hint="üres = azonnal"><input type="datetime-local" className={U_input} value={f.ertekesites_tol} onChange={e => set('ertekesites_tol', e.target.value)} /></UField>
+                <UField label="Árulás vége" hint="üres = visszavonásig"><input type="datetime-local" className={U_input} value={f.ertekesites_ig} onChange={e => set('ertekesites_ig', e.target.value)} /></UField>
+              </div>
+              {typeof FEED_CelkozonsegValaszto === 'function' && <FEED_CelkozonsegValaszto ertek={cel} onValt={setCel} />}
+            </>)}
+          </div>
+
+          <div className="space-y-4">
+            <SHOP_Elonezet f={f} kategoriak={kategoriak} />
+            <div className={'rounded-2xl p-3 text-[12px] font-bold ' + (hianyok.length ? 'bg-amber-50 text-amber-800 border border-amber-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100')} data-shop-hianyok={hianyok.join(',')}>
+              {hianyok.length ? 'Közzétételhez még hiányzik: ' + hianyok.map(x => SHOP_HIANY_NEV[x] || x).join(', ') + '.' : 'Közzétehető.'}
             </div>
           </div>
-        )}
-        {typeof FEED_CelkozonsegValaszto === 'function' && (
-          <FEED_CelkozonsegValaszto ertek={cel} onValt={setCel} />
-        )}
-        <label className="flex items-center gap-2.5 text-sm font-bold text-slate-600 cursor-pointer">
-          <input type="checkbox" checked={!!f.aktiv} onChange={e => set('aktiv', e.target.checked)} className="w-4 h-4 accent-primary" /> Aktív (látszik a boltban)
-        </label>
-        {hiba && <p className="text-[12px] font-bold text-red-600" role="alert">{hiba}</p>}
-        <div className="flex justify-end gap-2">
-          <button className={U_btnGhost} onClick={onClose}>Mégse</button>
-          <button className={U_btnPrimary} onClick={ment} disabled={busy} data-shop-termek-ment="1"><Lucide.Save size={15} /> Mentés</button>
         </div>
       </div>
+      )}
     </UModal>
   );
 }
@@ -980,41 +1368,62 @@ function SHOP_Katalogus({ adat, onFrissit }) {
   const [szerk, setSzerk] = useState(null);
   const [ujKat, setUjKat] = useState('');
   const [err, setErr] = useState('');
+  const [szuro, setSzuro] = useState('');
   const kategoriak = (adat && adat.kategoriak) || [];
   const katNev = (id) => (kategoriak.find(c => c.id === id) || {}).nev || '—';
+  const termekek = ((adat && adat.termekek) || []).filter(t => !szuro || t.statusz === szuro);
+  const db = (s) => ((adat && adat.termekek) || []).filter(t => t.statusz === s).length;
   const katMent = async (p) => { try { setErr(''); await SHOP_rpc('shop_category_save', { p }); setUjKat(''); onFrissit(); } catch (e) { setErr(SHOP_msg(e)); } };
-  const aktivValt = async (t) => { try { setErr(''); await SHOP_rpc('shop_product_save', { p: { ...t, aktiv: !t.aktiv } }); onFrissit(); } catch (e) { setErr(SHOP_msg(e)); } };
+  const masol = async (t) => { try { setErr(''); const d = await SHOP_rpc('shop_product_copy', { p_id: t.id }); onFrissit(); setSzerk(d); } catch (e) { setErr(SHOP_msg(e)); } };
+  const keszletSzoveg = (t) => {
+    const v = (t.valtozatok || []).filter(x => x.aktiv);
+    if (!v.length) return t.keszlet == null ? '∞' : String(t.keszlet);
+    if (v.some(x => x.keszlet == null)) return '∞';
+    return String(v.reduce((s, x) => s + (x.keszlet || 0), 0)) + ' (' + v.length + ' vált.)';
+  };
   return (
     <div className="grid lg:grid-cols-[1fr,300px] gap-4 mt-5" data-shop-admin-katalogus="1">
       <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
           <p className="text-sm font-black text-slate-800">Termékek <span className="text-slate-400">({((adat && adat.termekek) || []).length})</span></p>
+          <div className="flex flex-wrap gap-1.5">
+            {[['', 'Mind'], ['vazlat', 'Vázlat · ' + db('vazlat')], ['kozzetett', 'Közzétéve · ' + db('kozzetett')], ['archivalt', 'Archivált · ' + db('archivalt')]].map(([k, c]) => (
+              <button key={k || 'mind'} onClick={() => setSzuro(k)} data-shop-statusz-szuro={k || 'mind'}
+                className={'px-2.5 py-1 rounded-xl border text-[11px] font-bold ' + (szuro === k ? 'border-primary bg-primary/10 text-primary' : 'border-slate-100 text-slate-500 hover:border-slate-300')}>{c}</button>
+            ))}
+          </div>
           <button className={U_btnPrimary + ' py-2 text-[12px]'} onClick={() => setSzerk({ ...SHOP_URES_TERMEK })} data-shop-uj-termek="1"><Lucide.Plus size={14} /> Új termék</button>
         </div>
         {err && <p className="px-5 pt-3 text-[12px] font-bold text-red-600">{err}</p>}
-        {((adat && adat.termekek) || []).length === 0 ? <UEmpty icon={<Lucide.Package size={26} />} title="Még nincs termék" /> : (
+        {termekek.length === 0 ? <UEmpty icon={<Lucide.Package size={26} />} title="Nincs ilyen termék" /> : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead><tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 <th className="px-5 py-2">Termék</th><th className="px-3 py-2">Kategória</th><th className="px-3 py-2 text-right">Ár</th>
-                <th className="px-3 py-2 text-right">Készlet</th><th className="px-3 py-2 text-right">Eladva</th><th className="px-3 py-2">Állapot</th>
+                <th className="px-3 py-2 text-right">Készlet</th><th className="px-3 py-2 text-right">Eladva</th><th className="px-3 py-2">Állapot</th><th className="px-3 py-2"></th>
               </tr></thead>
               <tbody>
-                {adat.termekek.map(t => (
-                  <tr key={t.id} className="border-t border-slate-50 hover:bg-slate-50/70" data-shop-admin-termek={t.id}>
-                    <td className="px-5 py-3 cursor-pointer" onClick={() => setSzerk(t)}>
-                      <p className="text-[13px] font-black text-slate-800 flex items-center gap-2"><SHOP_Ikon tipus={t.tipus} size={14} /> {t.nev}</p>
-                      <p className="text-[10px] font-bold text-slate-400">{(SHOP_TIPUS[t.tipus] || [t.tipus])[0]}{t.jovahagyas_kell ? ' · jóváhagyással' : ''}{t.celkozonseg ? ' · célzott' : ''}{t.sku ? ' · ' + t.sku : ''}</p>
-                    </td>
-                    <td className="px-3 py-3 text-[12px] text-slate-600">{katNev(t.category_id)}</td>
-                    <td className="px-3 py-3 text-right text-[13px] font-black text-slate-800 tabular-nums">{SHOP_ft(t.ar_huf)}</td>
-                    <td className="px-3 py-3 text-right text-[12px] font-bold text-slate-600 tabular-nums">{t.keszlet == null ? '∞' : t.keszlet}</td>
-                    <td className="px-3 py-3 text-right text-[12px] font-bold text-slate-600 tabular-nums">{t.eladott_db || 0}</td>
-                    <td className="px-3 py-3">
-                      <button onClick={() => aktivValt(t)} title="Kattintásra váltás">{t.aktiv ? <UBadge tone="green">aktív</UBadge> : <UBadge tone="slate">rejtve</UBadge>}</button>
-                    </td>
-                  </tr>
-                ))}
+                {termekek.map(t => {
+                  const [c, tone] = SHOP_STATUSZ[t.statusz] || SHOP_STATUSZ.vazlat;
+                  return (
+                    <tr key={t.id} className="border-t border-slate-50 hover:bg-slate-50/70" data-shop-admin-termek={t.id}>
+                      <td className="px-5 py-3 cursor-pointer" onClick={() => setSzerk(t)}>
+                        <p className="text-[13px] font-black text-slate-800 flex items-center gap-2"><SHOP_SablonIkon sablon={t.sablon} size={14} /> {t.nev}</p>
+                        <p className="text-[10px] font-bold text-slate-400">{(SHOP_SABLONOK[t.sablon] || {}).cimke || t.tipus}{t.kurzus ? ' · ' + t.kurzus.kod : ''}{t.jovahagyas_kell ? ' · jóváhagyással' : ''}{t.celkozonseg ? ' · célzott' : ''}</p>
+                      </td>
+                      <td className="px-3 py-3 text-[12px] text-slate-600">{katNev(t.category_id)}</td>
+                      <td className="px-3 py-3 text-right text-[13px] font-black text-slate-800 tabular-nums">{SHOP_ft(t.ar_huf)}</td>
+                      <td className="px-3 py-3 text-right text-[12px] font-bold text-slate-600 tabular-nums">{keszletSzoveg(t)}</td>
+                      <td className="px-3 py-3 text-right text-[12px] font-bold text-slate-600 tabular-nums">{t.eladott_db || 0}</td>
+                      <td className="px-3 py-3">
+                        <UBadge tone={tone}>{c}</UBadge>
+                        {t.statusz === 'vazlat' && (t.hianyok || []).length > 0 && <p className="text-[10px] font-bold text-amber-700 mt-1">hiányzik: {(t.hianyok || []).map(x => SHOP_HIANY_NEV[x] || x).join(', ')}</p>}
+                        {t.statusz === 'kozzetett' && !t.arusithato && <p className="text-[10px] font-bold text-slate-400 mt-1">időablakon kívül</p>}
+                      </td>
+                      <td className="px-3 py-3"><button onClick={() => masol(t)} className="text-slate-300 hover:text-primary" title="Másolat vázlatként" data-shop-masol={t.id}><Lucide.Copy size={14} /></button></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1033,7 +1442,8 @@ function SHOP_Katalogus({ adat, onFrissit }) {
           <button className={U_btnGhost + ' py-2 text-[12px]'} disabled={!ujKat.trim()} onClick={() => katMent({ nev: ujKat.trim() })}><Lucide.Plus size={14} /></button>
         </div>
       </div>
-      <SHOP_TermekSzerkeszto termek={szerk} kategoriak={kategoriak} onClose={() => setSzerk(null)} onMentve={() => { setSzerk(null); onFrissit(); }} />
+      <SHOP_TermekSzerkeszto termek={szerk} kategoriak={kategoriak} onClose={() => setSzerk(null)}
+        onMentve={() => { onFrissit(); }} />
     </div>
   );
 }
