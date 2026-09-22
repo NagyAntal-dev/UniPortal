@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <title>UniPortal Pro — John von Neumann University | International Admissions Platform</title>
+  <title>UniPortal Pro — John von Neumann University | Admissions, studies and campus life</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -84,11 +84,12 @@
           </span>
         </div>
       </a>
-      <nav class="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-500">
+      <nav class="hidden md:flex items-center gap-7 text-sm font-semibold text-slate-500">
+        <a href="#journey" class="hover:text-primary-600 transition-colors">The journey</a>
         <a href="#audience" class="hover:text-primary-600 transition-colors">Who it's for</a>
         <a href="#demos" class="hover:text-primary-600 transition-colors">See it in action</a>
-        <a href="#process" class="hover:text-primary-600 transition-colors">Process</a>
         <a href="#modules" class="hover:text-primary-600 transition-colors">Modules</a>
+        <a href="#trust" class="hover:text-primary-600 transition-colors">Privacy</a>
       </nav>
       <div class="flex items-center gap-2">
         <button id="langToggle" type="button" data-noi18n onclick="njeNyelvValtas()" title="Language / Nyelv" aria-label="Language / Nyelv" class="px-3 py-2.5 rounded-xl text-[11px] font-black tracking-wide text-slate-500 hover:bg-slate-100 transition-colors">EN</button>
@@ -102,17 +103,17 @@
     <!-- ===== HERO ===== -->
     <section class="relative overflow-hidden grain">
       <div class="absolute -top-40 -right-40 w-[36rem] h-[36rem] rounded-full bg-primary-100/50 blur-3xl"></div>
-      <div class="max-w-6xl mx-auto px-6 pt-20 pb-24 grid lg:grid-cols-2 gap-16 items-center relative">
+      <div class="max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-[1.05fr_1fr] gap-14 items-center relative">
         <div>
           <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-50 border border-primary-100 text-primary-700 text-xs font-bold mb-7">
             <span class="w-1.5 h-1.5 rounded-full bg-primary-500"></span>
-            John von Neumann University · International Admissions
+            John von Neumann University · Kecskemét
           </div>
-          <h1 class="text-[2.7rem] leading-[1.05] sm:text-6xl font-black tracking-tight text-ink" style="text-wrap:balance">
-            The entire admissions journey on <span class="text-primary-600">one platform</span>.
+          <h1 class="text-[2.6rem] leading-[1.05] sm:text-6xl font-black tracking-tight text-ink" style="text-wrap:balance">
+            From first application to campus life — <span class="text-primary-600">one platform</span>.
           </h1>
-          <p class="mt-6 text-lg text-slate-500 leading-relaxed max-w-lg">
-            From application through review and visa to enrollment. Built for applicants, agents, and university staff — in one transparent system.
+          <p class="mt-6 text-lg text-slate-500 leading-relaxed max-w-xl">
+            Admissions, interviews and offers; courses and anonymous course evaluation; the campus feed, the dormitory and the university shop. For applicants, students, teachers, agents and staff — in Hungarian and English.
           </p>
           <div class="mt-9 flex flex-wrap items-center gap-3">
             <button onclick="openAuth('register')" class="group px-6 py-3.5 rounded-2xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 shadow-xl shadow-primary-600/25 transition-all active:scale-95 flex items-center gap-2">
@@ -123,13 +124,15 @@
               <i data-lucide="play" class="w-4 h-4 text-primary-600"></i> Watch demos
             </button>
           </div>
-          <div class="mt-7 flex items-center gap-5 text-xs font-semibold text-slate-400">
-            <span class="flex items-center gap-1.5"><i data-lucide="check" class="w-4 h-4 text-primary-500"></i> Try it instantly</span>
-            <span class="flex items-center gap-1.5"><i data-lucide="check" class="w-4 h-4 text-primary-500"></i> 12 integrated modules</span>
-          </div>
+          <dl class="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-xl">
+            <div><dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">Roles</dt><dd class="text-2xl font-black text-ink">5</dd></div>
+            <div><dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">Modules</dt><dd class="text-2xl font-black text-ink">24</dd></div>
+            <div><dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">Languages</dt><dd class="text-2xl font-black text-ink" data-noi18n>HU · EN</dd></div>
+            <div><dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">Evaluation</dt><dd class="text-2xl font-black text-ink">Anonymous</dd></div>
+          </dl>
         </div>
 
-        <!-- Product preview -->
+        <!-- Product preview: a student's home screen -->
         <div class="relative">
           <div class="absolute inset-0 scale-95 translate-y-6 bg-primary-200/30 rounded-[2rem] blur-2xl"></div>
           <div class="relative rounded-[1.6rem] bg-white shadow-2xl shadow-slate-300/40 border border-slate-100 overflow-hidden">
@@ -138,96 +141,147 @@
               <span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
               <span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
               <div class="ml-3 flex-1 h-5 rounded-md bg-white border border-slate-100 flex items-center px-2">
-                <span class="text-[9px] font-bold text-slate-300 tracking-wide">uniportal.nje.hu</span>
+                <span class="text-[9px] font-bold text-slate-300 tracking-wide" data-noi18n>uniportal.nje.hu</span>
               </div>
             </div>
-            <div class="flex h-[19rem]">
-              <aside class="w-[34%] bg-primary-600 p-3.5 flex flex-col gap-1.5">
-                <div class="text-white font-black text-sm mb-3 px-1">UniPortal</div>
-                <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-white/20 text-white text-[10px] font-bold"><i data-lucide="wallet" class="w-3.5 h-3.5"></i> Finance</div>
-                <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-white/70 text-[10px] font-semibold"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> Admissions</div>
-                <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-white/70 text-[10px] font-semibold"><i data-lucide="message-square" class="w-3.5 h-3.5"></i> CRM</div>
-                <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-white/70 text-[10px] font-semibold"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Visa</div>
-                <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-white/70 text-[10px] font-semibold"><i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i> Reports</div>
+            <div class="flex h-[22rem]">
+              <aside class="w-[31%] bg-primary-600 p-3 flex flex-col gap-1">
+                <div class="text-white font-black text-sm mb-2.5 px-1">UniPortal</div>
+                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/20 text-white text-[10px] font-bold"><i data-lucide="newspaper" class="w-3.5 h-3.5"></i> Feed</div>
+                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="book-open" class="w-3.5 h-3.5"></i> Courses</div>
+                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i> Course evaluation</div>
+                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i> Webshop</div>
+                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="bed-double" class="w-3.5 h-3.5"></i> My housing</div>
+                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-white/75 text-[10px] font-semibold"><i data-lucide="calendar-days" class="w-3.5 h-3.5"></i> Calendar</div>
               </aside>
-              <div class="flex-1 p-4 bg-white">
-                <div class="text-sm font-black text-ink">Finance</div>
-                <div class="text-[9px] text-slate-400 font-semibold mb-3">Revenue & receivables</div>
-                <div class="grid grid-cols-2 gap-2.5 mb-4">
-                  <div class="rounded-xl bg-primary-50 border border-primary-100 p-2.5">
-                    <div class="text-[8px] font-bold text-primary-700/70 uppercase tracking-wider">Revenue (monthly)</div>
-                    <div class="text-lg font-black text-ink mt-0.5">€14,750</div>
-                    <div class="text-[8px] font-bold text-emerald-600 mt-0.5">+14.2%</div>
+              <div class="flex-1 p-3.5 bg-slate-50/60 flex flex-col gap-2.5 min-w-0">
+                <div class="text-[9px] font-black uppercase tracking-widest text-primary-600">Campus feed</div>
+                <div class="text-sm font-black text-ink -mt-1.5">Welcome back, Anna</div>
+                <div class="rounded-xl bg-white border border-primary-100 overflow-hidden">
+                  <div class="px-3 py-2 bg-primary-50/70 text-[10px] font-black text-ink flex items-center gap-1.5"><i data-lucide="clipboard-list" class="w-3 h-3 text-primary-600"></i> 2 tasks waiting</div>
+                  <div class="px-3 py-1.5 flex items-center justify-between gap-2 border-t border-slate-50">
+                    <span class="min-w-0"><span class="block text-[10px] font-bold text-ink truncate">Mathematics I</span><span class="block text-[8px] font-bold text-sky-600">Goal setting</span></span>
+                    <span class="text-[8px] font-black text-white bg-primary-600 rounded-md px-1.5 py-1 whitespace-nowrap">Set goals</span>
                   </div>
-                  <div class="rounded-xl bg-slate-50 border border-slate-100 p-2.5">
-                    <div class="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Pending</div>
-                    <div class="text-lg font-black text-ink mt-0.5">€14,200</div>
-                    <div class="text-[8px] font-bold text-slate-400 mt-0.5">3 items</div>
+                  <div class="px-3 py-1.5 flex items-center justify-between gap-2 border-t border-slate-50">
+                    <span class="min-w-0"><span class="block text-[10px] font-bold text-ink truncate">Programming II</span><span class="block text-[8px] font-bold text-primary-600">Evaluation · <span data-noi18n>K-0014</span></span></span>
+                    <span class="text-[8px] font-black text-white bg-primary-600 rounded-md px-1.5 py-1">Fill in</span>
                   </div>
                 </div>
-                <div class="flex items-end gap-1.5 h-16 px-1">
-                  <div class="flex-1 rounded-t bg-primary-200" style="height:42%"></div>
-                  <div class="flex-1 rounded-t bg-primary-300" style="height:64%"></div>
-                  <div class="flex-1 rounded-t bg-primary-400" style="height:50%"></div>
-                  <div class="flex-1 rounded-t bg-primary-500" style="height:82%"></div>
-                  <div class="flex-1 rounded-t bg-primary-600" style="height:70%"></div>
-                  <div class="flex-1 rounded-t bg-primary-300" style="height:58%"></div>
+                <div class="rounded-xl bg-white border border-slate-100 p-3">
+                  <div class="flex items-center justify-between"><span class="text-[8px] font-black uppercase text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">Event</span><span class="text-[9px] font-bold text-slate-400 flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i> 214</span></div>
+                  <div class="text-[11px] font-black text-ink mt-1.5">Freshers' ball — tickets on sale</div>
+                  <div class="text-[9px] text-slate-400 font-semibold mt-0.5">For full-time students · 10 Oct</div>
+                </div>
+                <div class="rounded-xl bg-white border border-slate-100 p-3 flex items-center gap-2.5">
+                  <div class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><i data-lucide="car" class="w-3.5 h-3.5"></i></div>
+                  <div class="min-w-0"><div class="text-[10px] font-black text-ink truncate">Parking card approved</div><div class="text-[8px] font-bold text-slate-400" data-noi18n>WS-00012 · ABC-123</div></div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ===== JOURNEY ===== -->
+    <section id="journey" class="py-24 bg-slate-50/60 border-y border-slate-100">
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="max-w-2xl mb-14">
+          <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-600">The journey</span>
+          <h2 class="mt-3 text-4xl font-black tracking-tight text-ink" style="text-wrap:balance">One account from the first form to the last semester</h2>
+          <p class="mt-4 text-slate-500 text-lg">The same profile carries a person from applicant to enrolled student — no re-registration, no second system.</p>
+        </div>
+        <ol class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <li class="rounded-3xl bg-white border border-slate-100 p-6">
+            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">01</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="file-text" class="w-5 h-5"></i></span></div>
+            <h3 class="mt-4 font-black text-ink">Apply</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Programme catalogue, online form, document upload and the mathematics placement test.</p>
+          </li>
+          <li class="rounded-3xl bg-white border border-slate-100 p-6">
+            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">02</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="calendar-check" class="w-5 h-5"></i></span></div>
+            <h3 class="mt-4 font-black text-ink">Interview & review</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Book a slot in the interview calendar; reviewers score against an agreed set of criteria.</p>
+          </li>
+          <li class="rounded-3xl bg-white border border-slate-100 p-6">
+            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">03</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="mail-check" class="w-5 h-5"></i></span></div>
+            <h3 class="mt-4 font-black text-ink">Offer & payment</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Conditional acceptance letter as PDF, and a unique payment reference so every transfer finds its applicant.</p>
+          </li>
+          <li class="rounded-3xl bg-white border border-slate-100 p-6">
+            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">04</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="shield-check" class="w-5 h-5"></i></span></div>
+            <h3 class="mt-4 font-black text-ink">Visa & enrolment</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Visa checklist, messages with the International Office, and the move to student status.</p>
+          </li>
+          <li class="rounded-3xl bg-white border border-slate-100 p-6">
+            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">05</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="book-open" class="w-5 h-5"></i></span></div>
+            <h3 class="mt-4 font-black text-ink">Study</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Courses, start-of-term goals and the anonymous end-of-term course evaluation.</p>
+          </li>
+          <li class="rounded-3xl bg-white border border-slate-100 p-6">
+            <div class="flex items-center gap-3"><span class="text-xs font-black text-primary-600">06</span><span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center"><i data-lucide="home" class="w-5 h-5"></i></span></div>
+            <h3 class="mt-4 font-black text-ink">Campus life</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">The campus feed, dormitory and maintenance requests, a personal calendar and the university shop.</p>
+          </li>
+        </ol>
       </div>
     </section>
 
     <!-- ===== PERSONAS ===== -->
-    <section id="audience" class="py-24 bg-slate-50/60 border-y border-slate-100">
+    <section id="audience" class="py-24">
       <div class="max-w-6xl mx-auto px-6">
         <div class="max-w-2xl mb-14">
           <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-600">Who it's for</span>
-          <h2 class="mt-3 text-4xl font-black tracking-tight text-ink">One platform, three perspectives</h2>
-          <p class="mt-4 text-slate-500 text-lg">Every role gets its own focused interface — on shared, real-time data.</p>
+          <h2 class="mt-3 text-4xl font-black tracking-tight text-ink">One platform, five perspectives</h2>
+          <p class="mt-4 text-slate-500 text-lg">Every role gets its own focused menu — on shared data, with access decided by the database, not the screen.</p>
         </div>
-        <div class="grid md:grid-cols-3 gap-6">
-          <div class="bg-white rounded-3xl border border-slate-100 p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all">
-            <div class="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-6"><i data-lucide="graduation-cap" class="w-6 h-6"></i></div>
-            <h3 class="text-xl font-black text-ink">For applicants</h3>
-            <p class="mt-2 text-sm text-slate-500 leading-relaxed">Apply and track your progress transparently, from admission to enrollment.</p>
-            <ul class="mt-5 space-y-2.5 text-sm text-slate-600">
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Online application & document upload</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Video interview & status tracking</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Visa checklist & online payment</li>
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="bg-white rounded-3xl border border-slate-100 p-7 shadow-sm flex flex-col">
+            <div class="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-5"><i data-lucide="graduation-cap" class="w-6 h-6"></i></div>
+            <h3 class="text-lg font-black text-ink">Applicants & students</h3>
+            <ul class="mt-4 space-y-2 text-sm text-slate-600 flex-1">
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Apply, book an interview, pay with a reference</li>
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Courses and anonymous course evaluation</li>
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Feed, housing, calendar and webshop</li>
             </ul>
-            <button onclick="openAuth('register','student')" class="mt-7 w-full py-3 rounded-xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 transition-colors">Sign up as applicant</button>
+            <button onclick="openAuth('register','student')" class="mt-6 w-full py-3 rounded-xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 transition-colors">Sign up as applicant</button>
           </div>
-          <div class="bg-white rounded-3xl border border-slate-100 p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all">
-            <div class="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-6"><i data-lucide="briefcase" class="w-6 h-6"></i></div>
-            <h3 class="text-xl font-black text-ink">For agents & partners</h3>
-            <p class="mt-2 text-sm text-slate-500 leading-relaxed">Manage your submitted applicants and commission in a single portal.</p>
-            <ul class="mt-5 space-y-2.5 text-sm text-slate-600">
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Manage applicants in one place</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Track commission & performance</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Shared admissions pipeline</li>
+          <div class="bg-white rounded-3xl border border-slate-100 p-7 shadow-sm flex flex-col">
+            <div class="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-5"><i data-lucide="presentation" class="w-6 h-6"></i></div>
+            <h3 class="text-lg font-black text-ink">Teachers</h3>
+            <ul class="mt-4 space-y-2 text-sm text-slate-600 flex-1">
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Own courses and student lists</li>
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Evaluation results above the privacy threshold</li>
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Reply to feedback in a comment window</li>
             </ul>
-            <button onclick="openAuth('register','agent')" class="mt-7 w-full py-3 rounded-xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 transition-colors">Sign up as agent</button>
+            <button onclick="openAuth('login')" class="mt-6 w-full py-3 rounded-xl text-sm font-bold text-ink bg-slate-100 hover:bg-slate-200 transition-colors">Teacher sign in</button>
           </div>
-          <div class="bg-white rounded-3xl border border-slate-100 p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all">
-            <div class="w-12 h-12 rounded-2xl bg-ink text-white flex items-center justify-center mb-6"><i data-lucide="building-2" class="w-6 h-6"></i></div>
-            <h3 class="text-xl font-black text-ink">For university staff</h3>
-            <p class="mt-2 text-sm text-slate-500 leading-relaxed">Review, finance, CRM and reporting — full end-to-end administration.</p>
-            <ul class="mt-5 space-y-2.5 text-sm text-slate-600">
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Admissions review & finance</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> CRM, communication & marketing</li>
-              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Reports & system administration</li>
+          <div class="bg-white rounded-3xl border border-slate-100 p-7 shadow-sm flex flex-col">
+            <div class="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-5"><i data-lucide="briefcase" class="w-6 h-6"></i></div>
+            <h3 class="text-lg font-black text-ink">Agents & partners</h3>
+            <ul class="mt-4 space-y-2 text-sm text-slate-600 flex-1">
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Submit and follow your applicants</li>
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Commission periods and statements</li>
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-500 shrink-0 mt-0.5"></i> Agency approved before any data is shown</li>
             </ul>
-            <button onclick="openAuth('login')" class="mt-7 w-full py-3 rounded-xl text-sm font-bold text-ink bg-slate-100 hover:bg-slate-200 transition-colors">Staff sign in</button>
+            <button onclick="openAuth('register','agent')" class="mt-6 w-full py-3 rounded-xl text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 transition-colors">Sign up as agent</button>
+          </div>
+          <div class="bg-ink rounded-3xl p-7 shadow-sm flex flex-col text-white">
+            <div class="w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center mb-5"><i data-lucide="building-2" class="w-6 h-6"></i></div>
+            <h3 class="text-lg font-black">University staff</h3>
+            <ul class="mt-4 space-y-2 text-sm text-slate-300 flex-1">
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-400 shrink-0 mt-0.5"></i> Admissions, interviews and decisions</li>
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-400 shrink-0 mt-0.5"></i> Students, teachers, campaigns and the shop</li>
+              <li class="flex gap-2.5"><i data-lucide="check" class="w-4 h-4 text-primary-400 shrink-0 mt-0.5"></i> Permissions by role, group or person</li>
+            </ul>
+            <button onclick="openAuth('login')" class="mt-6 w-full py-3 rounded-xl text-sm font-bold text-ink bg-white hover:bg-primary-50 transition-colors">Staff sign in</button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ===== DEMOS / SEE IT IN ACTION ===== -->
-    <section id="demos" class="py-24">
+    <!-- ===== DEMOS ===== -->
+    <section id="demos" class="py-24 bg-slate-50/60 border-y border-slate-100">
       <div class="max-w-6xl mx-auto px-6">
         <div class="max-w-2xl mb-14">
           <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-600">See it in action</span>
@@ -236,10 +290,7 @@
         </div>
 
         <div class="grid lg:grid-cols-[300px_1fr] gap-8 items-start">
-          <!-- Tabs -->
           <div class="flex lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0" id="demoTabs"></div>
-
-          <!-- Stage -->
           <div>
             <div class="relative rounded-[1.4rem] bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden">
               <div class="flex items-center gap-2 px-4 h-9 bg-slate-800/60">
@@ -249,103 +300,139 @@
                 <span class="ml-2 text-[10px] font-bold text-slate-500 tracking-wide flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-primary-500"></span> Auto-playing demo</span>
                 <span class="ml-auto text-[10px] font-bold text-slate-500" id="demoLabel">Admissions review</span>
               </div>
-              <div class="p-6 sm:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-[20rem] flex items-center justify-center">
+              <div class="p-6 sm:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-[21rem] flex items-center justify-center">
                 <div class="w-full max-w-md" id="demoStages">
 
-                  <!-- Demo: review -->
+                  <!-- Demo: review with scoring criteria -->
                   <div class="demo-stage" data-demo="review">
                     <div class="rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
-                      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Applicant evaluation</div>
-                      <div class="flex items-center gap-3 mb-5">
-                        <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 font-black flex items-center justify-center text-sm">CW</div>
+                      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Interview scoring sheet</div>
+                      <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 font-black flex items-center justify-center text-sm">AO</div>
                         <div>
-                          <div class="text-sm font-black text-ink">Chen Wei</div>
-                          <div class="text-[11px] text-slate-400 font-semibold">BSc Business Admin</div>
+                          <div class="text-sm font-black text-ink">Amara Okafor</div>
+                          <div class="text-[11px] text-slate-400 font-semibold">BSc Computer Science · <span data-noi18n>FV-00042</span></div>
                         </div>
                         <div class="ml-auto relative w-24 h-7">
-                          <span class="fo absolute inset-0 flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-wide">Submitted</span>
+                          <span class="fo absolute inset-0 flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-wide">Interviewed</span>
                           <span class="fi absolute inset-0 flex items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wide">Accepted</span>
                         </div>
                       </div>
-                      <div class="space-y-3">
-                        <div>
-                          <div class="flex justify-between text-[11px] font-bold mb-1"><span class="text-slate-500">Overall score</span><span class="text-primary-600">88 / 100</span></div>
+                      <div class="space-y-2">
+                        <div class="flex justify-between text-[11px] font-bold"><span class="text-slate-500">Motivation</span><span class="text-ink">4 / 5</span></div>
+                        <div class="flex justify-between text-[11px] font-bold"><span class="text-slate-500">Mathematical thinking</span><span class="text-ink">5 / 5</span></div>
+                        <div class="flex justify-between text-[11px] font-bold"><span class="text-slate-500">English communication</span><span class="text-ink">4 / 5</span></div>
+                        <div class="pt-1">
+                          <div class="flex justify-between text-[11px] font-bold mb-1"><span class="text-slate-500">Total, calculated by the server</span><span class="text-primary-600">88 / 100</span></div>
                           <div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="gr h-full rounded-full bg-primary-500" style="width:14%"></div></div>
                         </div>
-                        <div class="grid grid-cols-3 gap-2 pt-1">
-                          <div class="rounded-lg bg-slate-50 p-2 text-center"><div class="text-[8px] font-bold text-slate-400 uppercase">Motivation</div><div class="text-xs font-black text-ink">4/5</div></div>
-                          <div class="rounded-lg bg-slate-50 p-2 text-center"><div class="text-[8px] font-bold text-slate-400 uppercase">GPA</div><div class="text-xs font-black text-ink">9/10</div></div>
-                          <div class="rounded-lg bg-slate-50 p-2 text-center"><div class="text-[8px] font-bold text-slate-400 uppercase">Language</div><div class="text-xs font-black text-ink">5/5</div></div>
-                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <!-- Demo: finance -->
-                  <div class="demo-stage hidden" data-demo="finance">
-                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
-                      <div class="flex items-center justify-between mb-4">
-                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Payments</div>
-                        <div class="relative text-right">
-                          <span class="fo block text-sm font-black text-ink">€14,700</span>
-                          <span class="fi absolute inset-0 text-sm font-black text-emerald-600">€14,750</span>
-                          <span class="ri dl absolute -right-1 -top-4 text-[10px] font-black text-emerald-500">+€50</span>
-                        </div>
-                      </div>
-                      <div class="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50">
-                        <div class="w-9 h-9 rounded-lg bg-primary-100 text-primary-700 flex items-center justify-center"><i data-lucide="receipt" class="w-4 h-4"></i></div>
-                        <div class="min-w-0">
-                          <div class="text-xs font-black text-ink">Application Fee · €50</div>
-                          <div class="text-[10px] text-slate-400 font-semibold">Chen Wei · Bank transfer</div>
-                        </div>
-                        <div class="ml-auto flex items-center gap-2">
-                          <div class="relative w-16 h-6">
-                            <span class="fo absolute inset-0 flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[9px] font-black uppercase">Pending</span>
-                            <span class="fi absolute inset-0 flex items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase">Paid</span>
-                          </div>
-                          <span class="inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[9px] font-black">Verify</span>
-                        </div>
-                      </div>
-                      <div class="mt-3 text-[10px] text-slate-400 font-semibold flex items-center gap-1.5"><i data-lucide="lock" class="w-3 h-3"></i> Verified transfers post to revenue instantly.</div>
-                    </div>
-                  </div>
-
-                  <!-- Demo: interview -->
+                  <!-- Demo: interview calendar -->
                   <div class="demo-stage hidden" data-demo="interview">
                     <div class="relative rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
                       <div class="cur absolute z-10 w-4 h-4" style="top:8px;left:64%"><i data-lucide="mouse-pointer-2" class="w-4 h-4 text-ink fill-white"></i></div>
-                      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Interview slots · Mar 25</div>
+                      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Interview calendar · 25 March</div>
                       <div class="space-y-2">
-                        <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100"><span class="text-xs font-bold text-ink">09:00 – 09:30</span><span class="text-[9px] font-black uppercase text-slate-400">Available</span></div>
+                        <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100"><span class="text-xs font-bold text-ink" data-noi18n>09:00 – 09:15</span><span class="text-[9px] font-black uppercase text-slate-400">Available</span></div>
                         <div class="relative flex items-center justify-between p-3 rounded-xl border border-primary-200 bg-primary-50/40">
-                          <span class="text-xs font-bold text-ink">10:00 – 10:30</span>
+                          <span class="text-xs font-bold text-ink" data-noi18n>09:15 – 09:30</span>
                           <span class="relative w-20 h-5">
                             <span class="fo absolute inset-0 flex items-center justify-end text-[9px] font-black uppercase text-slate-400">Available</span>
                             <span class="fi absolute inset-0 flex items-center justify-end gap-1 text-[9px] font-black uppercase text-emerald-600"><i data-lucide="video" class="w-3 h-3"></i> Booked</span>
                           </span>
                         </div>
-                        <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100"><span class="text-xs font-bold text-ink">11:00 – 11:30</span><span class="text-[9px] font-black uppercase text-slate-400">Available</span></div>
+                        <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100"><span class="text-xs font-bold text-ink" data-noi18n>09:30 – 09:45</span><span class="text-[9px] font-black uppercase text-slate-400">Available</span></div>
                       </div>
-                      <div class="fi dl mt-3 text-[10px] text-emerald-600 font-bold flex items-center gap-1.5"><i data-lucide="link" class="w-3 h-3"></i> Teams meeting link generated automatically</div>
+                      <div class="fi dl mt-3 text-[10px] text-emerald-600 font-bold flex items-center gap-1.5"><i data-lucide="calendar-plus" class="w-3 h-3"></i> Added to both calendars, with the meeting link</div>
                     </div>
                   </div>
 
-                  <!-- Demo: crm -->
-                  <div class="demo-stage hidden" data-demo="crm">
-                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg overflow-hidden">
-                      <div class="flex items-center gap-2.5 px-4 py-3 bg-emerald-600 text-white">
-                        <div class="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center"><i data-lucide="message-circle" class="w-4 h-4"></i></div>
-                        <div><div class="text-xs font-black">Chen Wei</div><div class="text-[9px] text-white/70 font-semibold">WhatsApp · online</div></div>
+                  <!-- Demo: anonymous course evaluation -->
+                  <div class="demo-stage hidden" data-demo="echo">
+                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
+                      <div class="flex items-center justify-between mb-4">
+                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Course evaluation</div>
+                        <span class="text-[10px] font-black font-mono text-slate-500 bg-slate-100 rounded px-1.5 py-0.5" data-noi18n># K-0014</span>
                       </div>
-                      <div class="p-4 bg-[#f0f2f5] min-h-[9rem] flex flex-col justify-end gap-2">
-                        <div class="fo self-start flex items-center gap-1 px-3 py-2 rounded-2xl rounded-bl-sm bg-white shadow-sm">
-                          <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
+                      <div class="text-sm font-black text-ink">Programming II</div>
+                      <div class="text-[11px] text-slate-400 font-semibold mb-3">How clearly were the requirements explained?</div>
+                      <div class="grid grid-cols-5 gap-1.5">
+                        <div class="h-8 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">1</div>
+                        <div class="h-8 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">2</div>
+                        <div class="h-8 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">3</div>
+                        <div class="relative h-8">
+                          <span class="fo absolute inset-0 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">4</span>
+                          <span class="fi absolute inset-0 rounded-lg bg-primary-600 text-white flex items-center justify-center text-xs font-black">4</span>
                         </div>
-                        <div class="ri self-end max-w-[85%] px-3 py-2 rounded-2xl rounded-br-sm bg-[#d9fdd3] shadow-sm">
-                          <p class="text-[11px] text-ink leading-snug">Dear Chen Wei, your application has been <b>accepted</b>! Please complete enrollment by Apr 1. 🎓</p>
-                          <div class="fi dl flex items-center justify-end gap-1 mt-1 text-[8px] text-emerald-600 font-bold">12:04 <i data-lucide="check-check" class="w-3 h-3"></i></div>
+                        <div class="h-8 rounded-lg border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400">5</div>
+                      </div>
+                      <div class="ri dl mt-4 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2 text-[10px] font-bold text-emerald-700 flex items-center gap-1.5"><i data-lucide="lock" class="w-3 h-3"></i> Submitted without your name — not even the administrators can link it to you.</div>
+                    </div>
+                  </div>
+
+                  <!-- Demo: webshop / parking card -->
+                  <div class="demo-stage hidden" data-demo="shop">
+                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
+                      <div class="flex items-center justify-between mb-3">
+                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">University shop</div>
+                        <div class="relative w-28 h-6">
+                          <span class="fo absolute inset-0 flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[9px] font-black uppercase">Awaiting approval</span>
+                          <span class="fi absolute inset-0 flex items-center justify-center rounded-full bg-sky-100 text-sky-700 text-[9px] font-black uppercase">Ready to pay</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50">
+                        <div class="w-9 h-9 rounded-lg bg-primary-100 text-primary-700 flex items-center justify-center"><i data-lucide="car" class="w-4 h-4"></i></div>
+                        <div class="min-w-0"><div class="text-xs font-black text-ink">Parking card · autumn term</div><div class="text-[10px] text-slate-400 font-semibold">Plate <span data-noi18n>ABC-123</span> · 12 000 Ft</div></div>
+                      </div>
+                      <div class="ri dl mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                        <div class="text-[9px] font-black text-amber-700 uppercase tracking-widest">Payment reference</div>
+                        <div class="text-sm font-black font-mono text-ink tracking-wider" data-noi18n>NJE-WS-00012-43</div>
+                      </div>
+                      <div class="mt-3 text-[10px] text-slate-400 font-semibold flex items-center gap-1.5"><i data-lucide="landmark" class="w-3 h-3"></i> Approved first, paid second — no refunds for rejected requests.</div>
+                    </div>
+                  </div>
+
+                  <!-- Demo: targeted feed -->
+                  <div class="demo-stage hidden" data-demo="feed">
+                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg p-5">
+                      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">New post · who should see it?</div>
+                      <div class="flex flex-wrap gap-1.5 mb-3">
+                        <span class="text-[10px] font-bold px-2.5 py-1 rounded-xl border border-primary-300 bg-primary-50 text-primary-700">Full-time</span>
+                        <span class="text-[10px] font-bold px-2.5 py-1 rounded-xl border border-slate-200 text-slate-500">Part-time</span>
+                        <span class="relative">
+                          <span class="fo text-[10px] font-bold px-2.5 py-1 rounded-xl border border-slate-200 text-slate-500 inline-block">GAMF faculty</span>
+                          <span class="fi absolute inset-0 text-[10px] font-bold px-2.5 py-1 rounded-xl border border-primary-300 bg-primary-50 text-primary-700 inline-block">GAMF faculty</span>
+                        </span>
+                      </div>
+                      <div class="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 flex items-center gap-2 text-sm font-black text-ink">
+                        <i data-lucide="eye" class="w-4 h-4 text-slate-400"></i>
+                        <span class="relative inline-block w-28 h-5">
+                          <span class="fo absolute inset-0">338 people</span>
+                          <span class="fi absolute inset-0 text-primary-600">211 people</span>
+                        </span>
+                      </div>
+                      <div class="mt-3 text-[10px] text-slate-400 font-semibold flex items-center gap-1.5"><i data-lucide="shield" class="w-3 h-3"></i> Filtered in the database — others cannot read the post at all.</div>
+                    </div>
+                  </div>
+
+                  <!-- Demo: admission chat + letter -->
+                  <div class="demo-stage hidden" data-demo="chat">
+                    <div class="rounded-2xl bg-white border border-slate-100 shadow-lg overflow-hidden">
+                      <div class="flex items-center gap-2.5 px-4 py-3 bg-primary-600 text-white">
+                        <div class="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center"><i data-lucide="messages-square" class="w-4 h-4"></i></div>
+                        <div><div class="text-xs font-black">International Office</div><div class="text-[9px] text-white/75 font-semibold">Messages about your application</div></div>
+                      </div>
+                      <div class="p-4 bg-slate-50 min-h-[9rem] flex flex-col justify-end gap-2">
+                        <div class="self-end max-w-[80%] px-3 py-2 rounded-2xl rounded-br-sm bg-primary-50 border border-primary-100 text-[11px] text-ink">When will I receive my offer letter?</div>
+                        <div class="fo self-start flex items-center gap-1 px-3 py-2 rounded-2xl rounded-bl-sm bg-white shadow-sm">
+                          <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span><span class="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
+                        </div>
+                        <div class="ri self-start max-w-[85%] px-3 py-2 rounded-2xl rounded-bl-sm bg-white shadow-sm">
+                          <p class="text-[11px] text-ink leading-snug">It has just been issued — you will find it attached below.</p>
+                          <div class="mt-1.5 flex items-center gap-2 rounded-lg border border-slate-100 px-2 py-1.5"><i data-lucide="file-text" class="w-3.5 h-3.5 text-red-500"></i><span class="text-[10px] font-bold text-ink">Conditional acceptance letter.pdf</span></div>
                         </div>
                       </div>
                     </div>
@@ -357,44 +444,8 @@
             </div>
             <p class="mt-4 text-sm text-slate-500 font-medium flex items-center gap-2" id="demoCaption">
               <i data-lucide="info" class="w-4 h-4 text-primary-500 shrink-0"></i>
-              <span>Reviewers score an applicant — the status updates to Accepted in real time.</span>
+              <span>Reviewers score each criterion; the server adds up the total and the decision follows.</span>
             </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== WORKFLOW ===== -->
-    <section id="process" class="py-24 bg-slate-50/60 border-y border-slate-100">
-      <div class="max-w-6xl mx-auto px-6">
-        <div class="max-w-2xl mb-14">
-          <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-600">The process</span>
-          <h2 class="mt-3 text-4xl font-black tracking-tight text-ink">The admission journey, end to end</h2>
-        </div>
-        <div class="grid md:grid-cols-4 gap-6">
-          <div class="relative">
-            <div class="text-5xl font-black text-primary-100">01</div>
-            <div class="w-11 h-11 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center -mt-3 mb-4"><i data-lucide="file-text" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Application</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Online form, documents and recommendation letters.</p>
-          </div>
-          <div class="relative">
-            <div class="text-5xl font-black text-primary-100">02</div>
-            <div class="w-11 h-11 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center -mt-3 mb-4"><i data-lucide="pie-chart" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Review & interview</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Scoring, video interview and slot booking in one place.</p>
-          </div>
-          <div class="relative">
-            <div class="text-5xl font-black text-primary-100">03</div>
-            <div class="w-11 h-11 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center -mt-3 mb-4"><i data-lucide="shield-check" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Offer & visa</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Conditional offer, visa checklist and compliance.</p>
-          </div>
-          <div class="relative">
-            <div class="text-5xl font-black text-primary-100">04</div>
-            <div class="w-11 h-11 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center -mt-3 mb-4"><i data-lucide="check-circle-2" class="w-5 h-5"></i></div>
-            <h3 class="font-black text-ink">Enrollment</h3>
-            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Payment, invoicing and finalized enrollment.</p>
           </div>
         </div>
       </div>
@@ -404,17 +455,60 @@
     <section id="modules" class="py-24 bg-ink text-white relative overflow-hidden">
       <div class="absolute -bottom-32 -left-32 w-[34rem] h-[34rem] rounded-full bg-primary-600/20 blur-3xl"></div>
       <div class="max-w-6xl mx-auto px-6 relative">
-        <div class="max-w-2xl mb-14">
+        <div class="max-w-2xl mb-12">
           <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-400">Modules</span>
-          <h2 class="mt-3 text-4xl font-black tracking-tight">One system, twelve modules</h2>
-          <p class="mt-4 text-slate-400 text-lg">Everything you need for international admissions and the student lifecycle.</p>
+          <h2 class="mt-3 text-4xl font-black tracking-tight">Twenty-four modules in four areas</h2>
+          <p class="mt-4 text-slate-400 text-lg">Grouped the same way as the menu inside the platform. The ones marked new arrived this semester.</p>
         </div>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4" id="moduleGrid"></div>
+        <div class="grid md:grid-cols-2 gap-6" id="moduleGrid"></div>
+      </div>
+    </section>
+
+    <!-- ===== TRUST ===== -->
+    <section id="trust" class="py-24">
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="max-w-2xl mb-12">
+          <span class="text-xs font-black uppercase tracking-[0.18em] text-primary-600">Privacy & security</span>
+          <h2 class="mt-3 text-4xl font-black tracking-tight text-ink" style="text-wrap:balance">Built for a public university</h2>
+          <p class="mt-4 text-slate-500 text-lg">The rules are enforced where the data lives, not only in the interface.</p>
+        </div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div class="rounded-3xl border border-slate-100 p-6">
+            <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4"><i data-lucide="user-x" class="w-5 h-5"></i></div>
+            <h3 class="font-black text-ink">Anonymous course evaluation</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Answers carry no name, and results appear only above a minimum number of respondents.</p>
+          </div>
+          <div class="rounded-3xl border border-slate-100 p-6">
+            <div class="w-10 h-10 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mb-4"><i data-lucide="database" class="w-5 h-5"></i></div>
+            <h3 class="font-black text-ink">Access decided by the database</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Role, group and individual permissions; a hidden menu item is never the only lock.</p>
+          </div>
+          <div class="rounded-3xl border border-slate-100 p-6">
+            <div class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-4"><i data-lucide="file-check-2" class="w-5 h-5"></i></div>
+            <h3 class="font-black text-ink">Consent log</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Every accepted notice and consent is recorded with its version and can be withdrawn.</p>
+          </div>
+          <div class="rounded-3xl border border-slate-100 p-6">
+            <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4"><i data-lucide="landmark" class="w-5 h-5"></i></div>
+            <h3 class="font-black text-ink">Payments to the university</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">Transfers go to the university's own account with a checkable reference. Card payment via SimplePay is coming.</p>
+          </div>
+          <div class="rounded-3xl border border-slate-100 p-6">
+            <div class="w-10 h-10 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center mb-4"><i data-lucide="user-check" class="w-5 h-5"></i></div>
+            <h3 class="font-black text-ink">Every account approved</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">New registrations and partner agencies are reviewed before they see any data.</p>
+          </div>
+          <div class="rounded-3xl border border-slate-100 p-6">
+            <div class="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center mb-4"><i data-lucide="languages" class="w-5 h-5"></i></div>
+            <h3 class="font-black text-ink">Hungarian and English</h3>
+            <p class="mt-1.5 text-sm text-slate-500 leading-relaxed">The whole interface switches language; course questionnaires follow the language of the programme.</p>
+          </div>
+        </div>
       </div>
     </section>
 
     <!-- ===== CTA ===== -->
-    <section class="py-24">
+    <section class="pb-24">
       <div class="max-w-4xl mx-auto px-6">
         <div class="rounded-[2rem] bg-primary-600 grain px-10 py-16 text-center shadow-2xl shadow-primary-600/25 relative overflow-hidden">
           <div class="absolute inset-0 bg-gradient-to-br from-primary-500/0 to-primary-800/30"></div>
@@ -442,6 +536,7 @@
       <p class="text-xs text-slate-400">© 2026 John von Neumann University. Demo interface. · <a href="privacy.html" class="hover:text-primary-600 underline-offset-2 hover:underline">Privacy Notice</a> · <a href="terms.html" class="hover:text-primary-600 underline-offset-2 hover:underline">Terms of Use</a></p>
     </div>
   </footer>
+
 
   <!-- ===== AUTH MODAL ===== -->
   <!-- A háttérre kattintás SZÁNDÉKOSAN nem zár: a belépőűrlapba már beírt
@@ -575,36 +670,67 @@
   </div>
 
   <script>
-    /* ---- Modules ---- */
-    const MODULES = [
-      ['briefcase', 'Agent & partner portal', 'Manage applicants and commissions.'],
-      ['file-text', 'Application & admissions', 'Handle applications and documents.'],
-      ['message-square', 'Communication & CRM', 'Email, WhatsApp and campaigns.'],
-      ['wallet', 'Finance', 'Revenue, fees and invoicing.'],
-      ['shield-check', 'Visa & compliance', 'Visa checklist and risk management.'],
-      ['pie-chart', 'Admissions review', 'Scoring and reviewer collaboration.'],
-      ['calendar', 'Interview scheduling', 'Slots and video interviews.'],
-      ['target', 'Marketing & leads', 'Leads and campaign performance.'],
-      ['users', 'Student portal', 'A dedicated space for applicants.'],
-      ['bar-chart-2', 'Reports', 'Dashboards and exports.'],
-      ['zap', 'Intelligence', 'Automations and insights.'],
-      ['settings', 'System administration', 'Permissions and integrations.'],
+    /* ---- Modules: négy terület, ugyanúgy csoportosítva, mint az alkalmazás menüje ---- */
+    const MODULE_GROUPS = [
+      ['file-text', 'Admissions', [
+        ['Application & admissions', 'Programme catalogue, online form and documents.', false],
+        ['Review & scoring criteria', 'An editable criteria sheet; the server adds up the score.', true],
+        ['Interview calendar', 'Staff availability, bookable slots, calendar invites.', true],
+        ['Offer letters & payment reference', 'Acceptance letter as PDF; a checkable reference on every transfer.', true],
+        ['Messages with applicants', 'Conversation per application, with attachments.', true],
+        ['Visa & compliance', 'Visa checklist and follow-up.', false],
+      ]],
+      ['book-open', 'Studies', [
+        ['Courses', 'Course registry, enrolments and student lists.', false],
+        ['Teachers', 'Teacher registry with courses, student numbers and campaigns.', true],
+        ['Students', 'Searchable directory with classification, groups and statistics.', true],
+        ['Course evaluation (ECHO)', 'Anonymous questionnaires, goal setting, numbered campaigns.', false],
+        ['Teacher results', 'Results above the privacy threshold, with a comment window.', false],
+        ['Student calendar', 'Interviews, deadlines and events in one calendar.', true],
+      ]],
+      ['home', 'Campus life', [
+        ['Campus feed', 'Posts for chosen audiences, with a view counter.', true],
+        ['University shop', 'Notes, parking cards and merchandise; staff edit products from templates.', true],
+        ['Dormitory', 'Rooms, beds, applications and occupancy.', false],
+        ['Maintenance', 'Fault reports and follow-up for the dormitory.', false],
+        ['AI assistant', 'Answers from the university knowledge base.', false],
+        ['Programmes', 'Short programmes and courses to apply for.', false],
+      ]],
+      ['settings', 'Operations', [
+        ['Finance', 'Fees, payments and invoice numbers.', false],
+        ['Agent & partner portal', 'Applicants, commission periods and statements.', false],
+        ['CRM & marketing', 'Communication, campaigns and leads.', false],
+        ['Reports & insights', 'Dashboards and exports.', false],
+        ['Permissions', 'Menu access by role, group or individual, plus job titles.', true],
+        ['Registrations & consent log', 'Account approval and a versioned record of consents.', false],
+      ]],
     ];
-    document.getElementById('moduleGrid').innerHTML = MODULES.map(([icon, name, desc]) => `
-      <div class="group rounded-2xl bg-white/[0.04] border border-white/10 p-5 hover:bg-white/[0.07] hover:border-primary-400/40 transition-all">
-        <div class="w-10 h-10 rounded-xl bg-primary-600/20 text-primary-300 flex items-center justify-center mb-3 group-hover:bg-primary-600 group-hover:text-white transition-colors">
-          <i data-lucide="${icon}" class="w-5 h-5"></i>
+    document.getElementById('moduleGrid').innerHTML = MODULE_GROUPS.map(([icon, group, items]) => `
+      <div class="rounded-3xl bg-white/[0.04] border border-white/10 p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="w-10 h-10 rounded-xl bg-primary-600/25 text-primary-300 flex items-center justify-center"><i data-lucide="${icon}" class="w-5 h-5"></i></span>
+          <h3 class="font-black text-white text-lg">${group}</h3>
         </div>
-        <h3 class="font-bold text-white text-sm">${name}</h3>
-        <p class="mt-1 text-xs text-slate-400 leading-relaxed">${desc}</p>
+        <ul class="divide-y divide-white/10">
+          ${items.map(([name, desc, uj]) => `
+            <li class="py-3 flex items-start justify-between gap-3">
+              <span class="min-w-0">
+                <span class="block text-sm font-bold text-white">${name}</span>
+                <span class="block text-xs text-slate-400 leading-relaxed mt-0.5">${desc}</span>
+              </span>
+              ${uj ? '<span class="shrink-0 text-[9px] font-black uppercase tracking-widest text-primary-200 bg-primary-600/30 rounded-md px-1.5 py-0.5">New</span>' : ''}
+            </li>`).join('')}
+        </ul>
       </div>`).join('');
 
     /* ---- Demo tabs ---- */
     const DEMOS = [
-      ['review', 'pie-chart', 'Admissions review', 'Reviewers score an applicant — the status updates to Accepted in real time.'],
-      ['finance', 'wallet', 'Finance', 'Verify a bank transfer and watch monthly revenue update instantly.'],
-      ['interview', 'calendar', 'Interview booking', 'Applicants book an interview slot; a Teams link is generated automatically.'],
-      ['crm', 'message-square', 'Communication', 'Send templated WhatsApp messages to applicants without leaving the platform.'],
+      ['review', 'pie-chart', 'Admissions review', 'Reviewers score each criterion; the server adds up the total and the decision follows.'],
+      ['interview', 'calendar', 'Interview booking', 'Applicants pick a 15-minute slot; the invitation lands in both calendars.'],
+      ['echo', 'clipboard-list', 'Course evaluation', 'Students rate their courses anonymously; every campaign has its own number.'],
+      ['shop', 'shopping-bag', 'University shop', 'A parking card is approved first, then paid with a unique reference.'],
+      ['feed', 'newspaper', 'Targeted feed', 'Choose who sees a post and watch the audience size update before publishing.'],
+      ['chat', 'messages-square', 'Messages', 'Applicants and the International Office talk in one thread; the offer letter arrives as a PDF.'],
     ];
     const demoMap = Object.fromEntries(DEMOS.map(d => [d[0], d]));
     document.getElementById('demoTabs').innerHTML = DEMOS.map(([key, icon, label]) => `
@@ -1054,7 +1180,164 @@
       "This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link with “Forgot password?”.": "Ez az e-mailes link érvénytelen vagy lejárt — minden link csak egyszer és korlátozott ideig működik. Ha jelszót állítottál vissza, kérj új linket az „Elfelejtett jelszó?” gombbal.",
       "Invalid login credentials": "Hibás e-mail-cím vagy jelszó.",
       "Email not confirmed": "Az e-mail-cím még nincs megerősítve.",
-      "User already registered": "Ezzel az e-mail-címmel már van fiók."
+      "User already registered": "Ezzel az e-mail-címmel már van fiók.",
+      "The journey": "Az életút",
+      "Privacy": "Adatvédelem",
+      "John von Neumann University · Kecskemét": "Neumann János Egyetem · Kecskemét",
+      "From first application to campus life —": "Az első jelentkezéstől a kampuszéletig —",
+      "Admissions, interviews and offers; courses and anonymous course evaluation; the campus feed, the dormitory and the university shop. For applicants, students, teachers, agents and staff — in Hungarian and English.": "Felvételi, interjúk és ajánlatok; kurzusok és névtelen kurzusértékelés; a kampusz hírfolyama, a kollégium és az egyetemi bolt. Jelentkezőknek, hallgatóknak, oktatóknak, ügynököknek és munkatársaknak — magyarul és angolul.",
+      "Roles": "Szerepkör",
+      "Languages": "Nyelv",
+      "Evaluation": "Értékelés",
+      "Anonymous": "Névtelen",
+      "Feed": "Hírfolyam",
+      "Courses": "Kurzusok",
+      "Course evaluation": "Kurzusértékelés",
+      "Webshop": "Webshop",
+      "My housing": "Szállásom",
+      "Calendar": "Naptár",
+      "Campus feed": "Kampusz hírfolyam",
+      "Welcome back, Anna": "Üdv újra itt, Anna",
+      "2 tasks waiting": "2 teendő vár rád",
+      "Mathematics I": "Matematika I.",
+      "Goal setting": "Célmeghatározás",
+      "Set goals": "Célok megadása",
+      "Programming II": "Programozás II.",
+      "Evaluation ·": "Értékelés ·",
+      "Fill in": "Kitöltés",
+      "Event": "Esemény",
+      "Freshers' ball — tickets on sale": "Gólyabál — a jegyek már kaphatók",
+      "For full-time students · 10 Oct": "Nappali tagozatosoknak · okt. 10.",
+      "Parking card approved": "Parkolókártya jóváhagyva",
+      "One account from the first form to the last semester": "Egy fiók az első űrlaptól az utolsó félévig",
+      "The same profile carries a person from applicant to enrolled student — no re-registration, no second system.": "Ugyanaz a profil kíséri végig a jelentkezőt a beiratkozott hallgatóig — nincs újraregisztráció, nincs második rendszer.",
+      "Apply": "Jelentkezés",
+      "Programme catalogue, online form, document upload and the mathematics placement test.": "Képzéskínálat, online űrlap, dokumentumfeltöltés és matematikai szintfelmérő.",
+      "Interview & review": "Interjú és bírálat",
+      "Book a slot in the interview calendar; reviewers score against an agreed set of criteria.": "Időpontfoglalás az interjúnaptárban; a bírálók egységes szempontrendszer szerint pontoznak.",
+      "Offer & payment": "Ajánlat és fizetés",
+      "Conditional acceptance letter as PDF, and a unique payment reference so every transfer finds its applicant.": "Feltételes felvételi levél PDF-ben, és egyedi utalási közlemény, hogy minden befizetés megtalálja a jelentkezőjét.",
+      "Visa & enrolment": "Vízum és beiratkozás",
+      "Visa checklist, messages with the International Office, and the move to student status.": "Vízum-ellenőrzőlista, üzenetváltás a Nemzetközi Irodával, és átlépés hallgatói státuszba.",
+      "Study": "Tanulás",
+      "Courses, start-of-term goals and the anonymous end-of-term course evaluation.": "Kurzusok, félév eleji célok és a névtelen félév végi kurzusértékelés.",
+      "Campus life": "Kampuszélet",
+      "The campus feed, dormitory and maintenance requests, a personal calendar and the university shop.": "Kampusz hírfolyam, kollégium és hibabejelentés, saját naptár és az egyetemi bolt.",
+      "One platform, five perspectives": "Egy platform, öt nézőpont",
+      "Every role gets its own focused menu — on shared data, with access decided by the database, not the screen.": "Minden szerepkör saját, fókuszált menüt kap — közös adatokon, és a hozzáférésről az adatbázis dönt, nem a képernyő.",
+      "Applicants & students": "Jelentkezők és hallgatók",
+      "Apply, book an interview, pay with a reference": "Jelentkezés, interjúfoglalás, fizetés közleménnyel",
+      "Courses and anonymous course evaluation": "Kurzusok és névtelen kurzusértékelés",
+      "Feed, housing, calendar and webshop": "Hírfolyam, szállás, naptár és webshop",
+      "Teachers": "Oktatók",
+      "Own courses and student lists": "Saját kurzusok és hallgatói névsorok",
+      "Evaluation results above the privacy threshold": "Értékelési eredmények az adatvédelmi küszöb felett",
+      "Reply to feedback in a comment window": "Válasz a visszajelzésekre észrevételi ablakban",
+      "Teacher sign in": "Oktatói belépés",
+      "Agents & partners": "Ügynökök és partnerek",
+      "Submit and follow your applicants": "Jelentkezők beküldése és követése",
+      "Commission periods and statements": "Jutalékidőszakok és elszámolások",
+      "Agency approved before any data is shown": "Az ügynökséget jóváhagyják, mielőtt bármilyen adatot látna",
+      "University staff": "Egyetemi munkatársak",
+      "Admissions, interviews and decisions": "Felvételi, interjúk és döntések",
+      "Students, teachers, campaigns and the shop": "Hallgatók, oktatók, kampányok és a bolt",
+      "Permissions by role, group or person": "Jogosultságok szerepkör, csoport vagy személy szerint",
+      "Interview scoring sheet": "Interjú értékelőlap",
+      "BSc Computer Science ·": "BSc Mérnökinformatikus ·",
+      "Interviewed": "Interjú lezajlott",
+      "Mathematical thinking": "Matematikai gondolkodás",
+      "English communication": "Angol nyelvű kommunikáció",
+      "Total, calculated by the server": "Összpontszám, a szerver számolja",
+      "Interview calendar · 25 March": "Interjúnaptár · márc. 25.",
+      "Added to both calendars, with the meeting link": "Mindkét naptárba bekerült, a meeting-linkkel",
+      "How clearly were the requirements explained?": "Mennyire volt világos a követelmények ismertetése?",
+      "Submitted without your name — not even the administrators can link it to you.": "Név nélkül küldted be — még az adminisztrátorok sem tudják hozzád kötni.",
+      "University shop": "Egyetemi bolt",
+      "Awaiting approval": "Jóváhagyásra vár",
+      "Ready to pay": "Fizethető",
+      "Parking card · autumn term": "Parkolókártya · őszi félév",
+      "Plate": "Rendszám",
+      "Payment reference": "Utalási közlemény",
+      "Approved first, paid second — no refunds for rejected requests.": "Előbb jóváhagyás, aztán fizetés — elutasított igénylésnél nincs visszautalás.",
+      "New post · who should see it?": "Új bejegyzés · kinek jelenjen meg?",
+      "Full-time": "Nappali",
+      "Part-time": "Levelező",
+      "GAMF faculty": "GAMF kar",
+      "338 people": "338 fő",
+      "211 people": "211 fő",
+      "Filtered in the database — others cannot read the post at all.": "Az adatbázis szűr — mások egyáltalán nem olvashatják a bejegyzést.",
+      "International Office": "Nemzetközi Iroda",
+      "Messages about your application": "Üzenetek a jelentkezésedről",
+      "When will I receive my offer letter?": "Mikor kapom meg a felvételi levelet?",
+      "It has just been issued — you will find it attached below.": "Épp most állítottuk ki — lent csatolva megtalálod.",
+      "Conditional acceptance letter.pdf": "Feltételes felvételi levél.pdf",
+      "Reviewers score each criterion; the server adds up the total and the decision follows.": "A bírálók szempontonként pontoznak; az összesítést a szerver végzi, ezután jön a döntés.",
+      "Twenty-four modules in four areas": "Huszonnégy modul, négy területen",
+      "Grouped the same way as the menu inside the platform. The ones marked new arrived this semester.": "Ugyanúgy csoportosítva, mint a platform menüje. Az „Új” jelzésűek ebben a félévben érkeztek.",
+      "New": "Új",
+      "Studies": "Tanulmányok",
+      "Operations": "Működés",
+      "Programme catalogue, online form and documents.": "Képzéskínálat, online űrlap és dokumentumok.",
+      "Review & scoring criteria": "Bírálat és szempontrendszer",
+      "An editable criteria sheet; the server adds up the score.": "Szerkeszthető szempontrendszer; a pontszámot a szerver összesíti.",
+      "Interview calendar": "Interjúnaptár",
+      "Staff availability, bookable slots, calendar invites.": "Munkatársi elérhetőség, foglalható idősávok, naptármeghívók.",
+      "Offer letters & payment reference": "Felvételi levél és utalási közlemény",
+      "Acceptance letter as PDF; a checkable reference on every transfer.": "Felvételi levél PDF-ben; ellenőrizhető közlemény minden utaláson.",
+      "Messages with applicants": "Üzenetváltás a jelentkezőkkel",
+      "Conversation per application, with attachments.": "Jelentkezésenkénti beszélgetés, csatolmányokkal.",
+      "Visa checklist and follow-up.": "Vízum-ellenőrzőlista és nyomon követés.",
+      "Course registry, enrolments and student lists.": "Kurzusnyilvántartás, kurzusfelvételek és névsorok.",
+      "Teacher registry with courses, student numbers and campaigns.": "Oktatói nyilvántartás kurzusokkal, hallgatói létszámmal és kampányokkal.",
+      "Students": "Hallgatók",
+      "Searchable directory with classification, groups and statistics.": "Kereshető névsor besorolással, csoportokkal és statisztikákkal.",
+      "Course evaluation (ECHO)": "Kurzusértékelés (ECHO)",
+      "Anonymous questionnaires, goal setting, numbered campaigns.": "Névtelen kérdőívek, célmeghatározás, sorszámozott kampányok.",
+      "Teacher results": "Oktatói eredmények",
+      "Results above the privacy threshold, with a comment window.": "Eredmények az adatvédelmi küszöb felett, észrevételi ablakkal.",
+      "Student calendar": "Hallgatói naptár",
+      "Interviews, deadlines and events in one calendar.": "Interjúk, határidők és események egy naptárban.",
+      "Posts for chosen audiences, with a view counter.": "Bejegyzések kiválasztott célközönségnek, megtekintés-számlálóval.",
+      "Notes, parking cards and merchandise; staff edit products from templates.": "Jegyzetek, parkolókártya és ajándéktárgyak; a termékeket sablonból viszik fel.",
+      "Dormitory": "Kollégium",
+      "Rooms, beds, applications and occupancy.": "Szobák, ágyak, jelentkezések és elhelyezés.",
+      "Maintenance": "Karbantartás",
+      "Fault reports and follow-up for the dormitory.": "Hibabejelentés és követés a kollégiumban.",
+      "AI assistant": "AI asszisztens",
+      "Answers from the university knowledge base.": "Válaszok az egyetemi tudásbázisból.",
+      "Programmes": "Programok",
+      "Short programmes and courses to apply for.": "Rövid képzések és kurzusok, amelyekre jelentkezni lehet.",
+      "Fees, payments and invoice numbers.": "Díjak, befizetések és számlaszámok.",
+      "Applicants, commission periods and statements.": "Jelentkezők, jutalékidőszakok és elszámolások.",
+      "CRM & marketing": "CRM és marketing",
+      "Communication, campaigns and leads.": "Kommunikáció, kampányok és érdeklődők.",
+      "Reports & insights": "Riportok és elemzések",
+      "Permissions": "Jogosultságok",
+      "Menu access by role, group or individual, plus job titles.": "Menühozzáférés szerepkör, csoport vagy személy szerint, munkakörökkel.",
+      "Registrations & consent log": "Regisztrációk és hozzájárulási napló",
+      "Account approval and a versioned record of consents.": "Fiókjóváhagyás és a hozzájárulások verziózott nyilvántartása.",
+      "Privacy & security": "Adatvédelem és biztonság",
+      "Built for a public university": "Állami egyetemre tervezve",
+      "The rules are enforced where the data lives, not only in the interface.": "A szabályokat ott érvényesítjük, ahol az adat van — nem csak a felületen.",
+      "Anonymous course evaluation": "Névtelen kurzusértékelés",
+      "Answers carry no name, and results appear only above a minimum number of respondents.": "A válaszokon nincs név, és eredmény csak egy minimális kitöltőszám felett jelenik meg.",
+      "Access decided by the database": "A hozzáférésről az adatbázis dönt",
+      "Role, group and individual permissions; a hidden menu item is never the only lock.": "Szerepkör, csoport és egyéni jogosultság; egy elrejtett menüpont soha nem az egyetlen zár.",
+      "Consent log": "Hozzájárulási napló",
+      "Every accepted notice and consent is recorded with its version and can be withdrawn.": "Minden elfogadott tájékoztatót és hozzájárulást verzióval rögzítünk, és visszavonható.",
+      "Payments to the university": "Fizetés az egyetemnek",
+      "Transfers go to the university's own account with a checkable reference. Card payment via SimplePay is coming.": "Az utalások az egyetem saját számlájára érkeznek, ellenőrizhető közleménnyel. A SimplePay-es kártyás fizetés hamarosan jön.",
+      "Every account approved": "Minden fiókot jóváhagyunk",
+      "New registrations and partner agencies are reviewed before they see any data.": "Az új regisztrációkat és partnerügynökségeket átnézzük, mielőtt bármilyen adatot látnának.",
+      "Hungarian and English": "Magyarul és angolul",
+      "The whole interface switches language; course questionnaires follow the language of the programme.": "A teljes felület nyelvet vált; a kurzuskérdőív a képzés nyelvét követi.",
+      "Applicants pick a 15-minute slot; the invitation lands in both calendars.": "A jelentkező 15 perces idősávot választ; a meghívó mindkét naptárba bekerül.",
+      "Students rate their courses anonymously; every campaign has its own number.": "A hallgatók névtelenül értékelik a kurzusaikat; minden kampánynak saját sorszáma van.",
+      "A parking card is approved first, then paid with a unique reference.": "A parkolókártyát előbb jóváhagyják, aztán egyedi közleménnyel fizethető.",
+      "Targeted feed": "Célzott hírfolyam",
+      "Choose who sees a post and watch the audience size update before publishing.": "Válaszd ki, kinek szól a bejegyzés, és közzététel előtt lásd, hány főt ér el.",
+      "Messages": "Üzenetek",
+      "Applicants and the International Office talk in one thread; the offer letter arrives as a PDF.": "A jelentkező és a Nemzetközi Iroda egy szálban beszél; a felvételi levél PDF-ben érkezik."
       };
       var MINTAK = [
         [/^If an account exists for (.+), we have sent it a link to set a new password\. Check your inbox \(and the spam folder\)\. The link works once and expires after a while\.$/,
@@ -1089,7 +1372,7 @@
         lista.forEach(szoveg);
       }
       document.documentElement.lang = 'hu';
-      document.title = 'UniPortal Pro — Neumann János Egyetem | Nemzetközi felvételi platform';
+      document.title = 'UniPortal Pro — Neumann János Egyetem | Felvételi, tanulmányok és kampuszélet';
       bejar(document.body);
       new MutationObserver(function(ms){
         ms.forEach(function(m){
