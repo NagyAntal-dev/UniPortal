@@ -380,7 +380,7 @@ function CRS_Tab({ user }) {
       if (error) throw error;
       await CRS_api.docAdd(sel, file.name, file.name, path, file.type || null, file.size, 'tananyag');
       await ujra();
-      szol('Feltöltve: ' + file.name);
+      szol(ECHO_ui('Feltöltve: ', 'Uploaded: ') + file.name);
     } catch (e) { setErr(CRS_msg(e)); }
     finally { setFeltolt(false); }
   };
@@ -419,7 +419,7 @@ function CRS_Tab({ user }) {
         <input className={U_input + ' flex-1 min-w-52'} value={q} onChange={e => setQ(e.target.value)}
           placeholder="Keresés kód vagy megnevezés szerint…" />
         <span className="text-[11px] font-black text-slate-400">
-          {rows === null ? '' : rows.length + ' kurzus'}
+          {rows === null ? '' : ECHO_ui(rows.length + ' kurzus', rows.length + (Number(rows.length) === 1 ? ' course' : ' courses'))}
         </span>
         {/* ÚJ KURZUS: a `courses` modul CREATE joga (72_rbac_actions.sql).
             A `regi` érték `true`, mert eddig a nyilvántartás megnyitása maga
@@ -529,13 +529,13 @@ function CRS_Tab({ user }) {
                 {(() => {
                   const okok = [];
                   if (!det.van_orarendi_info)
-                    okok.push('nincs órarendi információ');
+                    okok.push(ECHO_ui('nincs órarendi információ', 'no timetable information'));
                   if (det.vizsgakurzus)
-                    okok.push('vizsgakurzus');
+                    okok.push(ECHO_ui('vizsgakurzus', 'exam-only course'));
                   if ((det.oktatok || []).length === 0)
-                    okok.push('nincs rögzített oktató');
+                    okok.push(ECHO_ui('nincs rögzített oktató', 'no teacher recorded'));
                   if (det.hallgato_szam < 3 && (det.letszam == null || det.letszam < 3))
-                    okok.push('a létszám a küszöb alatt van (3 fő)');
+                    okok.push(ECHO_ui('a létszám a küszöb alatt van (3 fő)', 'enrolment is below the threshold (3 students)'));
                   if (okok.length === 0) return null;
                   return (
                     <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 flex gap-2.5 mb-4">
@@ -572,7 +572,7 @@ function CRS_Tab({ user }) {
                   {szerk && (
                     <CRS_Picker kind="teacher" courseId={det.id} cimke="Oktató"
                       onPick={o => tesz(() => CRS_api.teacher(det.id, o.id, 100, 'oktato', false),
-                                        () => 'Oktató hozzárendelve: ' + o.cimke)} />
+                                        () => ECHO_ui('Oktató hozzárendelve: ', 'Teacher assigned: ') + o.cimke)} />
                   )}
                 </div>
                 {(det.oktatok || []).length === 0 ? (
@@ -674,10 +674,11 @@ function CRS_Tab({ user }) {
                     <div className="flex items-center gap-3">
                       <CRS_Picker kind="group" courseId={det.id} cimke="Csoport" gomb="+ Csoport"
                         onPick={g => tesz(() => CRS_api.enroll(det.id, null, g.id, 'add'),
-                                          r => (r && r.erintett) + ' hallgató beiratkoztatva a(z) „' + g.cimke + '” csoportból.')} />
+                                          r => ECHO_ui((r && r.erintett) + ' hallgató beiratkoztatva a(z) „' + g.cimke + '” csoportból.',
+                                                       (r && r.erintett) + ' student(s) enrolled from the “' + g.cimke + '” group.'))} />
                       <CRS_Picker kind="student" courseId={det.id} cimke="Hallgató" gomb="+ Hallgató"
                         onPick={p => tesz(() => CRS_api.enroll(det.id, [p.id], null, 'add'),
-                                          () => 'Beiratkoztatva: ' + p.cimke)} />
+                                          () => ECHO_ui('Beiratkoztatva: ', 'Enrolled: ') + p.cimke)} />
                     </div>
                   )}
                 </div>
@@ -687,7 +688,7 @@ function CRS_Tab({ user }) {
                     nem a mai. */}
                 {hist && hist.felev_szam > 1 && (
                   <div className="flex items-center gap-1 mb-3">
-                    {[[false, 'Csak ' + det.term], [true, 'Minden félév (' + hist.felev_szam + ')']].map(([v, c]) => (
+                    {[[false, ECHO_ui('Csak ', 'Only ') + det.term], [true, ECHO_ui('Minden félév (', 'All terms (') + hist.felev_szam + ')']].map(([v, c]) => (
                       <button key={String(v)} onClick={() => setMind(v)}
                         className={'text-[11px] font-black px-3 py-1.5 rounded-xl transition ' +
                           (mind === v ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-50')}>
@@ -721,7 +722,7 @@ function CRS_Tab({ user }) {
                         {h.status !== 'active' && <UBadge tone="slate">leadta</UBadge>}
                         {szerk && h.ez_a_felev && (
                           <button onClick={() => tesz(() => CRS_api.enroll(det.id, [h.profile_id], null, 'remove'),
-                                                      () => 'Törölve a névsorból: ' + h.nev)}
+                                                      () => ECHO_ui('Törölve a névsorból: ', 'Removed from the list: ') + h.nev)}
                             className="text-slate-300 hover:text-red-500 flex-none"><Lucide.X size={14} /></button>
                         )}
                       </div>
@@ -745,8 +746,9 @@ function CRS_Tab({ user }) {
                     Minden félév a saját akkori oktatóját és létszámát mutatja.
                     {hist.teljes_felev_szam > hist.felev_szam && (
                       <span className="text-amber-600">
-                        {' '}Ebből {hist.teljes_felev_szam - hist.felev_szam} félév nem látszik,
-                        mert azoknak nem te vagy az oktatója.
+                        {' '}{ECHO_ui(
+                          'Ebből ' + (hist.teljes_felev_szam - hist.felev_szam) + ' félév nem látszik, mert azoknak nem te vagy az oktatója.',
+                          (hist.teljes_felev_szam - hist.felev_szam) + ' term(s) are hidden because you are not their teacher.')}
                       </span>
                     )}
                   </p>
@@ -766,20 +768,20 @@ function CRS_Tab({ user }) {
                           <div className="flex items-baseline justify-between gap-3">
                             <span className="text-xs font-black text-slate-800">{f.term}</span>
                             <span className="text-[10px] font-black text-slate-400">
-                              {f.hallgato} hallgató
+                              {ECHO_ui(f.hallgato + ' hallgató', f.hallgato + (Number(f.hallgato) === 1 ? ' student' : ' students'))}
                               {f.letszam != null && f.letszam !== f.hallgato
-                                ? ' · forrás szerint ' + f.letszam : ''}
-                              {f.kampany > 0 ? ' · ' + f.kampany + ' kampány' : ''}
+                                ? ECHO_ui(' · forrás szerint ', ' · per source system: ') + f.letszam : ''}
+                              {f.kampany > 0 ? ' · ' + ECHO_ui(f.kampany + ' kampány', f.kampany + (Number(f.kampany) === 1 ? ' campaign' : ' campaigns')) : ''}
                             </span>
                           </div>
                           <div className="text-[11px] font-bold text-slate-500 mt-0.5 truncate">
                             {f.name_hu}
                           </div>
                           <div className="text-[10px] font-bold text-slate-400 mt-1 truncate">
-                            {(f.oktatok || []).length === 0 ? 'nincs rögzített oktató'
+                            {(f.oktatok || []).length === 0 ? ECHO_ui('nincs rögzített oktató', 'no teacher recorded')
                               : f.oktatok.map(o => o.nev + ' (' + Math.round(o.share_pct) + '%)').join(', ')}
-                            {f.vizsgakurzus ? ' · vizsgakurzus' : ''}
-                            {!f.van_orarendi_info ? ' · nincs órarendi info' : ''}
+                            {f.vizsgakurzus ? ECHO_ui(' · vizsgakurzus', ' · exam-only course') : ''}
+                            {!f.van_orarendi_info ? ECHO_ui(' · nincs órarendi info', ' · no timetable info') : ''}
                           </div>
                         </button>
                       ))}
@@ -809,7 +811,7 @@ function CRS_Tab({ user }) {
                             <span className="text-slate-500 truncate">
                               {v.regi ? <span className="line-through text-slate-300">{v.regi}</span> : null}
                               {v.regi && v.uj ? ' → ' : ''}
-                              {v.uj || (v.regi ? ' (törölve)' : '')}
+                              {v.uj || (v.regi ? ECHO_ui(' (törölve)', ' (deleted)') : '')}
                             </span>
                             <span className="text-slate-300 font-bold ml-auto flex-none truncate max-w-40">
                               {v.ki}
@@ -841,8 +843,8 @@ function CRS_Tab({ user }) {
         <div className="flex items-center justify-end gap-2 mt-6">
           <button onClick={() => setTorles(null)} className={U_btnGhost + ' py-2.5 px-5'}>Mégse</button>
           <button onClick={() => { const t = torles; setTorles(null);
-                                   tesz(() => CRS_api.del(t.id), r => 'Törölve: ' + r.code +
-                                        ' (' + r.torolt_beiratkozas + ' beiratkozással együtt)'); }}
+                                   tesz(() => CRS_api.del(t.id), r => ECHO_ui('Törölve: ' + r.code + ' (' + r.torolt_beiratkozas + ' beiratkozással együtt)',
+                                                     'Deleted: ' + r.code + ' (together with ' + r.torolt_beiratkozas + ' enrolment(s))')); }}
             className={U_btnPrimary + ' py-2.5 px-5 !bg-red-500'}>Törlés</button>
         </div>
       </UModal>
@@ -905,9 +907,9 @@ function CRS_StudentView({ user }) {
       ) : (
         <div className="space-y-6">
           <div className="flex items-center gap-3 text-[11px] font-black text-slate-400">
-            <span>{d.kurzus_szam} kurzus</span>
+            <span>{ECHO_ui(d.kurzus_szam + ' kurzus', d.kurzus_szam + (Number(d.kurzus_szam) === 1 ? ' course' : ' courses'))}</span>
             <span className="text-slate-200">·</span>
-            <span>{d.felev_szam} félév</span>
+            <span>{ECHO_ui(d.felev_szam + ' félév', d.felev_szam + (Number(d.felev_szam) === 1 ? ' term' : ' terms'))}</span>
           </div>
 
           {felevek.map(f => (
@@ -915,14 +917,14 @@ function CRS_StudentView({ user }) {
               <div className="flex items-baseline justify-between gap-3 mb-4">
                 <h2 className="text-lg font-black text-slate-900">{f.term}</h2>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {f.kurzus_szam} kurzus
+                  {ECHO_ui(f.kurzus_szam + ' kurzus', f.kurzus_szam + (Number(f.kurzus_szam) === 1 ? ' course' : ' courses'))}
                 </span>
               </div>
 
               <div className="space-y-2">
                 {(f.kurzusok || []).map(k => {
                   const ki = !!nyit[k.course_id];
-                  const van = k.leiras || (k.oktatok || []).length > 0;
+                  const van = k.leiras || k.leiras_en || (k.oktatok || []).length > 0;
                   return (
                     <div key={k.course_id} className="border border-slate-100 rounded-2xl overflow-hidden">
                       <button type="button" disabled={!van}
@@ -932,7 +934,7 @@ function CRS_StudentView({ user }) {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="text-sm font-black text-slate-800 truncate">
-                              <ECHO_Src>{k.name_hu}</ECHO_Src>
+                              <ECHO_Src>{ECHO_ui(k.name_hu, k.name_en || k.name_hu)}</ECHO_Src>
                             </div>
                             <div className="text-[11px] font-bold text-slate-400 truncate mt-0.5">
                               {k.code}
@@ -968,13 +970,13 @@ function CRS_StudentView({ user }) {
                               ))}
                             </div>
                           )}
-                          {k.leiras && (
+                          {(k.leiras || k.leiras_en) && (
                             <div>
                               <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
                                 Tárgyleírás
                               </div>
                               <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
-                                <ECHO_Src>{k.leiras}</ECHO_Src>
+                                <ECHO_Src>{ECHO_ui(k.leiras || k.leiras_en, k.leiras_en || k.leiras)}</ECHO_Src>
                               </p>
                             </div>
                           )}

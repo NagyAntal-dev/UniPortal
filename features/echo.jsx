@@ -180,6 +180,12 @@ function ECHO_lang() {
   catch (e) { return 'hu'; }
 }
 
+/* Felületi mondat, amelyben szám vagy dátum áll, és az angol szórend eltér.
+   Az app.jsx DOM-fordítója szövegcsomópontonként dolgozik: a „{n}. lépésnél"
+   vagy a „{dátum}-ig" két csomópontra esik szét, amit szótárból nem lehet
+   angol sorrendbe tenni. Ezeknél a fejléc nyelvváltója szerint itt ágazunk el. */
+function ECHO_ui(hu, en) { return ECHO_lang() === 'en' ? en : hu; }
+
 // hu/en mezőpár feloldása egy compiled-objektumon.
 function ECHO_txt(o, lang) {
   if (!o) return '';
@@ -1318,12 +1324,12 @@ function ECHO_ablakAllapot(c) {
 
 function ECHO_date(s) {
   if (!s) return '—';
-  try { return new Date(s).toLocaleDateString('hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
+  try { return new Date(s).toLocaleDateString(ECHO_ui('hu-HU', 'en-GB'), { year: 'numeric', month: '2-digit', day: '2-digit' }); }
   catch (e) { return String(s).slice(0, 10); }
 }
 function ECHO_dateTime(s) {
   if (!s) return '—';
-  try { return new Date(s).toLocaleString('hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  try { return new Date(s).toLocaleString(ECHO_ui('hu-HU', 'en-GB'), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
   catch (e) { return String(s).slice(0, 16); }
 }
 
@@ -1898,9 +1904,12 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
           </div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Van egy félbehagyott kitöltésed</h2>
           <p className="text-sm text-slate-500 font-medium mt-3 leading-relaxed">
-            Ezen a kurzuson <b className="text-slate-700">{ECHO_dateTime(draft.mentve)}</b> mentettünk
-            utoljára{typeof draft.step === 'number' ? ` a ${draft.step + 1}. lépésnél` : ''}.
-            Folytathatod ott, ahol abbahagytad.
+            {ECHO_ui(
+              <>Ezen a kurzuson <b className="text-slate-700">{ECHO_dateTime(draft.mentve)}</b> mentettünk
+              utoljára{typeof draft.step === 'number' ? ` a ${draft.step + 1}. lépésnél` : ''}.</>,
+              <>Your answers on this course were last saved on <b className="text-slate-700">{ECHO_dateTime(draft.mentve)}</b>{typeof draft.step === 'number' ? `, at step ${draft.step + 1}` : ''}.</>
+            )}
+            {' '}Folytathatod ott, ahol abbahagytad.
           </p>
           <div className="mt-5 rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3.5">
             <p className="text-[11px] font-black uppercase tracking-widest text-amber-600 mb-1.5">
@@ -2204,7 +2213,7 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
         )}
         <div className="mt-4">
           <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
-            <span>{step + 1}. lépés / {steps.length}</span><span>{pct}%</span>
+            <span>{ECHO_ui((step + 1) + '. lépés / ' + steps.length, 'Step ' + (step + 1) + ' / ' + steps.length)}</span><span>{pct}%</span>
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: pct + '%' }} />
@@ -2465,7 +2474,7 @@ function ECHO_Review({ compiled, teachers, ans, tans, hasGoals, goalItems, lang,
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-black text-slate-800 truncate"><ECHO_Src>{t.name}</ECHO_Src></p>
                   <p className="text-[11px] text-slate-400 font-bold truncate">
-                    {skipped ? <ECHO_Src>{'kihagyva — ' + String(sv)}</ECHO_Src> : 'értékelve'}
+                    {skipped ? <>kihagyva — <ECHO_Src>{String(sv)}</ECHO_Src></> : 'értékelve'}
                   </p>
                 </div>
                 {skipped ? <UBadge tone="amber">kihagyva</UBadge> : <UBadge tone="green">kész</UBadge>}
@@ -2632,14 +2641,14 @@ function ECHO_StudentView({ user }) {
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-400 mb-4">
           <span className="inline-flex items-center gap-1"><Lucide.CalendarDays size={12} /> <ECHO_Src>{c.term}</ECHO_Src></span>
-          <span className="inline-flex items-center gap-1"><Lucide.Users size={12} /> {c.teacher_count} oktató</span>
-          {c.closes_at && <span className="inline-flex items-center gap-1"><Lucide.Clock size={12} /> {ECHO_date(c.closes_at)}-ig</span>}
+          <span className="inline-flex items-center gap-1"><Lucide.Users size={12} /> {ECHO_ui(c.teacher_count + ' oktató', c.teacher_count + (Number(c.teacher_count) === 1 ? ' teacher' : ' teachers'))}</span>
+          {c.closes_at && <span className="inline-flex items-center gap-1"><Lucide.Clock size={12} /> {ECHO_ui(ECHO_date(c.closes_at) + '-ig', 'until ' + ECHO_date(c.closes_at))}</span>}
           {c.goals_saved && <span className="inline-flex items-center gap-1 text-primary"><Lucide.Target size={12} /> célok megadva</span>}
           {/* A piszkozat LETE es a lepesszam latszik, a TARTALMA soha. */}
           {c.has_draft && (
             <span className="inline-flex items-center gap-1 text-blue-500">
               <Lucide.PauseCircle size={12} />
-              {(Number(c.draft_step) || 0) + 1}. lépésnél abbahagyva
+              {ECHO_ui((Number(c.draft_step) || 0) + 1 + '. lépésnél abbahagyva', 'Paused at step ' + ((Number(c.draft_step) || 0) + 1))}
             </span>
           )}
         </div>

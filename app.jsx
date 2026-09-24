@@ -14955,6 +14955,248 @@ Object.assign(HU_EN, {
   'Új oktató':'New teacher',
 });
 
+/* Kurzusértékelés — a hallgatói KITÖLTŐ felirata és súgói (features/echo.jsx:
+   kérdés-atomok, célmeghatározás, varázsló, összegzés, kurzuskártya). A kérdés-
+   és opciószövegek a kurzus nyelvét követik és a [data-echo-noi18n] burok védi
+   őket; ez a blokk csak a körülöttük lévő keretet fordítja. A <b>-vel tagolt
+   mondatok töredékenként szerepelnek — pontosan úgy, ahogy a DOM-ban szétesnek. */
+Object.entries({
+  // kérdés-atomok
+  'kiválasztva': 'selected',
+  'a keret betelt — vegyél le egyet a cseréhez': 'limit reached — remove one to swap',
+  'Írd le, mi volt az…': 'Describe what it was…',
+  'Egyéb — saját szöveg': 'Other — your own text',
+  'Az „Egyéb" mellé kötelező szöveget írni — írd be, majd a + gombbal add hozzá.':
+    'Text is required next to “Other” — type it, then add it with the + button.',
+  'Írd le a saját szavaiddal…': 'Describe it in your own words…',
+  'moderált mező': 'moderated field',
+  'Ezt az oktatót nem tudom értékelni': 'I cannot evaluate this teacher',
+  'A kihagyás oka': 'Reason for skipping',
+  'Egyéb ok — saját szöveg': 'Other reason — your own text',
+  'Ismeretlen kérdéstípus:': 'Unknown question type:',
+  '— a felület frissítésre szorul.': '— the interface needs an update.',
+  // kurzuskártya állapotai
+  'Félbehagyott': 'Unfinished',
+  'Van mentett piszkozatod — a kitöltés folytatható.': 'You have a saved draft — you can continue filling it in.',
+  'Nem kezdett': 'Not started',
+  'A kitöltési ablak nyitva.': 'The response window is open.',
+  'Célkitűzés': 'Goal setting',
+  'A félév eleji célok adhatók meg.': 'You can set your goals for the start of term.',
+  'Kitöltés folytatása': 'Continue filling in',
+  'Megnyílik:': 'Opens:',
+  // célmeghatározás
+  'A célmeghatározás nem tölthető be': 'Goal setting could not be loaded',
+  'A célok elmentve.': 'Goals saved.',
+  'A kurzus nyelvén (': 'There is no approved translation in the course language (',
+  ') nincs jóváhagyott fordítás, ezért a kérdőívet magyarul mutatjuk.': '), so the questionnaire is shown in Hungarian.',
+  'A félév elején kitűzött célok csak a Tiéd — az oktató nem látja őket, és a félév végi értékelésbe sem kerülnek át. Egyedül azt visszük tovább, hogy a céljaid mennyiben teljesültek.':
+    'The goals you set at the start of term are yours alone — the teacher cannot see them, and they are not carried into the end-of-term evaluation. The only thing carried forward is how far your goals were met.',
+  'Céljaim ezen a kurzuson': 'My goals on this course',
+  'Pl. magabiztosan írjak SQL lekérdezést': 'e.g. write SQL queries confidently',
+  'Legalább 1, legfeljebb 3 cél. Konkrét, félév végén eldönthető megfogalmazás segít a legtöbbet.':
+    'At least 1, at most 3 goals. Concrete wording that can be judged at the end of term helps the most.',
+  'Elvárásaim az oktatótól': 'My expectations of the teacher',
+  'Pl. kapjak érdemi visszajelzést a beadandóra': 'e.g. get meaningful feedback on my assignment',
+  'Legfeljebb 3 elvárás — ez a rész nem kötelező.': 'At most 3 expectations — this part is optional.',
+  'Célok mentése': 'Save goals',
+  // varázsló: betöltés, félbehagyott piszkozat
+  'A kérdőív nem tölthető be': 'The questionnaire could not be loaded',
+  'Van egy félbehagyott kitöltésed': 'You have an unfinished response',
+  'Folytathatod ott, ahol abbahagytad.': 'You can continue where you left off.',
+  'Amit a piszkozatról tudnod kell': 'What you should know about the draft',
+  'A mentett piszkozat — a beküldésig —': 'Until you submit, the saved draft',
+  'visszakereshető hozzád': 'can be traced back to you',
+  ': a kitöltésed a fiókodhoz kötve várakozik. A tartalmát rajtad kívül senki nem látja, sem oktató, sem adminisztrátor. A':
+    ': your response is stored linked to your account. Nobody but you can see its content — neither teachers nor administrators. At the',
+  'beküldés pillanatában': 'moment of submission',
+  'ez a kapcsolat elszakad: a válaszaid névtelenül kerülnek be, a piszkozat pedig törlődik.':
+    'this link is cut: your answers are recorded anonymously and the draft is deleted.',
+  'Újrakezdés üres űrlappal': 'Start over with an empty form',
+  'Most nem töltöm ki — a piszkozat megmarad': 'Not now — the draft will be kept',
+  // varázsló: fejléc, mentésjelző, alsó sáv
+  'Összegzés és beküldés': 'Summary and submission',
+  'Kilépés — a válaszaid piszkozatként megmaradnak': 'Exit — your answers are kept as a draft',
+  'A félév elején kitűzött célod': 'The goal you set at the start of term',
+  'Az oktatóval szemben megfogalmazott elvárásod': 'Your expectation of the teacher',
+  'A piszkozatot most nem sikerült menteni — a válaszaid a böngészőben megvannak.':
+    'The draft could not be saved just now — your answers are still in the browser.',
+  'A kitöltésed automatikusan mentődik.': 'Your response is saved automatically.',
+  'Piszkozat mentve': 'Draft saved',
+  'A piszkozat a beküldésig': 'Until submission, the draft',
+  ', de a tartalmát rajtad kívül senki nem látja. A beküldés pillanatában ez a kapcsolat elszakad, és a piszkozat törlődik.':
+    ', but nobody but you can see its content. At the moment of submission this link is cut and the draft is deleted.',
+  'Ebben a szakaszban most nincs megválaszolandó kérdés.': 'There is no question to answer in this section right now.',
+  'Beküldés…': 'Submitting…',
+  'Névtelen beküldés': 'Submit anonymously',
+  'Köszönjük az értékelést': 'Thank you for your evaluation',
+  'A válaszaid névtelenül érkeztek be. A rendszer azt tartja nyilván, hogy ezt a kurzust értékelted, de azt nem, hogy mit írtál — a kettő külön táblában él, közös kulcs nélkül.':
+    'Your answers were received anonymously. The system records that you evaluated this course, but not what you wrote — the two are kept in separate tables with no shared key.',
+  // összegzés
+  'Nem teljesült': 'Not met', 'Részben teljesült': 'Partly met', 'Teljesült': 'Met', 'Túlteljesült': 'Exceeded',
+  'A beküldés külön, bejelentkezés nélküli csatornán megy: a válaszaid mellé nem kerül sem a fiókod azonosítója, sem időbélyeg. A rendszer csak azt jegyzi fel — külön táblában —, hogy ezt a kurzust értékelted.':
+    'Submission goes through a separate channel without sign-in: neither your account ID nor a timestamp is attached to your answers. The system only records — in a separate table — that you evaluated this course.',
+  'A kurzusra adott válaszaid': 'Your answers about the course',
+  'A céljaid teljesülése': 'How far your goals were met',
+  'saját cél': 'own goal',
+  'A beküldésbe a céljaid szövege és darabszáma': 'The text and number of your goals are',
+  'nem': 'not',
+  'kerül bele — azok azonosítanának. Egyetlen összevont érték megy át:':
+    'included in the submission — they would identify you. Only one combined value is sent:',
+  'Az elvárásaid teljesülése oktatónként': 'How far your expectations were met, per teacher',
+  'oktatói elvárás ·': 'expectation of the teacher ·',
+  'A beküldésbe az elvárásaid szövege és darabszáma': 'The text and number of your expectations are',
+  'kerül bele — azok azonosítanának. Oktatónként egyetlen összevont érték megy át.':
+    'included in the submission — they would identify you. Only one combined value per teacher is sent.',
+  'Az oktatók értékelése': 'Evaluation of the teachers',
+  'értékelve': 'evaluated',
+  'kihagyva': 'skipped', 'kihagyva —': 'skipped —',
+  'kész': 'done',
+  'Ebben a kurzusban nincs véleményezhető oktató.': 'There is no teacher to evaluate in this course.',
+  // a szerver hibakódjai, ahogy a hallgató látja (ECHO_ERR)
+  'A fiókod még nincs jóváhagyva.': 'Your account has not been approved yet.',
+  'Ez a kurzus nem véleményezhető ezzel a fiókkal.': 'This course cannot be evaluated with this account.',
+  'A kampány még nem indult el.': 'The campaign has not started yet.',
+  'A kitöltési ablak zárva van.': 'The response window is closed.',
+  'A célmeghatározási ablak zárva van.': 'The goal-setting window is closed.',
+  'Legfeljebb 3 cél és 3 elvárás adható meg.': 'You can give at most 3 goals and 3 expectations.',
+  'Legalább egy célt meg kell fogalmaznod.': 'You need to set at least one goal.',
+  'A beküldött adat szerkezete hibás.': 'The submitted data is malformed.',
+  'A célteljesülés értéke érvénytelen.': 'The goal-fulfilment value is invalid.',
+  'A kitöltés túl hosszú — kérjük, rövidítsd a szöveges válaszokat.': 'The response is too long — please shorten your text answers.',
+  'Ezt a kurzust már értékelted.': 'You have already evaluated this course.',
+  'A kitöltési jegy lejárt. Kezdd elölről — a válaszaid megmaradtak.': 'The response ticket has expired. Start again — your answers have been kept.',
+  'Ezt a jegyet már felhasználtuk. Az értékelés valószínűleg beérkezett.': 'This ticket has already been used. Your evaluation has probably been received.',
+  'A kitöltési jegy érvénytelen.': 'The response ticket is invalid.',
+  'A kitöltési jegy sérült vagy hiányos. Kérjük, kezdd elölről.': 'The response ticket is damaged or incomplete. Please start again.',
+  'Ehhez a kurzushoz már nem kérhető újabb kitöltési jegy.': 'No more response tickets can be requested for this course.',
+  'Az egyik oktató nem véleményezhető ebben a kampányban.': 'One of the teachers cannot be evaluated in this campaign.',
+  'Nincs kapcsolat a háttérrendszerrel.': 'No connection to the server.',
+  'A névtelen beküldő kliens nem hozható létre — a kitöltés nem küldhető be biztonságosan.':
+    'The anonymous submission client could not be created — the response cannot be submitted safely.',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+HU_EN_PHRASES.push(
+  [/^Egy „Egyéb" válasz mellől hiányzik a szöveg \(([\s\S]*)\)\. Lépj vissza arra a kérdésre, és írd le, mi volt az\.$/,
+    'An “Other” answer is missing its text ($1). Go back to that question and describe what it was.'],
+  // A „bővebb" hibakódok után a szerver saját magyarázata áll — az elejét fordítjuk.
+  [/^Az „Egyéb" válasz mellé szöveget is meg kell adni\./, 'Text is also required next to an “Other” answer.'],
+  [/^A célmeghatározás bevezető kérdéseire válaszolni kell\./, 'The introductory goal-setting questions must be answered.'],
+  [/^A bevezető kérdésekre adott válasz érvénytelen\./, 'The answer to the introductory questions is invalid.'],
+  [/^megnyílik: /, 'opens: '],
+  [/^az ablak lejárt: /, 'window closed: '],
+);
+
+/* Kurzusok menüpont (features/courses.jsx) — az ügyintézői/oktatói nyilvántartás
+   és a hallgatói „A kurzusaim". A számot vagy nevet tartalmazó mondatok a
+   komponensben ágaznak el (ECHO_ui); itt csak az állandó feliratok vannak. */
+Object.entries({
+  // hibák
+  'Nincs bejelentkezve.': 'Not signed in.',
+  'Ez a kurzus nem található.': 'This course could not be found.',
+  'Ez az oktató nem található.': 'This teacher could not be found.',
+  'Ez a dokumentum már nincs meg.': 'This document no longer exists.',
+  'Ehhez nincs jogosultságod.': 'You do not have permission for this.',
+  // oktatói szerepek (hallgatói nézet)
+  'kurzusfelelős': 'course leader', 'gyakorlatvezető': 'lab instructor', 'vendégoktató': 'guest lecturer',
+  // változásnapló mezőnevei
+  'létrehozás': 'created', 'kurzuskód': 'course code', 'megnevezés': 'name', 'angol megnevezés': 'English name',
+  'félév': 'term', 'nyelv': 'language', 'szervezeti egység': 'organisational unit', 'létszám': 'headcount',
+  'órarendi információ': 'timetable information', 'vizsgakurzus': 'exam-only course', 'leírás': 'description',
+  'angol leírás': 'English description',
+  // dokumentumfajták
+  'Tanterv': 'Curriculum', 'Tananyag': 'Course material',
+  // kereső legördülő
+  'nincs találat': 'no results',
+  // kurzus-űrlap
+  'Új kurzus': 'New course',
+  'Kurzus szerkesztése': 'Edit course',
+  'A kurzuskód félévenként egyedi': 'The course code is unique per term',
+  'Kurzuskód': 'Course code',
+  'Neptun-kód. Félévenként egyedi.': 'Neptun code. Unique per term.',
+  'Formátum: 2025/26/2': 'Format: 2025/26/2',
+  'Megnevezés (magyar)': 'Name (Hungarian)',
+  'Megnevezés (angol)': 'Name (English)',
+  'Nem kötelező.': 'Optional.',
+  'Oktatás nyelve': 'Language of instruction',
+  'magyar': 'Hungarian', 'angol': 'English', 'német': 'German', 'egyéb': 'other',
+  'Szervezeti egység': 'Organisational unit',
+  'Kar vagy tanszék. A jelentések eszerint csoportosítanak.': 'Faculty or department. Reports are grouped by this.',
+  'Létszám a forrásrendszer szerint': 'Headcount per the source system',
+  'Ha üres, az alkalmassági motor a beiratkozási sorok számát használja.':
+    'If empty, the eligibility engine uses the number of enrolment records.',
+  'Van órarendi információ': 'Has timetable information',
+  'Vizsgakurzus': 'Exam-only course',
+  'Mindkettő KIZÁRÁSI ok az OMHV-ben: órarendi információ nélkül és vizsgakurzuson nincs véleményezés.':
+    'Both are EXCLUSION reasons in the student evaluation: there is no evaluation without timetable information or on an exam-only course.',
+  'Leírás (magyar)': 'Description (Hungarian)',
+  'Rövid tárgyleírás, tematika.': 'Short course description, syllabus.',
+  'Leírás (angol)': 'Description (English)',
+  // nyilvántartás: lista és részletek
+  'Keresés kód vagy megnevezés szerint…': 'Search by code or name…',
+  'Nincs kurzus': 'No courses',
+  'Ezzel a szűréssel nincs találat. Vegyél fel újat az „Új kurzus” gombbal.':
+    'No results with this filter. Add a new one with the “New course” button.',
+  'nincs órarend': 'no timetable',
+  'Válassz kurzust': 'Select a course',
+  'A bal oldali listából.': 'From the list on the left.',
+  'nincs szervezeti egység': 'no organisational unit',
+  'Kampányban': 'In campaigns',
+  'Ez a kurzus kimarad a véleményezésből.': 'This course is excluded from the evaluation.',
+  'Oka:': 'Reason:',
+  '. A hallgatói oldalon tehát a kurzus látszik a saját kurzusai között, de':
+    '. So on the student side the course appears among their own courses, but it',
+  'nem kap rá kérdőívet': 'gets no questionnaire',
+  '— ezért térhet el a két szám.': '— this is why the two numbers can differ.',
+  'Ha a jelölés téves, a Szerkesztés alatt javítható; utána a kampánynál újra kell építeni a jogosultsági listát.':
+    'If the flag is wrong, it can be fixed under Edit; afterwards the eligibility list must be rebuilt at the campaign.',
+  'Nincs oktató. Oktató nélkül a kurzus KIZÁRÓDIK az OMHV-ből.':
+    'No teacher. Without a teacher the course is EXCLUDED from the student evaluation.',
+  'Óraarány mentve.': 'Teaching share saved.',
+  'Oktató levéve.': 'Teacher removed.',
+  'Dokumentum levéve.': 'Document removed.',
+  'Dokumentum levéve. A fájlt a tárolóból csak a feltöltője tudja törölni.':
+    'Document removed. Only the uploader can delete the file from storage.',
+  'Az óraarány az órarendi órák százaléka. A 28/2023. határozat küszöbe alatt az oktató nem véleményezhető ezen a kurzuson.':
+    'The teaching share is the percentage of timetabled classes. Below the threshold of decision 28/2023 the teacher cannot be evaluated on this course.',
+  'Tananyagok és dokumentumok': 'Course materials and documents',
+  'nincs feltöltött fájl': 'no uploaded files',
+  'A fájlokat csak ügyintéző és a kurzus oktatója éri el. A hallgatók nem látják — ez belső nyilvántartás.':
+    'Files are only accessible to staff and the course teacher. Students cannot see them — this is an internal registry.',
+  'Hallgatói névsor ·': 'Student list ·',
+  '+ Csoport': '+ Group', '+ Hallgató': '+ Student',
+  'Szűrés névre vagy e-mailre…': 'Filter by name or email…',
+  'Erre a kurzusra még senki nincs beiratkozva.': 'No one is enrolled on this course yet.',
+  'leadta': 'dropped',
+  'Ez a névsor mondja meg, kit ér el a kampány: célközönség-szűkítés nélkül a kérdőívet a félév kurzusaira beiratkozott hallgatók kapják meg.':
+    'This list determines who the campaign reaches: without audience narrowing, the questionnaire goes to students enrolled on the term’s courses.',
+  'A kurzus története': 'Course history',
+  'Az azonos': 'Terms with the same',
+  'kurzuskódú': 'course code',
+  'félévek egy tantárgy egymást követő futásai. Minden félév a saját akkori oktatóját és létszámát mutatja.':
+    'are consecutive runs of one subject. Each term shows its own teacher and headcount at the time.',
+  'Ez a tantárgy egyelőre egyetlen félévvel szerepel. Amint ugyanezzel a kurzuskóddal létrejön a következő félév, itt egymás alatt fognak állni.':
+    'This subject has only one term so far. As soon as the next term is created with the same course code, they will be listed here one below the other.',
+  'Változásnapló': 'Change log',
+  'Még nincs bejegyzés. A napló a 44-es migráció óta gyűjt — az az előtti módosításokra visszamenőleg nincs nyom.':
+    'No entries yet. The log has been collecting since migration 44 — there is no record of earlier changes.',
+  'Kurzus törlése': 'Delete course',
+  'A törlés a beiratkozási sorokat is elviszi. Ha a kurzus bármelyik kampányban szerepel, a rendszer':
+    'Deleting also removes the enrolment records. If the course is part of any campaign, the system',
+  'elutasítja': 'refuses',
+  '— ilyenkor a törlés kampánytörténetet semmisítene meg.': '— in that case deleting would destroy campaign history.',
+  'Kurzusnyilvántartás': 'Course registry',
+  // hallgatói nézet
+  'A kurzusaim': 'My courses',
+  'Amikre félévről félévre beiratkoztál · oktatókkal és tárgyleírással':
+    'What you have enrolled on, term by term · with teachers and course descriptions',
+  'Még nincs kurzusod': 'You have no courses yet',
+  'Amint a tanulmányi rendszerből felkerülnek a kurzusfelvételeid, itt fognak megjelenni.':
+    'As soon as your course registrations arrive from the student records system, they will appear here.',
+  'leadva': 'dropped',
+  'Tárgyleírás': 'Course description',
+  'Ez a lista a tanulmányi nyilvántartásból származik. Ha valami hiányzik vagy tévesen szerepel benne, a tanulmányi osztály tudja javítani — ezen a felületen nem szerkeszthető.':
+    'This list comes from the student records system. If something is missing or wrong, the Registrar’s Office can correct it — it cannot be edited here.',
+}).forEach(([k, v]) => { if (!(k in HU_EN)) HU_EN[k] = v; });
+
 /* ----------------------------------------------------------------------------
    72_rbac_actions.sql — az akció-szintű jogosultság ÚJ magyar feliratai.
    A setupI18n DOM-fordítója ebből dolgozik. A DB-ből jövő modul- és

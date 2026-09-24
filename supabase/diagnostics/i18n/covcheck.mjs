@@ -27,7 +27,7 @@ const dictTo=raw.findIndex(l=>/^\(function setupI18n\(\)\{/.test(l));
 const statFrom=raw.findIndex(l=>/^const STATUS_I18N = \{/.test(l))+1;
 // A 72-es jogosultsági mátrix két új fájlt hozott; a mérésnek látnia kell
 // őket, különben a lefedettség jobbnak látszik, mint amilyen.
-const FILES=['app.jsx','features/programs.jsx','features/feed.jsx','features/assistant.jsx','features/registrations.jsx','features/knowledge-base.jsx','features/roles.jsx','features/perm.jsx'];
+const FILES=['app.jsx','features/programs.jsx','features/feed.jsx','features/assistant.jsx','features/registrations.jsx','features/knowledge-base.jsx','features/roles.jsx','features/perm.jsx','features/echo.jsx','features/courses.jsx'];
 let gt=0,gc=0;const miss=[];
 for(const f of FILES){
   const src=stripComments(readFileSync(ROOT+f,'utf8'));
