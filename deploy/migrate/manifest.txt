@@ -104,3 +104,4 @@
 80_audience_attribute_filter.sql
 81_echo_repeat_teacher_goal.sql
 82_audience_course_or.sql
+83_exchange_student.sql

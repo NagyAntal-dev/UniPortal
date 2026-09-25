@@ -154,6 +154,10 @@ const MENU_GROUPS = [
    ============================================================================ */
 function canSeeView(currentUser, viewId) {
   if (!currentUser) return false;
+    // A cserediák (83_exchange_student.sql) CSAK a Képzéseket látja. Minden más
+    // ág elé kerül: a Webshop / ECHO / Szállásom ága `role !== 'AGENT'` alapon
+    // különben beengedné. Saját biztonsági szabály, a mátrix nem írja felül.
+    if (currentUser.role === 'EXCHANGE_STUDENT') return viewId === AppView.STUDENT_PORTAL;
     // A kódba égetett, de SZEREPKÖR-alapú ágak (Kurzusok, Oktatók, ECHO,
     // Szállásom) ezen keresztül kérdezik a 72-es modul-mátrixot. Ha él, az
     // RBAC-felületen elvett VIEW jog itt is érvényesül; ha nem (null), az ág
@@ -9524,6 +9528,21 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
     );
   }
 
+  /* A cserediák (83_exchange_student.sql) csak a képzési kínálatot látja:
+     se fülsor, se felvételi folyamat, naptár vagy üzenetek. A jelentkezés a
+     ProgramsView saját folyamatán belül marad. */
+  if (user.role === 'EXCHANGE_STUDENT') {
+    return (
+      <div className="max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1720px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        <div>
+          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Képzések</h2>
+          <p className="text-slate-500 mt-1 max-w-[75ch]">Böngészd az NJE angol nyelvű képzéseit és jelentkezz online.</p>
+        </div>
+        <ProgramsView user={user} scope="degrees" embedded />
+      </div>
+    );
+  }
+
   /* Hallgatói nyilvántartási sor nélkül eddig CSAK a felvételi folyamat
      látszott. Most elöl a képzési kínálat (az admin „Képzések” menüpontjában
      felvett féléves képzések), mellette a felvételi folyamat. */
@@ -12459,6 +12478,8 @@ const App: React.FC = () => {
 
   // Default landing view per role.
   const viewForRole = (role) => {
+    // Exchange students see only Képzések (canSeeView), so they land there.
+    if (role === 'EXCHANGE_STUDENT') return AppView.STUDENT_PORTAL;
     return AppView.FEED; // Campus Feed is the shared landing for every role
   };
 

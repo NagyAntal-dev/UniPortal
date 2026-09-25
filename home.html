@@ -935,7 +935,7 @@
     }
     function renderLegal(){
       const box = document.getElementById('regLegal'); if (!box) return;
-      const role = persona === 'agent' ? 'AGENT' : 'STUDENT';
+      const role = persona === 'agent' ? 'AGENT' : 'EXCHANGE_STUDENT';
       const list = legalDocs.filter(d => !d.roles || !d.roles.length || d.roles.indexOf(role) >= 0);
       const prev = {}; box.querySelectorAll('input[data-legal]').forEach(i => { prev[i.dataset.legal] = i.checked; });
       box.innerHTML = '';
@@ -968,7 +968,9 @@
       const name = document.getElementById('regName').value.trim() || 'there';
       const email = document.getElementById('regEmail').value.trim();
       const password = document.getElementById('regPassword').value;
-      const role = persona === 'agent' ? 'AGENT' : 'STUDENT';
+      // Az önregisztráló hallgató mindig cserediák (83_exchange_student.sql):
+      // az e-mail-cím megerősítésével automatikusan jóváhagyott, és csak a Képzéseket látja.
+      const role = persona === 'agent' ? 'AGENT' : 'EXCHANGE_STUDENT';
       const btn = document.getElementById('regBtn');
       btn.disabled = true; const label = btn.textContent; btn.textContent = 'Creating…';
       // Az ügynökségi mezők a signUp metaadatába mennek; a handle_new_user()
@@ -1001,7 +1003,19 @@
         // applicant must confirm their email address, and an administrator
         // must then approve the account (migration 07). Say so plainly —
         // otherwise the pending screen after sign-in reads as a failure.
-        if (data.session) {
+        // Exchange students (the non-agent persona) are approved automatically
+        // once their email address is confirmed; agents still need an admin.
+        if (role !== 'AGENT' && data.session) {
+          document.getElementById('regSuccessMsg').textContent =
+            'Your account is ready. Continue to browse the programmes and apply.';
+          enterBtn.textContent = 'Continue';
+          enterBtn.onclick = () => enterApp();
+        } else if (role !== 'AGENT') {
+          document.getElementById('regSuccessMsg').textContent =
+            'Check your inbox and confirm your email address. Once it is confirmed, you can sign in right away.';
+          enterBtn.textContent = 'Back to sign in';
+          enterBtn.onclick = () => switchTab('login');
+        } else if (data.session) {
           // Email confirmation is switched off on the project: signed in
           // already, but still waiting for approval.
           document.getElementById('regSuccessMsg').textContent =
@@ -1212,6 +1226,8 @@
       "Sign-up failed.": "A regisztráció nem sikerült.",
       "Your account has been created and is now waiting for administrator approval. You can sign in, but the platform stays locked until it is approved.": "A fiókod létrejött, és adminisztrátori jóváhagyásra vár. Be tudsz lépni, de a platform a jóváhagyásig zárolva marad.",
       "Check your inbox and confirm your email address. After that an administrator reviews your registration — you will be able to sign in once it is approved.": "Nézd meg a postafiókodat, és erősítsd meg az e-mail-címedet. Ezután egy adminisztrátor átnézi a regisztrációdat — a jóváhagyás után tudsz belépni.",
+      "Your account is ready. Continue to browse the programmes and apply.": "A fiókod elkészült. Folytasd, és böngészd a képzéseket, majd jelentkezz.",
+      "Check your inbox and confirm your email address. Once it is confirmed, you can sign in right away.": "Nézd meg a postafiókodat, és erősítsd meg az e-mail-címedet. A megerősítés után azonnal be tudsz lépni.",
       "Continue": "Tovább",
       "This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link with “Forgot password?”.": "Ez az e-mailes link érvénytelen vagy lejárt — minden link csak egyszer és korlátozott ideig működik. Ha jelszót állítottál vissza, kérj új linket az „Elfelejtett jelszó?” gombbal.",
       "Invalid login credentials": "Hibás e-mail-cím vagy jelszó.",
