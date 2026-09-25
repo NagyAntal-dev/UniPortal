@@ -8,28 +8,79 @@
   A link a gyári {{ .ConfirmationURL }}: a megerősítés után a Supabase a
   regisztrációkor megadott emailRedirectTo címre (app.html) irányít.
 -->
-<div style="font-family: Inter, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #0f172a;">
-  <p style="font-size: 20px; font-weight: 800; color: #b85200; margin: 0 0 24px;">NJE · UniPortal</p>
+<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">Erősítsd meg az e-mail-címed a UniPortalon · Confirm your UniPortal email address</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff9f2" style="background: #fff9f2; font-family: Inter, 'Segoe UI', Arial, sans-serif;">
+  <tr>
+    <td align="center" style="padding: 32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="max-width: 520px; background: #ffffff; border: 1px solid #ffdcb3; border-radius: 24px; border-collapse: separate; overflow: hidden;">
+        <tr><td height="6" bgcolor="#d06700" style="height: 6px; background: #d06700; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+        <tr>
+          <td style="padding: 32px 36px 8px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: #b85200;">NJE</td>
+                <td style="padding: 0 10px;"><div style="width: 1px; height: 22px; background: #e2e8f0;"></div></td>
+                <td style="font-size: 11px; font-weight: 900; letter-spacing: 0.16em; color: #0f172a;">UNIPORTAL</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
 
-  <h2 style="font-size: 18px; margin: 0 0 8px;">Erősítsd meg az e-mail-címed</h2>
-  <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 20px;">
-    Köszönjük a regisztrációt! Az alábbi gombbal erősítsd meg az e-mail-címed, és utána be is léphetsz a fiókodba.
-    Ha nem te regisztráltál, hagyd figyelmen kívül ezt a levelet.
-  </p>
-  <p style="margin: 0 0 28px;">
-    <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: #b85200; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 22px; border-radius: 12px;">E-mail-cím megerősítése</a>
-  </p>
+        <tr>
+          <td style="padding: 24px 36px 0;">
+            <h1 style="margin: 0 0 8px; font-size: 22px; font-weight: 900; letter-spacing: -0.02em; color: #0f172a;">Erősítsd meg az e-mail-címed</h1>
+            <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.6; color: #64748b;">
+              Köszönjük a regisztrációt! Az alábbi gombbal erősítsd meg az e-mail-címed, és utána be is léphetsz a fiókodba.
+              Ha nem te regisztráltál, hagyd figyelmen kívül ezt a levelet.
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" bgcolor="#b85200" style="background: #b85200; border-radius: 16px;">
+                  <a href="{{ .ConfirmationURL }}" style="display: block; padding: 14px 22px; font-size: 14px; font-weight: 700; color: #ffffff; text-decoration: none;">E-mail-cím megerősítése</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
 
-  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 0 0 24px;" />
+        <tr><td style="padding: 28px 36px;"><div style="height: 1px; background: #f1f5f9; font-size: 0; line-height: 0;">&nbsp;</div></td></tr>
 
-  <h2 style="font-size: 18px; margin: 0 0 8px;">Confirm your email address</h2>
-  <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 20px;">
-    Thanks for signing up! Use the button below to confirm your email address, then you can sign in to your account.
-    If you did not sign up, ignore this email.
-  </p>
-  <p style="margin: 0 0 28px;">
-    <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: #b85200; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 22px; border-radius: 12px;">Confirm email address</a>
-  </p>
+        <tr>
+          <td style="padding: 0 36px;">
+            <h2 style="margin: 0 0 8px; font-size: 18px; font-weight: 900; letter-spacing: -0.01em; color: #0f172a;">Confirm your email address</h2>
+            <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.6; color: #64748b;">
+              Thanks for signing up! Use the button below to confirm your email address, then you can sign in to your account.
+              If you did not sign up, ignore this email.
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" bgcolor="#b85200" style="background: #b85200; border-radius: 16px;">
+                  <a href="{{ .ConfirmationURL }}" style="display: block; padding: 14px 22px; font-size: 14px; font-weight: 700; color: #ffffff; text-decoration: none;">Confirm email address</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
 
-  <p style="font-size: 12px; color: #94a3b8; margin: 0;">Neumann János Egyetem · John von Neumann University</p>
-</div>
+        <tr>
+          <td style="padding: 28px 36px 32px;">
+            <p style="margin: 0 0 6px; font-size: 11px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8;">Ha a gomb nem működik · If the button does not work</p>
+            <p style="margin: 0; font-size: 12px; line-height: 1.5; word-break: break-all;">
+              <a href="{{ .ConfirmationURL }}" style="color: #b85200; text-decoration: underline;">{{ .ConfirmationURL }}</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 520px;">
+        <tr>
+          <td align="center" style="padding: 20px 16px 0; font-size: 11px; line-height: 1.7; font-weight: 600; color: #94a3b8;">
+            Neumann János Egyetem · John von Neumann University<br />
+            <a href="https://kecskemetadatkozpont.github.io/UniPortal/privacy.html" style="color: #94a3b8; text-decoration: underline;">Adatkezelési tájékoztató · Privacy</a> ·
+            <a href="https://kecskemetadatkozpont.github.io/UniPortal/terms.html" style="color: #94a3b8; text-decoration: underline;">Felhasználási feltételek · Terms</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
