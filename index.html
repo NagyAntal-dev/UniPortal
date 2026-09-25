@@ -289,7 +289,7 @@
       var email = $('femail').value.trim(); if (!email) return;
       var b = $('bForgot'); b.disabled = true; b.textContent = L.kuldesFolyamatban;
       try {
-        var r = await window.sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('reset-password.html', window.location.href).href });
+        var r = await window.sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('reset-password.html?lang=' + (window.NJE_LANG === 'en' ? 'en' : 'hu'), window.location.href).href });
         if (r.error) {
           var rate = r.error.status === 429 || /rate limit|only request this after/i.test(r.error.message || '');
           hiba('eForgot', rate ? L.tulSok : (r.error.message || L.keresHiba));

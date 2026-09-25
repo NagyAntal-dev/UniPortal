@@ -1,12 +1,19 @@
 <!--
-  UniPortal (Docker) — regisztráció-megerősítő e-mail sablon (magyar + angol).
+  UniPortal (Docker) — regisztráció-megerősítő e-mail sablon (magyar / angol).
   Az auth szolgáltatás innen tölti le: http://web:8080/email/confirmation.html
   (beállítva: deploy/compose.uniportal.yml). A felhős változat:
-  supabase/email_templates/confirm_signup.html.
-  A link a gyári {{ .ConfirmationURL }}: a megerősítés után az auth a
-  regisztrációkor megadott emailRedirectTo címre (app.html) irányít.
+  supabase/email_templates/confirm_signup.html. A váz a recovery.html-é.
+  A link a gyári megerősítő link (ConfirmationURL): a megerősítés után az auth
+  a regisztrációkor megadott emailRedirectTo címre (app.html) irányít.
+
+  NYELV: a regisztráció nyelve. A home.html a signUp metaadatába teszi
+  (user_metadata.lang = hu|en, az oldal nje_lang beállítása); ha nincs,
+  a levél kétnyelvű. Ebbe a megjegyzésbe ne kerüljön sablonkifejezés.
 -->
-<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">Erősítsd meg az e-mail-címed a UniPortalon · Confirm your UniPortal email address</div>
+{{- $lang := printf "%v" .Data.lang -}}
+{{- $hu := ne $lang "en" -}}
+{{- $en := ne $lang "hu" }}
+<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">{{ if $hu }}Erősítsd meg az e-mail-címed a UniPortalon{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}Confirm your UniPortal email address{{ end }}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff9f2" style="background: #fff9f2; font-family: Inter, 'Segoe UI', Arial, sans-serif;">
   <tr>
     <td align="center" style="padding: 32px 16px;">
@@ -23,9 +30,9 @@
             </table>
           </td>
         </tr>
-
+{{ if $hu }}
         <tr>
-          <td style="padding: 24px 36px 0;">
+          <td lang="hu" style="padding: 24px 36px 0;">
             <h1 style="margin: 0 0 8px; font-size: 22px; font-weight: 900; letter-spacing: -0.02em; color: #0f172a;">Erősítsd meg az e-mail-címed</h1>
             <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.6; color: #64748b;">
               Köszönjük a regisztrációt! Az alábbi gombbal erősítsd meg az e-mail-címed, és utána be is léphetsz a fiókodba.
@@ -40,12 +47,12 @@
             </table>
           </td>
         </tr>
-
-        <tr><td style="padding: 28px 36px;"><div style="height: 1px; background: #f1f5f9; font-size: 0; line-height: 0;">&nbsp;</div></td></tr>
-
+{{ end }}{{ if and $hu $en }}
+        <tr><td style="padding: 28px 36px 4px;"><div style="height: 1px; background: #f1f5f9; font-size: 0; line-height: 0;">&nbsp;</div></td></tr>
+{{ end }}{{ if $en }}
         <tr>
-          <td style="padding: 0 36px;">
-            <h2 style="margin: 0 0 8px; font-size: 18px; font-weight: 900; letter-spacing: -0.01em; color: #0f172a;">Confirm your email address</h2>
+          <td lang="en" style="padding: 24px 36px 0;">
+            {{ if $hu }}<h2 style="margin: 0 0 8px; font-size: 18px; font-weight: 900; letter-spacing: -0.01em; color: #0f172a;">Confirm your email address</h2>{{ else }}<h1 style="margin: 0 0 8px; font-size: 22px; font-weight: 900; letter-spacing: -0.02em; color: #0f172a;">Confirm your email address</h1>{{ end }}
             <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.6; color: #64748b;">
               Thanks for signing up! Use the button below to confirm your email address, then you can sign in to your account.
               If you did not sign up, ignore this email.
@@ -59,10 +66,10 @@
             </table>
           </td>
         </tr>
-
+{{ end }}
         <tr>
           <td style="padding: 28px 36px 32px;">
-            <p style="margin: 0 0 6px; font-size: 11px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8;">Ha a gomb nem működik · If the button does not work</p>
+            <p style="margin: 0 0 6px; font-size: 11px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8;">{{ if $hu }}Ha a gomb nem működik{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}If the button does not work{{ end }}</p>
             <p style="margin: 0; font-size: 12px; line-height: 1.5; word-break: break-all;">
               <a href="{{ .ConfirmationURL }}" style="color: #b85200; text-decoration: underline;">{{ .ConfirmationURL }}</a>
             </p>
@@ -73,9 +80,9 @@
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 520px;">
         <tr>
           <td align="center" style="padding: 20px 16px 0; font-size: 11px; line-height: 1.7; font-weight: 600; color: #94a3b8;">
-            Neumann János Egyetem · John von Neumann University<br />
-            <a href="{{ .SiteURL }}/privacy.html" style="color: #94a3b8; text-decoration: underline;">Adatkezelési tájékoztató · Privacy</a> ·
-            <a href="{{ .SiteURL }}/terms.html" style="color: #94a3b8; text-decoration: underline;">Felhasználási feltételek · Terms</a>
+            {{ if $hu }}Neumann János Egyetem{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}John von Neumann University{{ end }}<br />
+            <a href="{{ .SiteURL }}/privacy.html" style="color: #94a3b8; text-decoration: underline;">{{ if $hu }}Adatkezelési tájékoztató{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}Privacy{{ end }}</a> ·
+            <a href="{{ .SiteURL }}/terms.html" style="color: #94a3b8; text-decoration: underline;">{{ if $hu }}Felhasználási feltételek{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}Terms{{ end }}</a>
           </td>
         </tr>
       </table>

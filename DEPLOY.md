@@ -199,7 +199,8 @@ ENABLE_EMAIL_AUTOCONFIRM=false
 Utána futtasd: `docker compose up -d`. Az `auth` az új beállításokkal indul újra. A Resendben előbb a küldő domaint kell hitelesíteni (DNS: SPF, DKIM). Az API-kulcs **csak** a szerver `.env`-jébe kerüljön.
 
 - A **jelszó-visszaállító levél** magyar/angol sablont használ (`deploy/web/email/recovery.html`). A link a `reset-password.html` oldalra visz, és csak a mentés gomb megnyomásakor váltódik be. Így a levelezők biztonsági szűrői nem tudják előre „elhasználni”.
-- A **regisztráció-megerősítő levél** szintén magyar/angol, UniPortal-arculatú sablon (`deploy/web/email/confirmation.html`).
+- A **regisztráció-megerősítő levél** szintén UniPortal-arculatú sablon (`deploy/web/email/confirmation.html`).
+- Mindkét levél **az oldal nyelvén** megy (magyar vagy angol, a nyelvváltó szerint), a tárgysorral együtt. A jelszó-visszaállításnál a kérés `redirectTo` címe viszi a nyelvet, ezért a `SITE_URL` végén **ne legyen perjel**. Ha a nyelv nem állapítható meg, a levél kétnyelvű.
 - Az e-mail-cím módosításáról szóló levél a Supabase alap angol sablonját használja.
 - Az `ENABLE_EMAIL_AUTOCONFIRM=true` **csak helyi próbához** való. Ilyenkor bárki megerősítés nélkül regisztrálhat, a beépített superadmin címmel is.
 - Ellenőrzés: `docker compose logs auth | grep -iE "mail|smtp|template"`

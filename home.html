@@ -897,7 +897,7 @@
       if (!email) return false;
       btn.disabled = true; btn.textContent = 'Sending…';
       try {
-        const { error } = await window.sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('reset-password.html', window.location.href).href });
+        const { error } = await window.sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('reset-password.html?lang=' + (window.NJE_LANG === 'en' ? 'en' : 'hu'), window.location.href).href });
         if (error) {
           const rate = error.status === 429 || /rate limit|only request this after/i.test(error.message || '');
           showErr('forgotError', rate ? 'Too many requests. Please wait a minute before requesting another link.' : (error.message || 'The request failed. Please try again.'));
@@ -983,7 +983,8 @@
       }
       const consents = {};
       boxes.filter(b => b.checked).forEach(b => { consents[b.dataset.legal] = b.dataset.version; });
-      const meta = { name, role, consents };
+      // A megerősítő levél nyelve (deploy/web/email/confirmation.html): az oldal nyelve.
+      const meta = { name, role, consents, lang: window.NJE_LANG === 'en' ? 'en' : 'hu' };
       if (role === 'AGENT') {
         const agName = (document.getElementById('regAgencyName') || {}).value || '';
         const agCountry = (document.getElementById('regAgencyCountry') || {}).value || '';

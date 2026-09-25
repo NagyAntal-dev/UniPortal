@@ -1,0 +1,1 @@
+{{ if eq (printf "%v" .Data.lang) "en" }}Confirm your email address — UniPortal Pro{{ else if eq (printf "%v" .Data.lang) "hu" }}E-mail-cím megerősítése — UniPortal Pro{{ else }}E-mail-cím megerősítése · Confirm your email address — UniPortal Pro{{ end }}

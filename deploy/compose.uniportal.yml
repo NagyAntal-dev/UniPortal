@@ -14,6 +14,7 @@
 #    szűrői így nem tudják előre elhasználni az egyszer használható linket.
 #    A sablont a web szolgáltatja: deploy/web/email/recovery.html
 #    A regisztráció-megerősítő levél ugyanígy: deploy/web/email/confirmation.html
+#    Mindkét levél az oldal nyelvén megy (részletek a sablonok fejlécében).
 #
 # 3) Edge Functions: a UniPortal függvényei közvetlenül a supabase/functions
 #    könyvtárból, csak olvasásra csatolva — nincs másolat, ami elavulhatna.
@@ -36,9 +37,10 @@ services:
   auth:
     environment:
       GOTRUE_MAILER_TEMPLATES_RECOVERY: http://web:8080/email/recovery.html
-      GOTRUE_MAILER_SUBJECTS_RECOVERY: "Új jelszó beállítása · Reset your password — UniPortal"
+      # A tárgysor is sablon: ugyanúgy választ nyelvet, mint a levél törzse.
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: '{{ if eq .RedirectTo (printf "%s/reset-password.html?lang=en" .SiteURL) }}Reset your password — UniPortal{{ else if eq .RedirectTo (printf "%s/reset-password.html?lang=hu" .SiteURL) }}Új jelszó beállítása — UniPortal{{ else if eq (printf "%v" .Data.lang) "en" }}Reset your password — UniPortal{{ else if eq (printf "%v" .Data.lang) "hu" }}Új jelszó beállítása — UniPortal{{ else }}Új jelszó beállítása · Reset your password — UniPortal{{ end }}'
       GOTRUE_MAILER_TEMPLATES_CONFIRMATION: http://web:8080/email/confirmation.html
-      GOTRUE_MAILER_SUBJECTS_CONFIRMATION: "E-mail-cím megerősítése · Confirm your email address — UniPortal"
+      GOTRUE_MAILER_SUBJECTS_CONFIRMATION: '{{ if eq (printf "%v" .Data.lang) "en" }}Confirm your email address — UniPortal{{ else if eq (printf "%v" .Data.lang) "hu" }}E-mail-cím megerősítése — UniPortal{{ else }}E-mail-cím megerősítése · Confirm your email address — UniPortal{{ end }}'
       # Az NJE SAML-t NEM a GoTrue kezeli, hanem a saját saml-sp szolgáltatás
       # (docker-compose.yml, docs/nje-saml.md) — a GOTRUE_SAML_* itt szándékosan nincs.
   functions:

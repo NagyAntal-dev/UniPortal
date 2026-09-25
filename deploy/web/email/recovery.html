@@ -1,5 +1,5 @@
 <!--
-  UniPortal (Docker) — jelszó-visszaállító e-mail sablon (magyar + angol).
+  UniPortal (Docker) — jelszó-visszaállító e-mail sablon (magyar / angol).
   Az auth szolgáltatás innen tölti le: http://web:8080/email/recovery.html
   (beállítva: deploy/compose.uniportal.yml). A felhős változat:
   supabase/email_templates/reset_password.html — itt a link a .env SITE_URL
@@ -8,10 +8,23 @@
   mentés gombra váltja be: a levelezők biztonsági szűrői így nem tudják
   előre elhasználni az egyszer használható linket.
   Arculat: a webapp kártyája (reset-password.html). Levelezőbiztos felépítés:
-  táblázatok és inline stílusok, mert a levelezők a <style>-t és a flexet
+  táblázatok és inline stílusok, mert a levelezők a style-blokkot és a flexet
   gyakran eldobják. A megerősítő levél (confirmation.html) ugyanez a váz.
+
+  NYELV: az oldal nyelve (nje_lang), amelyen a linket kérték. Az index.html és
+  a home.html a redirectTo-ba teszi: reset-password.html?lang=en|hu. A sablon
+  ezt a teljes címmel veti össze (a GoTrue sablonjaiban nincs szövegkereső
+  függvény), ezért a SITE_URL végén ne legyen perjel. Ha a cím nem egyezik,
+  a fiók regisztrációkori nyelve dönt (user_metadata.lang); ha az sincs, a
+  levél kétnyelvű. Ebbe a megjegyzésbe ne kerüljön sablonkifejezés.
 -->
-<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">Új jelszó beállítása a UniPortal fiókodhoz · Reset your UniPortal password</div>
+{{- $lang := "" -}}
+{{- if eq .RedirectTo (printf "%s/reset-password.html?lang=en" .SiteURL) }}{{ $lang = "en" }}
+{{- else if eq .RedirectTo (printf "%s/reset-password.html?lang=hu" .SiteURL) }}{{ $lang = "hu" }}
+{{- else }}{{ $lang = printf "%v" .Data.lang }}{{ end -}}
+{{- $hu := ne $lang "en" -}}
+{{- $en := ne $lang "hu" }}
+<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">{{ if $hu }}Új jelszó beállítása a UniPortal fiókodhoz{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}Reset your UniPortal password{{ end }}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff9f2" style="background: #fff9f2; font-family: Inter, 'Segoe UI', Arial, sans-serif;">
   <tr>
     <td align="center" style="padding: 32px 16px;">
@@ -28,9 +41,9 @@
             </table>
           </td>
         </tr>
-
+{{ if $hu }}
         <tr>
-          <td style="padding: 24px 36px 0;">
+          <td lang="hu" style="padding: 24px 36px 0;">
             <h1 style="margin: 0 0 8px; font-size: 22px; font-weight: 900; letter-spacing: -0.02em; color: #0f172a;">Új jelszó beállítása</h1>
             <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.6; color: #64748b;">
               Jelszó-visszaállítást kértek a fiókodhoz. Az alábbi gombbal új jelszót állíthatsz be.
@@ -45,12 +58,12 @@
             </table>
           </td>
         </tr>
-
-        <tr><td style="padding: 28px 36px;"><div style="height: 1px; background: #f1f5f9; font-size: 0; line-height: 0;">&nbsp;</div></td></tr>
-
+{{ end }}{{ if and $hu $en }}
+        <tr><td style="padding: 28px 36px 4px;"><div style="height: 1px; background: #f1f5f9; font-size: 0; line-height: 0;">&nbsp;</div></td></tr>
+{{ end }}{{ if $en }}
         <tr>
-          <td style="padding: 0 36px;">
-            <h2 style="margin: 0 0 8px; font-size: 18px; font-weight: 900; letter-spacing: -0.01em; color: #0f172a;">Reset your password</h2>
+          <td lang="en" style="padding: 24px 36px 0;">
+            {{ if $hu }}<h2 style="margin: 0 0 8px; font-size: 18px; font-weight: 900; letter-spacing: -0.01em; color: #0f172a;">Reset your password</h2>{{ else }}<h1 style="margin: 0 0 8px; font-size: 22px; font-weight: 900; letter-spacing: -0.02em; color: #0f172a;">Reset your password</h1>{{ end }}
             <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.6; color: #64748b;">
               A password reset was requested for your account. Use the button below to set a new password.
               The link works once and expires after a while. If you did not request this, ignore this email — your password stays the same.
@@ -64,10 +77,10 @@
             </table>
           </td>
         </tr>
-
+{{ end }}
         <tr>
           <td style="padding: 28px 36px 32px;">
-            <p style="margin: 0 0 6px; font-size: 11px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8;">Ha a gomb nem működik · If the button does not work</p>
+            <p style="margin: 0 0 6px; font-size: 11px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8;">{{ if $hu }}Ha a gomb nem működik{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}If the button does not work{{ end }}</p>
             <p style="margin: 0; font-size: 12px; line-height: 1.5; word-break: break-all;">
               <a href="{{ .SiteURL }}/reset-password.html?token_hash={{ .TokenHash }}&type=recovery" style="color: #b85200; text-decoration: underline;">{{ .SiteURL }}/reset-password.html?token_hash={{ .TokenHash }}&amp;type=recovery</a>
             </p>
@@ -78,9 +91,9 @@
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 520px;">
         <tr>
           <td align="center" style="padding: 20px 16px 0; font-size: 11px; line-height: 1.7; font-weight: 600; color: #94a3b8;">
-            Neumann János Egyetem · John von Neumann University<br />
-            <a href="{{ .SiteURL }}/privacy.html" style="color: #94a3b8; text-decoration: underline;">Adatkezelési tájékoztató · Privacy</a> ·
-            <a href="{{ .SiteURL }}/terms.html" style="color: #94a3b8; text-decoration: underline;">Felhasználási feltételek · Terms</a>
+            {{ if $hu }}Neumann János Egyetem{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}John von Neumann University{{ end }}<br />
+            <a href="{{ .SiteURL }}/privacy.html" style="color: #94a3b8; text-decoration: underline;">{{ if $hu }}Adatkezelési tájékoztató{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}Privacy{{ end }}</a> ·
+            <a href="{{ .SiteURL }}/terms.html" style="color: #94a3b8; text-decoration: underline;">{{ if $hu }}Felhasználási feltételek{{ end }}{{ if and $hu $en }} · {{ end }}{{ if $en }}Terms{{ end }}</a>
           </td>
         </tr>
       </table>
