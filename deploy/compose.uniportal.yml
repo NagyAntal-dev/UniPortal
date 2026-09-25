@@ -13,6 +13,7 @@
 #    reset-password.html oldalra visz (token_hash). A levelezők biztonsági
 #    szűrői így nem tudják előre elhasználni az egyszer használható linket.
 #    A sablont a web szolgáltatja: deploy/web/email/recovery.html
+#    A regisztráció-megerősítő levél ugyanígy: deploy/web/email/confirmation.html
 #
 # 3) Edge Functions: a UniPortal függvényei közvetlenül a supabase/functions
 #    könyvtárból, csak olvasásra csatolva — nincs másolat, ami elavulhatna.
@@ -36,6 +37,8 @@ services:
     environment:
       GOTRUE_MAILER_TEMPLATES_RECOVERY: http://web:8080/email/recovery.html
       GOTRUE_MAILER_SUBJECTS_RECOVERY: "Új jelszó beállítása · Reset your password — UniPortal"
+      GOTRUE_MAILER_TEMPLATES_CONFIRMATION: http://web:8080/email/confirmation.html
+      GOTRUE_MAILER_SUBJECTS_CONFIRMATION: "E-mail-cím megerősítése · Confirm your email address — UniPortal"
       # Az NJE SAML-t NEM a GoTrue kezeli, hanem a saját saml-sp szolgáltatás
       # (docker-compose.yml, docs/nje-saml.md) — a GOTRUE_SAML_* itt szándékosan nincs.
   functions:

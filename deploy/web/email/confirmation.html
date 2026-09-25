@@ -1,0 +1,33 @@
+<!--
+  UniPortal (Docker) — regisztráció-megerősítő e-mail sablon (magyar + angol).
+  Az auth szolgáltatás innen tölti le: http://web:8080/email/confirmation.html
+  (beállítva: deploy/compose.uniportal.yml). A felhős változat:
+  supabase/email_templates/confirm_signup.html.
+  A link a gyári {{ .ConfirmationURL }}: a megerősítés után az auth a
+  regisztrációkor megadott emailRedirectTo címre (app.html) irányít.
+-->
+<div style="font-family: Inter, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #0f172a;">
+  <p style="font-size: 20px; font-weight: 800; color: #b85200; margin: 0 0 24px;">NJE · UniPortal</p>
+
+  <h2 style="font-size: 18px; margin: 0 0 8px;">Erősítsd meg az e-mail-címed</h2>
+  <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 20px;">
+    Köszönjük a regisztrációt! Az alábbi gombbal erősítsd meg az e-mail-címed, és utána be is léphetsz a fiókodba.
+    Ha nem te regisztráltál, hagyd figyelmen kívül ezt a levelet.
+  </p>
+  <p style="margin: 0 0 28px;">
+    <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: #b85200; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 22px; border-radius: 12px;">E-mail-cím megerősítése</a>
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 0 0 24px;" />
+
+  <h2 style="font-size: 18px; margin: 0 0 8px;">Confirm your email address</h2>
+  <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 20px;">
+    Thanks for signing up! Use the button below to confirm your email address, then you can sign in to your account.
+    If you did not sign up, ignore this email.
+  </p>
+  <p style="margin: 0 0 28px;">
+    <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: #b85200; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 22px; border-radius: 12px;">Confirm email address</a>
+  </p>
+
+  <p style="font-size: 12px; color: #94a3b8; margin: 0;">Neumann János Egyetem · John von Neumann University</p>
+</div>
