@@ -1044,7 +1044,7 @@
     loadLegalDocs();
     // A visszaállító oldal „Új link kérése” gombja ide mutat: index.html#forgot
     if (location.hash === '#forgot') { openAuth('login'); showForgot(); }
-    // A belépőoldal (index.html) „Regisztráció” linkje ide mutat: home.html#register
+    // Régi könyvjelzők: home.html#register. A belépőoldal (index.html) már maga kezeli a regisztrációt.
     if (location.hash === '#register') { openAuth('register'); try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
     /* Egy lejárt vagy már felhasznált e-mailes link hibával ide jöhet vissza
        (#error_code=otp_expired…). Eddig ilyenkor semmi nem történt; most

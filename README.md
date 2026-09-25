@@ -34,8 +34,8 @@ kap `profiles` sort a `handle_new_user` triggeren keresztül.
 
 | URL | Tartalom |
 |---|---|
-| `/` (`index.html`) | Belépőoldal előadótermi háttérrel (e-mail/jelszó, NJE SSO, elfelejtett jelszó) |
-| `/home.html` | Publikus landing page: pozicionálás, animált modul-demók, regisztráció (`home.html#register`) |
+| `/` (`index.html`) | Belépőoldal előadótermi háttérrel (e-mail/jelszó, NJE SSO, elfelejtett jelszó, regisztráció: `index.html#register`) |
+| `/home.html` | Publikus landing page: pozicionálás, animált modul-demók, saját regisztrációs ablak |
 | `/app.html` | A teljes alkalmazás — 12+ modul, szerepkör szerinti menüvel |
 | `/Felveteli-Prototipus.html` | Külön, magyar nyelvű jelentkezői folyamat-prototípus (7 lépés, `localStorage`) |
 | `/Felveteli-Fejlesztesi-ToDo.html` | A felvételi modul fejlesztési terve / ToDo dokumentum |

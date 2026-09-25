@@ -110,6 +110,29 @@
             justify-content: space-between; font-size: 11px; color: var(--muted); }
     .foot a { color: var(--muted); text-decoration: none; font-weight: 600; }
     .foot a:hover { color: var(--accent); text-decoration: underline; }
+    /* Regisztráció */
+    .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .seg button { font: inherit; font-size: 14px; font-weight: 700; padding: 11px; border-radius: 12px; cursor: pointer;
+                  background: #fff; border: 1px solid #e2e8f0; color: var(--muted); transition: border-color .15s, background .15s; }
+    .seg button:hover { border-color: #cbd5e1; }
+    .seg button[aria-pressed="true"] { background: #fff9f2; border-color: #ffbf7a; color: #943d00; }
+    .box { border: 1px solid #ffdcb3; background: rgba(255, 249, 242, .7); border-radius: 16px; padding: 14px 14px 2px; margin-bottom: 14px; }
+    .box > p { margin: 0 0 12px; font-size: 11px; font-weight: 600; line-height: 1.5; color: #943d00; }
+    .tipp { margin: 6px 0 0 2px; font-size: 11px; color: #94a3b8; }
+    .legal { margin: 4px 0 14px; }
+    .chk { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 10px; font-size: 12px; font-weight: 500; letter-spacing: 0;
+           text-transform: none; line-height: 1.5; color: #475569; cursor: pointer; }
+    .chk input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; padding: 0; box-shadow: none; accent-color: var(--accent); cursor: pointer; }
+    .chk b { color: #ef4444; }
+    .chk a { font-weight: 700; color: var(--accent); white-space: nowrap; text-decoration: none; }
+    .chk a:hover { text-decoration: underline; }
+    .legal .opt { margin: 14px 0 10px 2px; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #94a3b8; }
+    .note { margin: 12px 0 0; font-size: 11px; line-height: 1.5; color: #94a3b8; text-align: center; }
+    .done { text-align: center; }
+    .done .ico { width: 60px; height: 60px; margin: 26px auto 0; border-radius: 50%; background: #fff9f2; color: var(--accent);
+                 display: grid; place-items: center; }
+    .done h1 { margin-top: 18px; }
+    .done .sub { margin-bottom: 24px; }
     .credit { position: fixed; right: 16px; bottom: max(12px, env(safe-area-inset-bottom)); font-size: 11px; font-weight: 600;
               color: rgba(255, 255, 255, .72); text-shadow: 0 1px 2px rgba(0, 0, 0, .5); pointer-events: none; }
     [hidden] { display: none !important; }
@@ -173,8 +196,70 @@
         <button class="link back" type="button" id="toLogin" data-t="vissza"></button>
       </form>
 
+      <!-- Regisztráció. A signUp metaadata ugyanaz, amit a triggerek várnak:
+           name, role, consents (59_legal_consents.sql), lang (a megerősítő levél
+           nyelve), ügynöknél agencyName / agencyCountry / agencyCountries
+           (29_agency.sql, handle_new_user). -->
+      <form id="fReg" hidden novalidate>
+        <h1 data-t="regCim"></h1>
+        <p class="sub" data-t="regAlcim"></p>
+        <div class="field">
+          <label data-t="igy"></label>
+          <div class="seg" role="group">
+            <button type="button" data-persona="student" data-t="jelentkezo"></button>
+            <button type="button" data-persona="agent" data-t="ugynok"></button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="rnev" data-t="nev"></label>
+          <input id="rnev" type="text" autocomplete="name" data-tp="nevPh" required />
+        </div>
+        <div class="box" id="rUgynokseg" hidden>
+          <p data-t="ugyInfo"></p>
+          <div class="field">
+            <label for="rugyNev" data-t="ugyNev"></label>
+            <input id="rugyNev" type="text" autocomplete="organization" data-tp="ugyNevPh" />
+          </div>
+          <div class="field">
+            <label for="rugyOrszag" data-t="ugyOrszag"></label>
+            <input id="rugyOrszag" type="text" autocomplete="country-name" data-tp="ugyOrszagPh" />
+          </div>
+          <div class="field">
+            <label for="rugyOrszagok" data-t="ugyOrszagok"></label>
+            <input id="rugyOrszagok" type="text" data-tp="ugyOrszagokPh" />
+            <p class="tipp" data-t="ugyOrszagokTipp"></p>
+          </div>
+        </div>
+        <div class="field">
+          <label for="remail" data-t="email"></label>
+          <input id="remail" type="email" autocomplete="email" data-tp="emailPh" required />
+        </div>
+        <div class="field">
+          <label for="rjelszo" data-t="jelszo"></label>
+          <input id="rjelszo" type="password" autocomplete="new-password" minlength="6" data-tp="jelszoPh" required />
+        </div>
+        <!-- Jogi elfogadások: a legal_document katalógusból (az anon olvashatja),
+             különben a beégetett tartalék. Külön jelölőnégyzetek, a választhatók
+             alapból üresen. -->
+        <div class="legal" id="rJogi"></div>
+        <div class="msg err" id="eReg" role="alert"></div>
+        <button class="btn" id="bReg" type="submit" data-t="letrehoz"></button>
+        <p class="note" id="rMegj"></p>
+        <button class="link back" type="button" id="regToLogin" data-t="vissza"></button>
+      </form>
+
+      <!-- Sikeres regisztráció -->
+      <section class="done" id="regKesz" hidden aria-live="polite">
+        <div class="ico" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <h1 id="regKeszCim"></h1>
+        <p class="sub" id="regKeszSzoveg"></p>
+        <button class="btn" id="bRegKesz" type="button"></button>
+      </section>
+
       <div class="foot">
-        <a href="home.html#register" data-t="regisztracio"></a>
+        <a href="#register" id="toReg" data-t="regisztracio"></a>
         <a href="home.html" data-t="rolunk"></a>
         <span><a href="privacy.html" data-t="adatvedelem"></a> · <a href="terms.html" data-t="feltetelek"></a></span>
       </div>
@@ -204,7 +289,24 @@
             kapcsolat: 'Kapcsolódási hiba. Kérjük, próbáld újra.', sikertelen: 'A belépés nem sikerült.',
             tulSok: 'Túl sok kérés. Várj egy percet, mielőtt új linket kérsz.', keresHiba: 'A kérés nem sikerült. Kérjük, próbáld újra.',
             elkuldve: function (e) { return 'Ha létezik fiók a(z) ' + e + ' címhez, elküldtük rá az új jelszó beállításához szükséges linket. Nézd meg a postafiókodat (és a levélszemét mappát is).'; },
-            lejart: 'Ez az e-mailes link érvénytelen vagy lejárt — minden link csak egyszer és korlátozott ideig működik. Ha jelszót állítottál vissza, kérj új linket.' },
+            lejart: 'Ez az e-mailes link érvénytelen vagy lejárt — minden link csak egyszer és korlátozott ideig működik. Ha jelszót állítottál vissza, kérj új linket.',
+            regCim: 'Regisztráció', regAlcim: 'Hozd létre a UniPortal-fiókodat.', igy: 'Így regisztrálok', jelentkezo: 'Jelentkező', ugynok: 'Ügynök',
+            nev: 'Teljes név', nevPh: 'pl. Kovács Anna', emailPh: 'pl. anna@example.com', jelszoPh: 'Legalább 6 karakter',
+            ugyInfo: 'Az ügynökséged függő állapotban jön létre. Egy adminisztrátor átnézi, mielőtt bármely jelentkezőt látnál.',
+            ugyNev: 'Ügynökség neve', ugyNevPh: 'pl. Global Study Kft.', ugyOrszag: 'Székhely szerinti ország', ugyOrszagPh: 'pl. Nigéria',
+            ugyOrszagok: 'Toborzási országok', ugyOrszagokPh: 'pl. Nigéria, Ghána, Kenya', ugyOrszagokTipp: 'Több országot vesszővel válassz el.',
+            letrehoz: 'Fiók létrehozása', letrehozFolyamatban: 'Létrehozás…', olvas: 'Elolvasom',
+            opcionalis: 'Nem kötelező — később a profilodban módosíthatod',
+            megjDiak: 'A regisztráció után meg kell erősítened az e-mail-címedet.',
+            megjUgynok: 'Meg kell erősítened az e-mail-címedet, és minden új ügynökségi fiókot egy adminisztrátor hagy jóvá, mielőtt használható lenne.',
+            regHianyzik: 'Add meg a neved, az e-mail-címed és a jelszót.', rovidJelszo: 'A jelszó legalább 6 karakter legyen.',
+            kotelezo: 'Fogadd el a *-gal jelölt kötelező tételeket.', regHiba: 'A regisztráció nem sikerült.',
+            marRegisztralt: 'Ezzel az e-mail-címmel már van fiók. Lépj be, vagy kérj új jelszót.',
+            udv: function (n) { return 'Üdv, ' + n + '!'; }, tovabb: 'Tovább', visszaBelep: 'Vissza a belépéshez',
+            keszDiak: 'A fiókod elkészült. Folytasd, és böngészd a képzéseket, majd jelentkezz.',
+            keszDiakMegerosit: 'Nézd meg a postafiókodat, és erősítsd meg az e-mail-címedet. A megerősítés után azonnal be tudsz lépni.',
+            keszUgynok: 'A fiókod létrejött, és adminisztrátori jóváhagyásra vár. Be tudsz lépni, de a platform a jóváhagyásig zárolva marad.',
+            keszUgynokMegerosit: 'Nézd meg a postafiókodat, és erősítsd meg az e-mail-címedet. Ezután egy adminisztrátor átnézi a regisztrációdat — a jóváhagyás után tudsz belépni.' },
       en: { cim: 'Sign in', alcim: 'Sign in to your John von Neumann University UniPortal account.', email: 'Email address', jelszo: 'Password',
             elfelejtett: 'Forgot password?', belepes: 'Sign in', belepesFolyamatban: 'Signing in…', fcim: 'Reset your password',
             falcim: "Enter the email address you sign in with. We'll send you a link to set a new password.",
@@ -224,7 +326,24 @@
             kapcsolat: 'Connection error. Please try again.', sikertelen: 'Sign-in failed.',
             tulSok: 'Too many requests. Please wait a minute before requesting another link.', keresHiba: 'The request failed. Please try again.',
             elkuldve: function (e) { return 'If an account exists for ' + e + ', we have sent it a link to set a new password. Check your inbox (and the spam folder).'; },
-            lejart: 'This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link.' }
+            lejart: 'This email link is invalid or has expired — each link works only once and for a limited time. If you were resetting your password, request a new link.',
+            regCim: 'Sign up', regAlcim: 'Create your UniPortal account.', igy: "I'm signing up as", jelentkezo: 'Applicant', ugynok: 'Agent',
+            nev: 'Full name', nevPh: 'e.g. Anna Kovács', emailPh: 'e.g. anna@example.com', jelszoPh: 'At least 6 characters',
+            ugyInfo: 'Your agency is created in a pending state. An administrator reviews it before you can see any applicant.',
+            ugyNev: 'Agency name', ugyNevPh: 'e.g. Global Study Ltd.', ugyOrszag: 'Country of origin', ugyOrszagPh: 'e.g. Nigeria',
+            ugyOrszagok: 'Countries of recruitment', ugyOrszagokPh: 'e.g. Nigeria, Ghana, Kenya', ugyOrszagokTipp: 'Separate several countries with commas.',
+            letrehoz: 'Create account', letrehozFolyamatban: 'Creating…', olvas: 'Read',
+            opcionalis: 'Optional — you can change these later in your profile',
+            megjDiak: 'After signing up you will need to confirm your email address.',
+            megjUgynok: 'You will need to confirm your email address, and an administrator approves every new agency account before it can be used.',
+            regHianyzik: 'Enter your name, email address and password.', rovidJelszo: 'The password must be at least 6 characters.',
+            kotelezo: 'Please accept the required items marked with *.', regHiba: 'Sign-up failed.',
+            marRegisztralt: 'An account with this email address already exists. Sign in, or request a new password.',
+            udv: function (n) { return 'Welcome, ' + n + '!'; }, tovabb: 'Continue', visszaBelep: 'Back to sign in',
+            keszDiak: 'Your account is ready. Continue to browse the programmes and apply.',
+            keszDiakMegerosit: 'Check your inbox and confirm your email address. Once it is confirmed, you can sign in right away.',
+            keszUgynok: 'Your account has been created and is now waiting for administrator approval. You can sign in, but the platform stays locked until it is approved.',
+            keszUgynokMegerosit: 'Check your inbox and confirm your email address. After that an administrator reviews your registration — you will be able to sign in once it is approved.' }
     };
     var L = T[window.NJE_LANG] || T.hu;
     function $(id) { return document.getElementById(id); }
@@ -232,6 +351,7 @@
       document.documentElement.lang = window.NJE_LANG;
       document.title = (window.NJE_LANG === 'en' ? 'Sign in' : 'Belépés') + ' — UniPortal · ' + (window.NJE_LANG === 'en' ? 'John von Neumann University' : 'Neumann János Egyetem');
       document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = L[el.dataset.t]; });
+      document.querySelectorAll('[data-tp]').forEach(function (el) { el.placeholder = L[el.dataset.tp]; });
       $('lang').textContent = window.NJE_LANG === 'en' ? 'EN' : 'HU';
       $('mutat').setAttribute('aria-label', L.mutat);
     }
@@ -239,7 +359,7 @@
     $('lang').addEventListener('click', function () {
       window.NJE_LANG = window.NJE_LANG === 'en' ? 'hu' : 'en';
       try { localStorage.setItem('nje_lang', window.NJE_LANG); } catch (e) {}
-      L = T[window.NJE_LANG]; alkalmaz();
+      L = T[window.NJE_LANG]; alkalmaz(); regNyelv();
     });
 
     function hiba(id, szoveg) { var el = $(id); el.textContent = szoveg; el.classList.add('on'); }
@@ -273,14 +393,23 @@
       } catch (err) { hiba('eLogin', L.kapcsolat); b.disabled = false; b.textContent = L.belepes; }
     });
 
-    function nezet(forgot) {
-      $('fLogin').hidden = forgot; $('fForgot').hidden = !forgot;
-      tisztit('eLogin'); tisztit('eForgot'); tisztit('oForgot');
-      if (forgot) { if (!$('femail').value) $('femail').value = $('email').value.trim(); setTimeout(function () { $('femail').focus(); }, 0); }
-      else setTimeout(function () { $('email').focus(); }, 0);
+    /* Nézetek ugyanabban a kártyában: 'login' | 'forgot' | 'reg' | 'regKesz'.
+       A regisztráció is itt marad — a folyamat sehol nem visz a home.html-re. */
+    function nezet(v) {
+      $('fLogin').hidden = v !== 'login'; $('fForgot').hidden = v !== 'forgot';
+      $('fReg').hidden = v !== 'reg'; $('regKesz').hidden = v !== 'regKesz';
+      $('toReg').hidden = v === 'reg' || v === 'regKesz';
+      tisztit('eLogin'); tisztit('eForgot'); tisztit('oForgot'); tisztit('eReg');
+      if (v === 'forgot' && !$('femail').value) $('femail').value = $('email').value.trim();
+      if (v === 'reg') { szemely(persona); jogiBetolt(); }
+      window.scrollTo(0, 0);
+      var fokusz = { login: 'email', forgot: 'femail', reg: 'rnev', regKesz: 'bRegKesz' }[v];
+      setTimeout(function () { $(fokusz).focus(); }, 0);
     }
-    $('toForgot').addEventListener('click', function () { nezet(true); });
-    $('toLogin').addEventListener('click', function () { nezet(false); });
+    $('toForgot').addEventListener('click', function () { nezet('forgot'); });
+    $('toLogin').addEventListener('click', function () { nezet('login'); });
+    $('toReg').addEventListener('click', function (e) { e.preventDefault(); nezet('reg'); });
+    $('regToLogin').addEventListener('click', function () { nezet('login'); });
 
     /* A válasz szándékosan ugyanaz, akár létezik a fiók, akár nem — a felületről
        így nem deríthető ki, ki van regisztrálva. */
@@ -298,6 +427,126 @@
         }
       } catch (err) { hiba('eForgot', L.kapcsolat); }
       b.disabled = false; b.textContent = L.kuldes;
+    });
+
+    /* ---- Regisztráció ----
+       Az önregisztráló hallgató mindig cserediák (83_exchange_student.sql): az
+       e-mail-cím megerősítésével automatikusan jóváhagyott. Az ügynökséget
+       adminisztrátor hagyja jóvá (29_agency.sql). */
+    var persona = 'student';
+    var regEredmeny = null;   // a sikerképernyő állapota (nyelvváltáskor újrarajzoljuk)
+    function szerep() { return persona === 'agent' ? 'AGENT' : 'EXCHANGE_STUDENT'; }
+    function szemely(p) {
+      persona = p;
+      document.querySelectorAll('#fReg [data-persona]').forEach(function (b) {
+        b.setAttribute('aria-pressed', b.dataset.persona === p ? 'true' : 'false');
+      });
+      $('rUgynokseg').hidden = p !== 'agent';
+      $('rMegj').textContent = p === 'agent' ? L.megjUgynok : L.megjDiak;
+      jogiRajzol();   // az ügynöknek a partnerfeltételek is kötelezők
+    }
+    document.querySelectorAll('#fReg [data-persona]').forEach(function (b) {
+      b.addEventListener('click', function () { szemely(b.dataset.persona); });
+    });
+
+    /* Jogi elfogadások (59_legal_consents.sql). A bejelölt tételek a signUp
+       metaadatába kerülnek (consents: { id: verzió }); a szövegek textContent-tel
+       kerülnek az oldalra, a katalógus tartalma nem értelmeződik HTML-ként. */
+    var JOGI_TARTALEK = [
+      { id: 'terms', label_hu: 'Elolvastam és elfogadom a Felhasználási feltételeket.', kind: 'terms', version: '2026-09-11', required: true, roles: [], label_en: 'I have read and accept the Terms of Use.', url: 'terms.html' },
+      { id: 'privacy', label_hu: 'Megismertem az Adatkezelési tájékoztatót.', kind: 'notice', version: '2026-09-11', required: true, roles: [], label_en: 'I have read the Privacy Notice.', url: 'privacy.html' },
+      { id: 'age16', label_hu: 'Kijelentem, hogy elmúltam 16 éves.', kind: 'declaration', version: '2026-09-11', required: true, roles: [], label_en: 'I confirm that I am at least 16 years old.', url: 'privacy.html#kiskoru' },
+      { id: 'agent_terms', label_hu: 'Elfogadom a Partnerügynökségi feltételeket, és kijelentem, hogy a jelentkezők adatait az ő tájékoztatásuk és felhatalmazásuk alapján adom meg.', kind: 'terms', version: '2026-09-11', required: true, roles: ['AGENT'], label_en: "I accept the Partner Agency Terms and confirm that I submit applicants' data only after informing them and with their authorisation.", url: 'terms.html#partner' },
+      { id: 'marketing', label_hu: 'Hozzájárulok, hogy az egyetem képzési ajánlatairól és eseményeiről e-mailben tájékoztatást kapjak. Bármikor visszavonhatom.', kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: "I agree to receive emails about the university's programmes and events. I can withdraw this at any time.", url: 'privacy.html#marketing' },
+      { id: 'whatsapp', label_hu: 'Hozzájárulok, hogy a Nemzetközi Iroda WhatsAppon is felvegye velem a kapcsolatot (a Meta Platforms szolgáltatásán keresztül). Bármikor visszavonhatom.', kind: 'consent', version: '2026-09-11', required: false, roles: [], label_en: 'I agree that the International Office may also contact me via WhatsApp (a Meta Platforms service). I can withdraw this at any time.', url: 'privacy.html#whatsapp' }
+    ];
+    var jogiLista = JOGI_TARTALEK, jogiKert = false;
+    function jogiBetolt() {
+      if (jogiKert || !window.sb) return;
+      jogiKert = true;
+      window.sb.from('legal_document').select('id,kind,version,required,roles,label_hu,label_en,url,sort_order')
+        .eq('active', true).order('sort_order')
+        .then(function (r) { if (!r.error && Array.isArray(r.data) && r.data.length) { jogiLista = r.data; jogiRajzol(); } }, function () {});
+    }
+    function jogiRajzol() {
+      var doboz = $('rJogi'), role = szerep(), elozo = {};
+      doboz.querySelectorAll('input[data-legal]').forEach(function (i) { elozo[i.dataset.legal] = i.checked; });
+      doboz.textContent = '';
+      var lista = jogiLista.filter(function (d) { return !d.roles || !d.roles.length || d.roles.indexOf(role) >= 0; });
+      function sor(d) {
+        var lab = document.createElement('label'); lab.className = 'chk';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.dataset.legal = d.id; cb.dataset.version = d.version; cb.dataset.required = d.required ? '1' : '';
+        cb.checked = !!elozo[d.id];
+        var span = document.createElement('span');
+        span.appendChild(document.createTextNode(((window.NJE_LANG === 'hu' && d.label_hu) || d.label_en) + ' '));
+        if (d.required) { var cs = document.createElement('b'); cs.textContent = '*'; span.appendChild(cs); span.appendChild(document.createTextNode(' ')); }
+        if (d.url) {
+          var a = document.createElement('a'); a.href = d.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = L.olvas;
+          a.addEventListener('click', function (ev) { ev.stopPropagation(); });
+          span.appendChild(a);
+        }
+        lab.appendChild(cb); lab.appendChild(span); doboz.appendChild(lab);
+      }
+      lista.filter(function (d) { return d.required; }).forEach(sor);
+      var opc = lista.filter(function (d) { return !d.required; });
+      if (opc.length) {
+        var h = document.createElement('p'); h.className = 'opt'; h.textContent = L.opcionalis; doboz.appendChild(h);
+        opc.forEach(sor);
+      }
+    }
+
+    function keszMutat() {
+      $('regKeszCim').textContent = L.udv(regEredmeny.nev);
+      $('regKeszSzoveg').textContent = L[regEredmeny.kulcs];
+      $('bRegKesz').textContent = regEredmeny.app ? L.tovabb : L.visszaBelep;
+    }
+    // Nyelvváltáskor a futás közben rajzolt részek is az új nyelvre váltanak.
+    function regNyelv() { szemely(persona); if (regEredmeny) keszMutat(); }
+
+    $('bRegKesz').addEventListener('click', function () {
+      if (regEredmeny && regEredmeny.app) return belep();
+      $('email').value = regEredmeny ? regEredmeny.email : '';
+      $('jelszo').value = '';
+      nezet('login');
+    });
+
+    $('fReg').addEventListener('submit', async function (e) {
+      e.preventDefault(); tisztit('eReg');
+      var nev = $('rnev').value.trim(), email = $('remail').value.trim(), jelszo = $('rjelszo').value;
+      if (!nev || !email || !jelszo) { hiba('eReg', L.regHianyzik); return; }
+      if (jelszo.length < 6) { hiba('eReg', L.rovidJelszo); return; }
+      var dobozok = Array.prototype.slice.call(document.querySelectorAll('#rJogi input[data-legal]'));
+      if (dobozok.some(function (d) { return d.dataset.required && !d.checked; })) { hiba('eReg', L.kotelezo); return; }
+      var consents = {};
+      dobozok.forEach(function (d) { if (d.checked) consents[d.dataset.legal] = d.dataset.version; });
+      var role = szerep();
+      // lang: a megerősítő levél nyelve (deploy/web/email/confirmation.html).
+      var meta = { name: nev, role: role, consents: consents, lang: window.NJE_LANG === 'en' ? 'en' : 'hu' };
+      if (role === 'AGENT') {
+        // A handle_new_user() trigger (29_agency.sql) ebből nyitja a függő agencies sort.
+        meta.agencyName = $('rugyNev').value.trim() || nev;
+        meta.agencyCountry = $('rugyOrszag').value.trim();
+        meta.agencyCountries = $('rugyOrszagok').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      }
+      var b = $('bReg'); b.disabled = true; b.textContent = L.letrehozFolyamatban;
+      try {
+        var r = await window.sb.auth.signUp({ email: email, password: jelszo,
+          options: { data: meta, emailRedirectTo: new URL('app.html', window.location.href).href } });
+        if (r.error) {
+          var m = r.error.message || '';
+          hiba('eReg', /already (registered|exists)/i.test(m) ? L.marRegisztralt : (m || L.regHiba));
+          return;
+        }
+        // Ha a projektben ki van kapcsolva az e-mail-megerősítés, rögtön van munkamenet.
+        var session = !!(r.data && r.data.session);
+        regEredmeny = { nev: nev, email: email, app: session,
+          kulcs: role === 'AGENT' ? (session ? 'keszUgynok' : 'keszUgynokMegerosit') : (session ? 'keszDiak' : 'keszDiakMegerosit') };
+        $('rjelszo').value = '';
+        keszMutat();
+        nezet('regKesz');
+      } catch (err) { hiba('eReg', L.kapcsolat); }
+      finally { b.disabled = false; b.textContent = L.letrehoz; }
     });
 
     /* NJE SAML belépés — ugyanaz, mint a régi nyitóoldalon (home.html): belépés
@@ -318,7 +567,12 @@
     /* Lejárt vagy már felhasznált e-mailes link (#error_code=…): megmondjuk, mi a teendő. */
     (function () {
       var hp = new URLSearchParams(location.hash.replace(/^#/, ''));
-      if (location.hash === '#forgot') { nezet(true); return; }
+      if (location.hash === '#forgot') { nezet('forgot'); return; }
+      if (location.hash === '#register') {
+        nezet('reg');
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+        return;
+      }
       if (!hp.get('error_code') && !hp.get('error')) return;
       hiba('eLogin', L.lejart);
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
