@@ -11,7 +11,9 @@
 //                      és az arculatok beágyazása
 //   mod: 'illesztes' — a friss arculatú felhívások újrapárosítása
 //   mod: 'reszletek' — beadandó dokumentumok és elvárt eredmények (KPI) az
-//                      EU téma-részlet végpontjáról
+//                      EU téma-részlet végpontjáról. `call_ids` megadásával
+//                      egyetlen felhívásra is, frissességtől függetlenül —
+//                      erre épül a felületen a frissítés gomb.
 //   mod: 'csapat'    — csapatjavaslat MINDEN felhívásra, nem csak a megnyitottra
 //   mod: 'mind'      — mind a hat, időkeretre vágva
 //
@@ -609,10 +611,23 @@ async function euKer(url: string) {
   throw new Error(utolso);
 }
 
-async function reszletekLepes(sb: ReturnType<typeof createClient>, hatarido: number, limit: number) {
-  const { data: sor, error } = await sb.rpc('grants_call_details_queue', { p_limit: limit, p_napok: 30 });
-  if (error) throw new Error('grants_call_details_queue: ' + error.message);
-  const varo = (sor ?? []) as Array<Record<string, unknown>>;
+async function reszletekLepes(sb: ReturnType<typeof createClient>, hatarido: number, limit: number,
+                              callIds?: string[]) {
+  let varo: Array<Record<string, unknown>> = [];
+  if (callIds && callIds.length) {
+    // Kérésre indított frissítés: a frissesség nem számít, mert az iroda épp
+    // most akarja látni az aktuális állapotot.
+    for (const id of callIds.slice(0, 10)) {
+      const { data, error } = await sb.rpc('grants_call_details_queue',
+        { p_limit: 1, p_napok: 30, p_call: id });
+      if (error) throw new Error('grants_call_details_queue: ' + error.message);
+      for (const x of ((data ?? []) as Array<Record<string, unknown>>)) varo.push(x);
+    }
+  } else {
+    const { data: sor, error } = await sb.rpc('grants_call_details_queue', { p_limit: limit, p_napok: 30 });
+    if (error) throw new Error('grants_call_details_queue: ' + error.message);
+    varo = (sor ?? []) as Array<Record<string, unknown>>;
+  }
   let felhivas = 0, dok = 0, kpi = 0, hiba = 0;
   const hibak: string[] = [];
 
@@ -730,7 +745,11 @@ Deno.serve(async (req) => {
     if (mod === 'klaszter' || mod === 'mind') ki.klaszter = await klaszterLepes(sb, hatarido, Math.min(50, limit));
     // A részletek MEGELŐZIK az arculatokat: a gazdagabb szövegből pontosabb
     // arculat készül, és a sorrend így egy körben hoz eredményt.
-    if (mod === 'reszletek' || mod === 'mind') ki.reszletek = await reszletekLepes(sb, hatarido, Math.min(20, limit));
+    if (mod === 'reszletek' || mod === 'mind') {
+      const idk = Array.isArray((test as { call_ids?: unknown }).call_ids)
+        ? ((test as { call_ids: unknown[] }).call_ids).map((x) => String(x)) : undefined;
+      ki.reszletek = await reszletekLepes(sb, hatarido, Math.min(20, limit), idk);
+    }
     if (mod === 'arculat' || mod === 'mind') {
       const idk = Array.isArray((test as { call_ids?: unknown }).call_ids)
         ? ((test as { call_ids: unknown[] }).call_ids).map((x) => String(x)) : undefined;

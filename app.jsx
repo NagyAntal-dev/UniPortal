@@ -12658,6 +12658,11 @@ Object.assign(HU_EN, {
   'Beadandó dokumentumok és elvárt eredmények': 'Documents to submit and expected outcomes',
   'Elvárt eredmények — ezen mérnek minket': 'Expected outcomes — this is what we are measured on',
   'Hatókör': 'Scope',
+  'Frissítés a kiíró oldaláról': 'Refresh from the funder\u2019s site',
+  'Frissítés…': 'Refreshing…',
+  'A kiíró oldaláról': 'From the funder\u2019s site',
+  'A kiíró oldaláról most nem sikerült letölteni. Próbáld újra kicsit később.':
+    'Could not fetch from the funder\u2019s site right now. Try again shortly.',
   // 100 — a pontozás hangolása
   'Pontozás és csapatösszeállítás': 'Scoring and team assembly',
   'Ezek a számok döntik el, kit ajánl a rendszer egy felhívásra. A hangolás irodai döntés — a mentés után a találatok a következő gépi körben újraszámolnak.':

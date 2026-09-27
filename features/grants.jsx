@@ -33,6 +33,28 @@ const GRT_api = {
   callGet:     (id)          => GRT_rpc('grants_call_get', { p_call: id }),
   // Beadandó dokumentumok és elvárt eredmények (99_grants_call_details.sql).
   callDetails: (id)          => GRT_rpc('grants_call_details', { p_call: id }),
+  // Kérésre indított frissítés: a letöltés Edge Functionben fut (a
+  // service_role kulcs nem lehet a böngészőben), a jogosultságot ott is
+  // ellenőrzi a grants_context.
+  callDetailsRefresh: async (id) => {
+    if (!window.sb || !window.sb.functions) throw new Error('A betöltő szolgáltatás nem elérhető.');
+    const { data, error } = await window.sb.functions.invoke('grants-semantic',
+      { body: { mod: 'reszletek', call_ids: [id] } });
+    if (error) {
+      let reszletes = '';
+      try {
+        const v = error.context;
+        if (v && typeof v.text === 'function') {
+          const sz = await v.text();
+          try { const t = JSON.parse(sz); reszletes = t.hiba || t.message || ''; }
+          catch (e2) { reszletes = String(sz).slice(0, 200); }
+        }
+      } catch (e3) { /* marad az általános üzenet */ }
+      throw new Error(reszletes || error.message || 'A frissítés hibára futott.');
+    }
+    if (data && data.ok === false) throw new Error(data.hiba || 'A frissítés hibára futott.');
+    return (data && data.reszletek) || {};
+  },
   callSave:    (adat)        => GRT_rpc('grants_call_save', { p_adat: adat }),
   callArchive: (id, arch)    => GRT_rpc('grants_call_archive', { p_call: id, p_archivalt: arch !== false }),
   options:     ()            => GRT_rpc('grants_call_options'),
@@ -158,16 +180,25 @@ const GRT_DOK_TIPUS = {
 
 /* Beadandó dokumentumok és elvárt eredmények. A felhívás szövegéből gépi körben
    készül; amíg nincs meg, ezt ki is írjuk — nem hagyjuk üresen a szakaszt. */
-function GRT_Reszletek({ r }) {
+function GRT_Reszletek({ r, onFrissit, frissitBusy, frissitHiba }) {
   if (!r) return null;
   const dok = r.dokumentumok || [];
   const nincsSemmi = !r.elvart_eredmeny && !r.hatokor && dok.length === 0;
+  const gomb = onFrissit ? (
+    <button className={U_btnGhost + ' !px-3 !py-1.5 text-xs'} disabled={frissitBusy} onClick={onFrissit}>
+      <Lucide.RefreshCw size={13} className={frissitBusy ? 'animate-spin' : ''} />
+      {frissitBusy ? 'Frissítés…' : 'Frissítés a kiíró oldaláról'}
+    </button>
+  ) : null;
   if (nincsSemmi) {
     return (
       <div className="bg-slate-50 rounded-2xl p-4">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-          Beadandó dokumentumok és elvárt eredmények
-        </p>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Beadandó dokumentumok és elvárt eredmények
+          </p>
+          {gomb}
+        </div>
         <p className="text-sm text-slate-500">
           {r.hiba
             ? `A kiíró oldaláról nem sikerült betölteni: ${r.hiba}`
@@ -175,11 +206,21 @@ function GRT_Reszletek({ r }) {
               ? 'A kiíró oldalán ehhez a felhíváshoz nem szerepel dokumentumlista és elvárt eredmény.'
               : 'Még nem töltöttük le a kiíró oldaláról — a gépi kör hamarosan sorra veszi.'}
         </p>
+        {frissitHiba && <p className="text-xs text-rose-600 font-bold mt-2">{frissitHiba}</p>}
       </div>
     );
   }
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+          {r.frissitve
+            ? `A kiíró oldaláról frissítve: ${String(r.frissitve).slice(0, 10)}`
+            : 'A kiíró oldaláról'}
+        </p>
+        {gomb}
+      </div>
+      {frissitHiba && <p className="text-xs text-rose-600 font-bold">{frissitHiba}</p>}
       {r.elvart_eredmeny && (
         <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4">
           <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-2">
@@ -241,11 +282,13 @@ function GRT_Reszletek({ r }) {
 function GRT_CallModal({ open, id, onClose, onValtozott }) {
   const [d, setD] = useState(null);
   const [reszlet, setReszlet] = useState(null);
+  const [frissitBusy, setFrissitBusy] = useState(false);
+  const [frissitHiba, setFrissitHiba] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open || !id) { setD(null); setReszlet(null); setErr(''); return; }
+    if (!open || !id) { setD(null); setReszlet(null); setErr(''); setFrissitHiba(''); return; }
     let el = true;
     setD(null); setReszlet(null); setErr('');
     GRT_api.callGet(id).then(x => { if (el) setD(x); }).catch(e => { if (el) setErr(GRT_msg(e)); });
@@ -254,6 +297,22 @@ function GRT_CallModal({ open, id, onClose, onValtozott }) {
     GRT_api.callDetails(id).then(x => { if (el) setReszlet(x); }).catch(() => {});
     return () => { el = false; };
   }, [open, id]);
+
+  /* Kérésre indított frissítés: letöltés a kiíró oldaláról, majd újraolvasás.
+     A 30 napos gépi kör nem mindig elég — ha valaki épp azon a felhíváson
+     dolgozik, most akarja látni a módosított sablont. */
+  const reszletFrissit = async () => {
+    setFrissitBusy(true); setFrissitHiba('');
+    try {
+      const r = await GRT_api.callDetailsRefresh(id);
+      const friss = await GRT_api.callDetails(id);
+      setReszlet(friss);
+      if (r && r.hiba > 0 && (!friss || !friss.elvart_eredmeny)) {
+        setFrissitHiba('A kiíró oldaláról most nem sikerült letölteni. Próbáld újra kicsit később.');
+      }
+    } catch (e) { setFrissitHiba(GRT_msg(e)); }
+    finally { setFrissitBusy(false); }
+  };
 
   const archival = async () => {
     if (!window.confirm('Archiváljuk ezt a felhívást? A katalógusból eltűnik, de a hivatkozások megmaradnak.')) return;
@@ -336,7 +395,8 @@ function GRT_CallModal({ open, id, onClose, onValtozott }) {
 
           {/* Mit kell kitölteni és mit mérnek rajtunk — a kiíró oldaláról
               betöltve. A részletes szövegeket idézzük, a teljes felhívást nem. */}
-          <GRT_Reszletek r={reszlet} />
+          <GRT_Reszletek r={reszlet} onFrissit={reszletFrissit}
+            frissitBusy={frissitBusy} frissitHiba={frissitHiba} />
 
           {/* A teljes felhívásszöveget nem közöljük újra — mindig az eredetire
               hivatkozunk, és ez jogi döntés, nem kényelmi. */}

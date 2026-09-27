@@ -112,3 +112,4 @@
 99_grants_call_details.sql
 100_grants_pontozas_ui.sql
 101_grants_details_mind.sql
+102_grants_details_frissites.sql
