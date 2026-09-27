@@ -113,3 +113,4 @@
 100_grants_pontozas_ui.sql
 101_grants_details_mind.sql
 102_grants_details_frissites.sql
+103_grants_lejart_hatarido.sql

@@ -12658,6 +12658,7 @@ Object.assign(HU_EN, {
   'Beadandó dokumentumok és elvárt eredmények': 'Documents to submit and expected outcomes',
   'Elvárt eredmények — ezen mérnek minket': 'Expected outcomes — this is what we are measured on',
   'Hatókör': 'Scope',
+  'tegnap járt le': 'expired yesterday',
   'Frissítés a kiíró oldaláról': 'Refresh from the funder\u2019s site',
   'Frissítés…': 'Refreshing…',
   'A kiíró oldaláról': 'From the funder\u2019s site',
@@ -12707,7 +12708,7 @@ Object.assign(HU_EN, {
 });
 
 const HU_EN_PHRASES = [
-  [/Aktív jelentkezések/g,'Active applications'],[/Akív jelentkezések/g,'Active applications'],[/Új jelentkező/g,'New applicant'],[/\bMód\b/g,'Mode'],[/Felvételi folyamat ·/g,'Admission process ·'],[/(\d+)\s*\/\s*(\d+)\s*lépés/g,'$1/$2 steps'],[/(\d+)\s*lépés/g,'$1 steps'],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)%\s*biztos/g,'$1% confidence'],[/(\d+)\s*lehetséges egyezés/g,'$1 possible match(es)'],[/TESZT — helyes válasz:/g,'TEST — correct answer:'],[/Helyes:/g,'Correct:'],[/(\d+)\s*\/\s*(\d+)\s*helyes/g,'$1 / $2 correct'],[/(\d+)\s*\/\s*(\d+)\s*kötelező hitelesítve/g,'$1 / $2 required verified'],[/(\d+)\s*hiányzik/g,'$1 missing'],[/(\d+)\s*új\b/g,'$1 new'],[/EUR \/ szemeszter/g,'EUR / semester'],[/szemeszter/g,'semester'],[/szem\./g,'sem.'],[/Egyszerűsítsd, majd értékeld ki, ha/g,'Simplify, then evaluate if'],[/Mennyi/g,'What is'],[/Értékeld ki a következő kifejezést!/g,'Evaluate the following expression!'],[/Érték =/g,'Value ='],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)\s*\/\s*(\d+)\s*kötelező/g,'$1 / $2 required'],
+  [/Aktív jelentkezések/g,'Active applications'],[/Akív jelentkezések/g,'Active applications'],[/Új jelentkező/g,'New applicant'],[/\bMód\b/g,'Mode'],[/Felvételi folyamat ·/g,'Admission process ·'],[/(\d+)\s*\/\s*(\d+)\s*lépés/g,'$1/$2 steps'],[/(\d+)\s*lépés/g,'$1 steps'],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)%\s*biztos/g,'$1% confidence'],[/(\d+)\s*lehetséges egyezés/g,'$1 possible match(es)'],[/TESZT — helyes válasz:/g,'TEST — correct answer:'],[/Helyes:/g,'Correct:'],[/(\d+)\s*\/\s*(\d+)\s*helyes/g,'$1 / $2 correct'],[/(\d+)\s*\/\s*(\d+)\s*kötelező hitelesítve/g,'$1 / $2 required verified'],[/(\d+)\s*hiányzik/g,'$1 missing'],[/(\d+)\s*új\b/g,'$1 new'],[/EUR \/ szemeszter/g,'EUR / semester'],[/szemeszter/g,'semester'],[/szem\./g,'sem.'],[/Egyszerűsítsd, majd értékeld ki, ha/g,'Simplify, then evaluate if'],[/Mennyi/g,'What is'],[/Értékeld ki a következő kifejezést!/g,'Evaluate the following expression!'],[/Érték =/g,'Value ='],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)\s*\/\s*(\d+)\s*kötelező/g,'$1 / $2 required'],[/(\d+)\s*napja lejárt/g,'expired $1 days ago'],
 ];
 // ------------------------------------------------------------------
 // A1/A3/A4/H1/I1 csomag új magyar szövegei. Külön Object.assign hívásban,

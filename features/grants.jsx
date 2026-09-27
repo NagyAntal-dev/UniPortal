@@ -131,14 +131,23 @@ function GRT_Hatarido({ nap, datum }) {
   if (nap === null || nap === undefined) {
     return <span className="text-xs font-bold text-slate-400">nincs határidő</span>;
   }
-  const tone = nap <= 3 ? 'red' : nap <= 14 ? 'amber' : nap <= 30 ? 'blue' : 'slate';
-  const szin = { red: 'text-red-600', amber: 'text-amber-600', blue: 'text-sky-600', slate: 'text-slate-500' }[tone];
+  // A LEJÁRT és a MA LEJÁRÓ határidő két külön dolog: az egyik cselekvést
+  // sürget, a másik már nem. Korábban a szerver nullára vágta a negatívot,
+  // ezért egy három napja lejárt kiírás is „ma jár le"-ként jelent meg.
+  const lejart = nap < 0;
+  const szin = lejart ? 'text-slate-400'
+    : nap <= 3 ? 'text-red-600' : nap <= 14 ? 'text-amber-600'
+    : nap <= 30 ? 'text-sky-600' : 'text-slate-500';
   return (
     <div className="text-right flex-none">
       <p className={'text-sm font-black ' + szin}>
-        {nap === 0 ? 'ma jár le' : nap + ' nap'}
+        {lejart
+          ? (nap === -1 ? 'tegnap járt le' : `${-nap} napja lejárt`)
+          : nap === 0 ? 'ma jár le' : `${nap} nap`}
       </p>
-      <p className="text-[11px] text-slate-400 font-bold">{GRT_dt(datum)}</p>
+      <p className={'text-[11px] font-bold ' + (lejart ? 'text-slate-300 line-through' : 'text-slate-400')}>
+        {GRT_dt(datum)}
+      </p>
     </div>
   );
 }
