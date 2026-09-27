@@ -29,7 +29,11 @@ const GRT_api = {
                                   p_q: p.q || null, p_allapot: p.allapot || null,
                                   p_program: p.program || null, p_source: p.forras || null,
                                   p_napon_belul: p.napon || null,
-                                  p_limit: p.limit || 100, p_offset: p.offset || 0 }),
+                                  p_limit: p.limit || 100, p_offset: p.offset || 0,
+                                  // A lejárt kiírás alapból kimarad: a lista a
+                                  // legközelebbi határidő szerint rendez, és
+                                  // különben épp azok állnának elöl (104).
+                                  p_lejart: !!p.lejart }),
   callGet:     (id)          => GRT_rpc('grants_call_get', { p_call: id }),
   // Beadandó dokumentumok és elvárt eredmények (99_grants_call_details.sql).
   callDetails: (id)          => GRT_rpc('grants_call_details', { p_call: id }),
@@ -885,6 +889,7 @@ function GRT_OfficeView({ user }) {
   const [allapot, setAllapot] = useState('nyitott');
   const [program, setProgram] = useState('');
   const [napon, setNapon] = useState('');
+  const [lejart, setLejart] = useState(false);
   const [lista, setLista] = useState(null);
   const [opts, setOpts] = useState(null);
   const [listaBusy, setListaBusy] = useState(false);
@@ -904,12 +909,12 @@ function GRT_OfficeView({ user }) {
     let el = true;
     setListaBusy(true);
     const t = setTimeout(() => {
-      GRT_api.calls({ q, allapot, program, napon: napon ? Number(napon) : null, limit: 60 })
+      GRT_api.calls({ q, allapot, program, napon: napon ? Number(napon) : null, limit: 60, lejart })
         .then(d => { if (el) { setLista(d); setListaBusy(false); } })
         .catch(e => { if (el) { setErr(GRT_msg(e)); setListaBusy(false); } });
     }, 300);
     return () => { el = false; clearTimeout(t); };
-  }, [q, allapot, program, napon]);
+  }, [q, allapot, program, napon, lejart]);
 
   useEffect(() => { if (ful === 'forrasok') GRT_api.etlRuns(20).then(setRuns).catch(() => {}); }, [ful]);
 
@@ -953,7 +958,7 @@ function GRT_OfficeView({ user }) {
         : `Betöltés kész: ${ossz.uj} új, ${ossz.modosult} módosult, ${ossz.valtozatlan} változatlan (${ossz.masodperc} s).`);
       await ctxBetolt();
       GRT_api.etlRuns(20).then(setRuns).catch(() => {});
-      GRT_api.calls({ q, allapot, program, napon: napon ? Number(napon) : null, limit: 60 }).then(setLista).catch(() => {});
+      GRT_api.calls({ q, allapot, program, napon: napon ? Number(napon) : null, limit: 60, lejart }).then(setLista).catch(() => {});
     } catch (e) {
       // A részeredmény megmarad: ami már betöltődött, az bent van. Ezt ki is írjuk,
       // hogy ne tűnjön úgy, mintha az egész futás kárba ment volna.
@@ -1088,6 +1093,14 @@ function GRT_OfficeView({ user }) {
                   {h.c}
                 </button>
               ))}
+              {/* A lejárt kiírás alapból kimarad: a lista a legközelebbi
+                  határidő szerint rendez, tehát különben épp azok állnának
+                  elöl, amelyekre már nem lehet pályázni. */}
+              <button onClick={() => setLejart(!lejart)}
+                className={'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black transition-all '
+                           + (lejart ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100')}>
+                <Lucide.History size={12} /> lejártak is
+              </button>
               <div className="flex-1" />
               {lista && (
                 <span className="text-[11px] font-bold text-slate-400 flex items-center gap-2">

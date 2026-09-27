@@ -12659,6 +12659,7 @@ Object.assign(HU_EN, {
   'Elvárt eredmények — ezen mérnek minket': 'Expected outcomes — this is what we are measured on',
   'Hatókör': 'Scope',
   'tegnap járt le': 'expired yesterday',
+  'lejártak is': 'include expired',
   'Frissítés a kiíró oldaláról': 'Refresh from the funder\u2019s site',
   'Frissítés…': 'Refreshing…',
   'A kiíró oldaláról': 'From the funder\u2019s site',
