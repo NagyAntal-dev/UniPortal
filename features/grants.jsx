@@ -171,7 +171,9 @@ function GRT_Reszletek({ r }) {
         <p className="text-sm text-slate-500">
           {r.hiba
             ? `A kiíró oldaláról nem sikerült betölteni: ${r.hiba}`
-            : 'Még nem töltöttük le a kiíró oldaláról — a gépi kör hamarosan sorra veszi.'}
+            : r.frissitve
+              ? 'A kiíró oldalán ehhez a felhíváshoz nem szerepel dokumentumlista és elvárt eredmény.'
+              : 'Még nem töltöttük le a kiíró oldaláról — a gépi kör hamarosan sorra veszi.'}
         </p>
       </div>
     );

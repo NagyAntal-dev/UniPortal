@@ -12684,6 +12684,8 @@ Object.assign(HU_EN, {
   'Értékelés és küszöbök': 'Evaluation and thresholds',
   'Még nem töltöttük le a kiíró oldaláról — a gépi kör hamarosan sorra veszi.':
     'Not yet fetched from the funder\u2019s site — the automated round will get to it.',
+  'A kiíró oldalán ehhez a felhíváshoz nem szerepel dokumentumlista és elvárt eredmény.':
+    'The funder\u2019s page lists no documents or expected outcomes for this call.',
   // 96 — nevek a listakártyán
   'Nyitott felhívások és a javasolt csapat': 'Open calls and the proposed team',
   'A javaslatok gépi körben készülnek, minden felhívásra — a kártyán látod a neveket, kattintásra a részleteket.':
