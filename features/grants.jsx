@@ -1145,6 +1145,8 @@ function GRT_OfficeView({ user }) {
           // kollégát vonja be.
           { id: 'bevonas', cim: 'Bevonás', ikon: <Lucide.HeartHandshake size={14} /> },
           { id: 'csapat', cim: 'Csapatajánló', ikon: <Lucide.Sparkles size={14} /> },
+          // Konzorciumkeresés (106): hova kell külső partner, és mit viszünk mi.
+          { id: 'konzorcium', cim: 'Konzorcium', ikon: <Lucide.Handshake size={14} /> },
           { id: 'forrasok', cim: 'Adatforrások', ikon: <Lucide.Database size={14} />, jel: elavultDb },
           { id: 'beallitas', cim: 'Beállítások', ikon: <Lucide.Settings size={14} /> },
         ].map(t => (
@@ -1242,6 +1244,8 @@ function GRT_OfficeView({ user }) {
       {ful === 'bevonas' && <GRTT_BevonasView />}
 
       {ful === 'csapat' && <GRTT_CsapatView />}
+
+      {ful === 'konzorcium' && <GRTT_KonzorciumView />}
 
       {ful === 'forrasok' && (
         <div className="space-y-4">

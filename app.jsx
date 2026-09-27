@@ -12658,6 +12658,14 @@ Object.assign(HU_EN, {
   'Beadandó dokumentumok és elvárt eredmények': 'Documents to submit and expected outcomes',
   'Elvárt eredmények — ezen mérnek minket': 'Expected outcomes — this is what we are measured on',
   'Hatókör': 'Scope',
+  // 106 — konzorciumkeresés
+  'Konzorcium': 'Consortium',
+  'Konzorciumkeresés': 'Consortium search',
+  'csak ahol hiányzik valaki': 'only where someone is missing',
+  'Partnerkeresés a kiírónál': 'Partner search at the funder',
+  'Amit mi hozunk': 'What we bring',
+  'Minden elvárásra van házon belüli jelöltünk — partner nem feltétlenül kell.':
+    'We have an in-house candidate for every expectation — a partner may not be needed.',
   'tegnap járt le': 'expired yesterday',
   'Felkérés vezetőnek': 'Invite as lead',
   'Küldés…': 'Sending…',

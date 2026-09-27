@@ -64,6 +64,8 @@ const GRTT_api = {
   semantic:   ()                => GRTT_rpc('grants_semantic_stats'),
   rebuild:    (mit)             => GRTT_rpc('grants_semantic_rebuild', { p_mit: mit || 'mind' }),
   gaps:       (n)               => GRTT_rpc('grants_coauthor_gaps', { p_limit: n || 20 }),
+  partnerCalls:(q, n, hiany)    => GRTT_rpc('grants_partner_calls', {
+                                     p_q: q || null, p_limit: n || 40, p_csak_hiany: !!hiany }),
   scoringGet: ()                => GRTT_rpc('grants_scoring_get'),
   scoringSave:(ertekek, ujra)   => GRTT_rpc('grants_scoring_save', {
                                      p_ertekek: ertekek, p_ujraszamol: !!ujra }),
@@ -354,6 +356,139 @@ function GRTT_PontozasBeallitas() {
           {`A súlyokat utoljára ekkor állították át: ${String(d.valtozott).slice(0, 16).replace('T', ' ')}.`}
         </p>
       )}
+    </div>
+  );
+}
+
+
+/* ----------------------------------------------------------------------------
+   Konzorciumkeresés (106)
+   ----------------------------------------------------------------------------
+   MÉRVE 2026-09-27: az EU partnerkereső HIRDETÉSEIT — hogy melyik külföldi
+   szervezet keres partnert — nyilvános API-n nem lehet lekérni; a portál
+   kereső-API-ja minden szűrt lekérdezésre hibát ad, a modul pedig bejelentkezés
+   mögött van. Ezért ez a képernyő azt mutatja, amit rajtunk kívül senki nem tud
+   megmondani: MIRE kell nekünk partner, kiket vinnénk mi, és hol lehet
+   meghirdetni a kiírónál.
+   ------------------------------------------------------------------------- */
+function GRTT_KonzorciumView() {
+  const [lista, setLista] = useState(null);
+  const [q, setQ] = useState('');
+  const [csakHiany, setCsakHiany] = useState(true);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let el = true;
+    const t = setTimeout(() => {
+      GRTT_api.partnerCalls(q, 40, csakHiany)
+        .then(d => { if (el) setLista(Array.isArray(d) ? d : []); })
+        .catch(e => { if (el) setErr(GRT_msg(e)); });
+    }, 300);
+    return () => { el = false; clearTimeout(t); };
+  }, [q, csakHiany]);
+
+  return (
+    <div>
+      {err && <p className="text-xs text-rose-600 font-bold mb-3">{err}</p>}
+
+      <div className="bg-white border border-slate-100 rounded-2xl p-4 mb-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-slate-800">Konzorciumkeresés</p>
+            <p className="text-[11px] text-slate-400 mt-0.5 max-w-2xl">
+              {'Azok a nyitott felhívások, ahol a kiíró engedi a partnerkeresést. Minden sor megmondja, '
+               + 'MIRE kell partner — vagyis melyik elvárásra nincs házon belüli jelöltünk —, és kiket '
+               + 'vinnénk mi a konzorciumba.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input className={U_input + ' !py-2 !px-3 text-xs w-56'} value={q}
+              onChange={e => setQ(e.target.value)} placeholder="Keresés a felhívás címére…" />
+            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+              <input type="checkbox" checked={csakHiany} onChange={e => setCsakHiany(e.target.checked)} />
+              csak ahol hiányzik valaki
+            </label>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-400 mt-3">
+          {'A külföldi szervezetek partnerkereső hirdetései nyilvános felületen nem érhetők el — azokat a '
+           + 'kiíró oldalán, bejelentkezve lehet böngészni. A soronkénti gomb oda visz.'}
+        </p>
+      </div>
+
+      {!lista && <p className="text-sm text-slate-400">Betöltés…</p>}
+      {lista && lista.length === 0 && (
+        <div className="bg-white border border-slate-100 rounded-2xl p-6">
+          <p className="text-sm text-slate-500">
+            {csakHiany
+              ? 'Nincs olyan partnerkeresésre nyitott felhívás, ahol valamelyik elvárásra ne lenne emberünk. Vedd ki a pipát, és látod az összeset.'
+              : 'Nincs partnerkeresésre nyitott felhívás a szűrésben.'}
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {(lista || []).map(c => {
+          const hianyzo = c.hianyzo || [];
+          const csapat = c.sajat_csapat || [];
+          return (
+            <div key={c.call_id} className="bg-white border border-slate-100 rounded-2xl p-4">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-800">{c.cim}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {`${c.program || '—'}${c.hatarido ? ' · határidő: ' + String(c.hatarido).slice(0, 10) : ''}`
+                     + `${c.arculat_db ? ' · ' + c.arculat_db + ' elvárás' : ''}`
+                     + `${c.felkert_db ? ' · ' + c.felkert_db + ' kollégát felkértünk' : ''}`}
+                  </p>
+                </div>
+                {c.partner_url && (
+                  <a href={c.partner_url} target="_blank" rel="noopener noreferrer"
+                    className={U_btnGhost + ' !px-3 !py-1.5 text-xs whitespace-nowrap'}>
+                    <Lucide.ExternalLink size={13} /> Partnerkeresés a kiírónál
+                  </a>
+                )}
+              </div>
+
+              {hianyzo.length > 0 ? (
+                <div className="mt-3 bg-amber-50 border border-amber-100 rounded-xl p-3">
+                  <p className="text-[11px] font-black text-amber-700 uppercase tracking-wider mb-1">
+                    {`Ehhez partner kell (${hianyzo.length} elvárás)`}
+                  </p>
+                  {hianyzo.map((h, i) => (
+                    <p key={i} className="text-[11px] text-amber-800">
+                      <span className="font-bold">{h.arculat}</span>
+                      {h.szoveg ? <span className="text-amber-700/80">{` — ${h.szoveg}`}</span> : null}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-emerald-600 font-bold mt-3">
+                  {'Minden elvárásra van házon belüli jelöltünk — partner nem feltétlenül kell.'}
+                </p>
+              )}
+
+              {csapat.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                    Amit mi hozunk
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {csapat.map((t, i) => (
+                      <span key={i}
+                        className={'px-2 py-0.5 rounded-lg text-[11px] font-bold '
+                                   + (t.szerep === 'vezeto' ? 'bg-primary/10 text-primary'
+                                                            : 'bg-slate-50 text-slate-600')}>
+                        {`${t.nev}${t.szerep === 'vezeto' ? ' · vezető' : ''}${t.arculat ? ' · ' + t.arculat : ''}`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
