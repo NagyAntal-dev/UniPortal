@@ -12659,6 +12659,8 @@ Object.assign(HU_EN, {
   'Elvárt eredmények — ezen mérnek minket': 'Expected outcomes — this is what we are measured on',
   'Hatókör': 'Scope',
   'tegnap járt le': 'expired yesterday',
+  'Felkérés vezetőnek': 'Invite as lead',
+  'Küldés…': 'Sending…',
   // 105 — javasolt projektvezető a kártyán
   'Nincs mérhető előzménye — a javaslat kizárólag a téma illeszkedésén alapul.':
     'No measurable track record — the proposal rests on topical fit alone.',

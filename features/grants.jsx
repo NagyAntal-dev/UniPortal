@@ -63,6 +63,9 @@ const GRT_api = {
   callGet:     (id)          => GRT_rpc('grants_call_get', { p_call: id }),
   // Beadandó dokumentumok és elvárt eredmények (99_grants_call_details.sql).
   callDetails: (id)          => GRT_rpc('grants_call_details', { p_call: id }),
+  // Felkérés a kártyáról (88_grants_invite.sql). A 'felkerve' állapot azt
+  // jelenti: ki is küldtük — a kolléga innentől válaszolhat rá.
+  inviteCreate: (adat)       => GRT_rpc('grants_invite_create', { p_adat: adat }),
   // Kérésre indított frissítés: a letöltés Edge Functionben fut (a
   // service_role kulcs nem lehet a böngészőben), a jogosultságot ott is
   // ellenőrzi a grants_context.
@@ -182,12 +185,19 @@ function GRT_Hatarido({ nap, datum }) {
   );
 }
 
-function GRT_CallCard({ sor, onNyit }) {
+function GRT_CallCard({ sor, onNyit, onVezeto, onFelker, felkerBusy }) {
   const a = GRT_ALLAPOT[sor.allapot] || GRT_ALLAPOT.ismeretlen;
+  /* A kártya kattintható, de NEM <button>: a javasolt vezető neve önálló gomb,
+     és gomb a gombban érvénytelen jelölés (a képernyőolvasó sem tudja
+     szétszedni). Ezért div + role, billentyűzetről ugyanúgy nyílik. */
   return (
-    <button type="button" onClick={() => onNyit(sor.id)}
+    <div role="button" tabIndex={0} onClick={() => onNyit(sor.id)}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNyit(sor.id); }
+      }}
       className="w-full text-left bg-white border border-slate-100 rounded-2xl p-4 hover:border-primary/40
-                 hover:shadow-sm transition-all">
+                 hover:shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2
+                 focus:ring-primary/30">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -212,7 +222,12 @@ function GRT_CallCard({ sor, onNyit }) {
                 className={'flex-none mt-0.5 ' + (sor.vezeto.bizonyitott ? 'text-emerald-600' : 'text-slate-300')} />
               <div className="min-w-0">
                 <p className="text-[11px] font-black text-slate-600">
-                  {`Javasolt projektvezető: ${sor.vezeto.nev}`}
+                  {'Javasolt projektvezető: '}
+                  <button type="button"
+                    onClick={e => { e.stopPropagation(); onVezeto && onVezeto(sor.vezeto.researcher_id); }}
+                    className="font-black text-primary hover:underline">
+                    {sor.vezeto.nev}
+                  </button>
                   {sor.vezeto.kar ? <span className="font-bold text-slate-400">{` · ${sor.vezeto.kar}`}</span> : null}
                   {sor.vezeto.felkerve
                     ? <span className="font-bold text-emerald-600">{' · már felkérve'}</span> : null}
@@ -223,6 +238,16 @@ function GRT_CallCard({ sor, onNyit }) {
                     {`Erre alapozva: ${sor.vezeto.mire}${sor.vezeto.mire_ev ? ' (' + sor.vezeto.mire_ev + ')' : ''}`}
                   </p>
                 )}
+                {/* Felkérés innen, egy kattintással. A felkérés attól a
+                    pillanattól látszik a kollégánál („Pályázati felkéréseim")
+                    és a Bevonás fülön is — ugyanabból a naplóból. */}
+                {!sor.vezeto.felkerve && onFelker && (
+                  <button type="button" disabled={felkerBusy}
+                    onClick={e => { e.stopPropagation(); onFelker(sor); }}
+                    className={U_btnGhost + ' !px-2.5 !py-1 text-[11px] mt-1'}>
+                    <Lucide.Send size={12} /> {felkerBusy ? 'Küldés…' : 'Felkérés vezetőnek'}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -230,7 +255,7 @@ function GRT_CallCard({ sor, onNyit }) {
         <GRT_Hatarido nap={sor.hatralevo_nap === null || sor.hatralevo_nap === undefined
                             ? null : Number(sor.hatralevo_nap)} datum={sor.hatarido} />
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -946,6 +971,9 @@ function GRT_OfficeView({ user }) {
   const [listaBusy, setListaBusy] = useState(false);
 
   const [nyitottId, setNyitottId] = useState(null);
+  // A javasolt projektvezető profilja a kártyáról, egy kattintással (105).
+  const [vezetoId, setVezetoId] = useState(null);
+  const [felkerBusy, setFelkerBusy] = useState('');
   const [ujOpen, setUjOpen] = useState(false);
   const [runs, setRuns] = useState(null);
   const [betoltBusy, setBetoltBusy] = useState(false);
@@ -968,6 +996,27 @@ function GRT_OfficeView({ user }) {
   }, [q, allapot, program, napon, lejart]);
 
   useEffect(() => { if (ful === 'forrasok') GRT_api.etlRuns(20).then(setRuns).catch(() => {}); }, [ful]);
+
+  /* Felkérés a javasolt projektvezetőnek, a kártyáról. Nem néma művelet:
+     megerősítést kérünk, mert ez egy kollégának kiküldött megkeresés. */
+  const vezetoFelker = async (sor) => {
+    const v = sor.vezeto;
+    if (!v) return;
+    if (!window.confirm(`Felkérjük ${v.nev} kollégát projektvezetőnek erre a felhívásra?\n\n`
+        + `${sor.cim}\n\nA felkérés azonnal megjelenik nála a „Pályázati felkéréseim" képernyőn, `
+        + 'és válaszolhat rá.')) return;
+    setFelkerBusy(sor.id); setErr('');
+    try {
+      await GRT_api.inviteCreate({
+        call_id: sor.id, researcher_id: v.researcher_id,
+        arculat: v.arculat || null, szerep: 'vezeto', allapot: 'felkerve',
+      });
+      setToast(`${v.nev} felkérve projektvezetőnek. A Bevonás fülön követhető.`);
+      GRT_api.calls({ q, allapot, program, napon: napon ? Number(napon) : null, limit: 60, lejart })
+        .then(setLista).catch(() => {});
+    } catch (e) { setErr(GRT_msg(e)); }
+    finally { setFelkerBusy(''); }
+  };
 
   const forrasMent = async (adat) => {
     try { await GRT_api.sourceSave(adat); await ctxBetolt(); setToast('Beállítás mentve.'); }
@@ -1172,7 +1221,10 @@ function GRT_OfficeView({ user }) {
                 : 'Próbáld szűkebb szűrőkkel.'} />
           ) : (
             <div className="space-y-3">
-              {lista.sorok.map(s => <GRT_CallCard key={s.id} sor={s} onNyit={setNyitottId} />)}
+              {lista.sorok.map(s => (
+                <GRT_CallCard key={s.id} sor={s} onNyit={setNyitottId} onVezeto={setVezetoId}
+                  onFelker={vezetoFelker} felkerBusy={felkerBusy === s.id} />
+              ))}
               {Number(lista.ossz) > Number(lista.mutatva) && (
                 <p className="text-center text-[11px] font-bold text-slate-400 py-2">
                   {lista.ossz - lista.mutatva} további találat — szűkíts a szűrőkkel.
@@ -1304,6 +1356,10 @@ function GRT_OfficeView({ user }) {
           </div>
         </div>
       )}
+
+      {/* A kutatói profil ugyanaz az ablak, amit a Kutatók fül használ —
+          egy adatlap, egy helyen karbantartva. */}
+      <GRTR_ProfilModal open={!!vezetoId} id={vezetoId} onClose={() => setVezetoId(null)} />
 
       <GRT_CallModal open={!!nyitottId} id={nyitottId} onClose={() => setNyitottId(null)}
         onValtozott={() => GRT_api.calls({ q, allapot, program, napon: napon ? Number(napon) : null, limit: 60 })
