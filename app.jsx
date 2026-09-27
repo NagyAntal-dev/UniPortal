@@ -12659,6 +12659,9 @@ Object.assign(HU_EN, {
   'Elvárt eredmények — ezen mérnek minket': 'Expected outcomes — this is what we are measured on',
   'Hatókör': 'Scope',
   'tegnap járt le': 'expired yesterday',
+  // 105 — javasolt projektvezető a kártyán
+  'Nincs mérhető előzménye — a javaslat kizárólag a téma illeszkedésén alapul.':
+    'No measurable track record — the proposal rests on topical fit alone.',
   'lejártak is': 'include expired',
   'Frissítés a kiíró oldaláról': 'Refresh from the funder\u2019s site',
   'Frissítés…': 'Refreshing…',
@@ -12709,7 +12712,7 @@ Object.assign(HU_EN, {
 });
 
 const HU_EN_PHRASES = [
-  [/Aktív jelentkezések/g,'Active applications'],[/Akív jelentkezések/g,'Active applications'],[/Új jelentkező/g,'New applicant'],[/\bMód\b/g,'Mode'],[/Felvételi folyamat ·/g,'Admission process ·'],[/(\d+)\s*\/\s*(\d+)\s*lépés/g,'$1/$2 steps'],[/(\d+)\s*lépés/g,'$1 steps'],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)%\s*biztos/g,'$1% confidence'],[/(\d+)\s*lehetséges egyezés/g,'$1 possible match(es)'],[/TESZT — helyes válasz:/g,'TEST — correct answer:'],[/Helyes:/g,'Correct:'],[/(\d+)\s*\/\s*(\d+)\s*helyes/g,'$1 / $2 correct'],[/(\d+)\s*\/\s*(\d+)\s*kötelező hitelesítve/g,'$1 / $2 required verified'],[/(\d+)\s*hiányzik/g,'$1 missing'],[/(\d+)\s*új\b/g,'$1 new'],[/EUR \/ szemeszter/g,'EUR / semester'],[/szemeszter/g,'semester'],[/szem\./g,'sem.'],[/Egyszerűsítsd, majd értékeld ki, ha/g,'Simplify, then evaluate if'],[/Mennyi/g,'What is'],[/Értékeld ki a következő kifejezést!/g,'Evaluate the following expression!'],[/Érték =/g,'Value ='],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)\s*\/\s*(\d+)\s*kötelező/g,'$1 / $2 required'],[/(\d+)\s*napja lejárt/g,'expired $1 days ago'],
+  [/Aktív jelentkezések/g,'Active applications'],[/Akív jelentkezések/g,'Active applications'],[/Új jelentkező/g,'New applicant'],[/\bMód\b/g,'Mode'],[/Felvételi folyamat ·/g,'Admission process ·'],[/(\d+)\s*\/\s*(\d+)\s*lépés/g,'$1/$2 steps'],[/(\d+)\s*lépés/g,'$1 steps'],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)%\s*biztos/g,'$1% confidence'],[/(\d+)\s*lehetséges egyezés/g,'$1 possible match(es)'],[/TESZT — helyes válasz:/g,'TEST — correct answer:'],[/Helyes:/g,'Correct:'],[/(\d+)\s*\/\s*(\d+)\s*helyes/g,'$1 / $2 correct'],[/(\d+)\s*\/\s*(\d+)\s*kötelező hitelesítve/g,'$1 / $2 required verified'],[/(\d+)\s*hiányzik/g,'$1 missing'],[/(\d+)\s*új\b/g,'$1 new'],[/EUR \/ szemeszter/g,'EUR / semester'],[/szemeszter/g,'semester'],[/szem\./g,'sem.'],[/Egyszerűsítsd, majd értékeld ki, ha/g,'Simplify, then evaluate if'],[/Mennyi/g,'What is'],[/Értékeld ki a következő kifejezést!/g,'Evaluate the following expression!'],[/Érték =/g,'Value ='],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)\s*\/\s*(\d+)\s*kötelező/g,'$1 / $2 required'],[/(\d+)\s*napja lejárt/g,'expired $1 days ago'],[/Javasolt projektvezető:/g,'Proposed project lead:'],[/Erre alapozva:/g,'Based on:'],[/(\d+)\s*utolsó szerzős publikáció/g,'$1 last-author publication(s)'],[/(\d+)\s*pályázati előzmény/g,'$1 previous grant(s)'],[/(\d+)\s*pályázatot vezetett már/g,'has led $1 proposal(s)'],[/szabad kapacitás/g,'free capacity'],[/szűk kapacitás/g,'limited capacity'],[/vezetői előzmény nélkül/g,'no leadership track record'],[/már felkérve/g,'already invited'],
 ];
 // ------------------------------------------------------------------
 // A1/A3/A4/H1/I1 csomag új magyar szövegei. Külön Object.assign hívásban,

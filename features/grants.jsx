@@ -203,6 +203,29 @@ function GRT_CallCard({ sor, onNyit }) {
           {sor.kivonat && (
             <p className="text-[11px] text-slate-400 font-medium mt-1 line-clamp-2">{sor.kivonat}</p>
           )}
+          {/* Javasolt projektvezető (105). Az indoklás mért tényekből áll, és
+              ITT látszik — egy javaslat, amit nem lehet ellenőrizni, nem
+              javaslat, hanem tipp. */}
+          {sor.vezeto && (
+            <div className="mt-2 flex items-start gap-1.5">
+              <Lucide.UserCheck size={13}
+                className={'flex-none mt-0.5 ' + (sor.vezeto.bizonyitott ? 'text-emerald-600' : 'text-slate-300')} />
+              <div className="min-w-0">
+                <p className="text-[11px] font-black text-slate-600">
+                  {`Javasolt projektvezető: ${sor.vezeto.nev}`}
+                  {sor.vezeto.kar ? <span className="font-bold text-slate-400">{` · ${sor.vezeto.kar}`}</span> : null}
+                  {sor.vezeto.felkerve
+                    ? <span className="font-bold text-emerald-600">{' · már felkérve'}</span> : null}
+                </p>
+                <p className="text-[11px] text-slate-400 font-medium">{sor.vezeto.szoveg}</p>
+                {sor.vezeto.mire && (
+                  <p className="text-[11px] text-slate-400 font-medium truncate">
+                    {`Erre alapozva: ${sor.vezeto.mire}${sor.vezeto.mire_ev ? ' (' + sor.vezeto.mire_ev + ')' : ''}`}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
         <GRT_Hatarido nap={sor.hatralevo_nap === null || sor.hatralevo_nap === undefined
                             ? null : Number(sor.hatralevo_nap)} datum={sor.hatarido} />
