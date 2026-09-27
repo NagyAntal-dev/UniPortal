@@ -23,17 +23,43 @@ async function GRT_rpc(fn, args) {
   return data;
 }
 
+/* A felületet push telepíti, az adatbázist ember futtatja — a kettő SOHA nincs
+   egyszerre kész. Ezért minden olyan hívás, ami friss migrációtól függ, tud
+   visszaesni a régi alakra ahelyett, hogy a képernyőt ellehetetlenítené.
+   MÉRVE: a p_lejart paramétert küldő lista PGRST202-t kapott, amíg a 104 nem
+   futott le, és a felület ezt „a modul nincs telepítve" hibaként mutatta. */
+function GRT_hianyzoFuggveny(e) {
+  const raw = (e && (e.message || e.hint || e.details)) || '';
+  return /schema cache/i.test(raw) || /PGRST202/.test(raw)
+      || /could not find the function/i.test(raw);
+}
+let GRT_LEJART_TAMOGATOTT = true;
+const GRT_lejartTamogatott = () => GRT_LEJART_TAMOGATOTT;
+
 const GRT_api = {
   context:     ()            => GRT_rpc('grants_context'),
-  calls:       (p)           => GRT_rpc('grants_calls', {
-                                  p_q: p.q || null, p_allapot: p.allapot || null,
-                                  p_program: p.program || null, p_source: p.forras || null,
-                                  p_napon_belul: p.napon || null,
-                                  p_limit: p.limit || 100, p_offset: p.offset || 0,
-                                  // A lejárt kiírás alapból kimarad: a lista a
-                                  // legközelebbi határidő szerint rendez, és
-                                  // különben épp azok állnának elöl (104).
-                                  p_lejart: !!p.lejart }),
+  calls:       async (p) => {
+    const alap = {
+      p_q: p.q || null, p_allapot: p.allapot || null,
+      p_program: p.program || null, p_source: p.forras || null,
+      p_napon_belul: p.napon || null,
+      p_limit: p.limit || 100, p_offset: p.offset || 0,
+    };
+    // A lejárt kiírás alapból kimarad: a lista a legközelebbi határidő szerint
+    // rendez, és különben épp azok állnának elöl (104).
+    if (GRT_LEJART_TAMOGATOTT) {
+      try {
+        return await GRT_rpc('grants_calls', { ...alap, p_lejart: !!p.lejart });
+      } catch (e) {
+        if (!GRT_hianyzoFuggveny(e)) throw e;
+        // A 104 még nem futott le. Megyünk tovább a régi alakkal, és a
+        // kapcsolót sem kínáljuk fel — inkább hiányozzon egy szűrő, mint hogy
+        // a lista elérhetetlen legyen.
+        GRT_LEJART_TAMOGATOTT = false;
+      }
+    }
+    return GRT_rpc('grants_calls', alap);
+  },
   callGet:     (id)          => GRT_rpc('grants_call_get', { p_call: id }),
   // Beadandó dokumentumok és elvárt eredmények (99_grants_call_details.sql).
   callDetails: (id)          => GRT_rpc('grants_call_details', { p_call: id }),
@@ -890,6 +916,8 @@ function GRT_OfficeView({ user }) {
   const [program, setProgram] = useState('');
   const [napon, setNapon] = useState('');
   const [lejart, setLejart] = useState(false);
+  // A 104 migráció megléte: a lista első betöltése után derül ki.
+  const [lejartKapcsolo, setLejartKapcsolo] = useState(true);
   const [lista, setLista] = useState(null);
   const [opts, setOpts] = useState(null);
   const [listaBusy, setListaBusy] = useState(false);
@@ -910,7 +938,7 @@ function GRT_OfficeView({ user }) {
     setListaBusy(true);
     const t = setTimeout(() => {
       GRT_api.calls({ q, allapot, program, napon: napon ? Number(napon) : null, limit: 60, lejart })
-        .then(d => { if (el) { setLista(d); setListaBusy(false); } })
+        .then(d => { if (el) { setLista(d); setListaBusy(false); setLejartKapcsolo(GRT_lejartTamogatott()); } })
         .catch(e => { if (el) { setErr(GRT_msg(e)); setListaBusy(false); } });
     }, 300);
     return () => { el = false; clearTimeout(t); };
@@ -1096,11 +1124,13 @@ function GRT_OfficeView({ user }) {
               {/* A lejárt kiírás alapból kimarad: a lista a legközelebbi
                   határidő szerint rendez, tehát különben épp azok állnának
                   elöl, amelyekre már nem lehet pályázni. */}
-              <button onClick={() => setLejart(!lejart)}
-                className={'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black transition-all '
-                           + (lejart ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100')}>
-                <Lucide.History size={12} /> lejártak is
-              </button>
+              {lejartKapcsolo && (
+                <button onClick={() => setLejart(!lejart)}
+                  className={'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black transition-all '
+                             + (lejart ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100')}>
+                  <Lucide.History size={12} /> lejártak is
+                </button>
+              )}
               <div className="flex-1" />
               {lista && (
                 <span className="text-[11px] font-bold text-slate-400 flex items-center gap-2">

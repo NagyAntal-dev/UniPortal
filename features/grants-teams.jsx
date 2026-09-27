@@ -232,10 +232,14 @@ function GRTT_PontozasBeallitas() {
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
 
+  const [nincsTelepitve, setNincsTelepitve] = useState(false);
   const betolt = () => GRTT_api.scoringGet().then(x => { setD(x); setMod({}); })
-    .catch(e => setErr(GRT_msg(e)));
+    .catch(e => { if (GRT_hianyzoFuggveny(e)) setNincsTelepitve(true); else setErr(GRT_msg(e)); });
   useEffect(() => { betolt(); }, []);
 
+  // A migráció még nem futott le: ilyenkor a panel egyszerűen nincs ott, nem
+  // pedig hibaüzenetet mutat egy olyan képernyőn, ami egyébként működik.
+  if (nincsTelepitve) return null;
   if (err && !d) return <p className="text-xs text-rose-600 font-bold">{err}</p>;
   if (!d) return <p className="text-sm text-slate-400">Betöltés…</p>;
 
