@@ -1,6 +1,8 @@
--- Generated NJE import. Run as database owner after the UniPortal migrations.
+-- Generated NJE import. Run as database owner with psql after the UniPortal migrations.
 -- Private personal data. Never add the generated file to the migration manifest.
 -- Existing credentials and records are preserved; conflicts abort atomically.
+-- PREVIEW BY DEFAULT: rolls back unless run with  psql -v apply=1 ...
+\set ON_ERROR_STOP on
 begin;
 set local search_path = public, extensions, pg_temp;
 set local standard_conforming_strings = on;
@@ -20,10 +22,13 @@ insert into public.role_definition(kod,nev,leiras,sorrend,beepitett)
 values ('TEACHER','Oktató','Kurzusok és saját oktatói eredmények.',70,false)
 on conflict (kod) do nothing;
 
+create temp table nje_settings (student_scopes text not null, max_drop_pct numeric not null) on commit drop;
 create temp table nje_accounts (
   key text primary key, role text not null, code text not null, name text not null,
   email text not null unique, password_hash text not null,
-  uid uuid, is_new boolean not null default false
+  -- Created by the previous import: must already exist, never re-created.
+  in_previous boolean not null default false,
+  uid uuid, is_new boolean not null default false, matched_by text
 ) on commit drop;
 create temp table nje_attributes (
   key text primary key references nje_accounts(key), neptun text not null unique,
@@ -45,11 +50,29 @@ create temp table nje_links (
 ) on commit drop;
 create temp table nje_enrollments (
   term text, course_code text, key text references nje_accounts(key),
+  in_previous boolean not null default false,
   primary key(term,course_code,key),
   foreign key(term,course_code) references nje_courses(term,code)
 ) on commit drop;
+-- The previous workbook, exactly as the previous import stored it. Empty on a
+-- first import; then every sync step below is a no-op.
+create temp table nje_prev_accounts (key text primary key, name text) on commit drop;
+create temp table nje_prev_attributes (
+  neptun text primary key, tagozat text, kepzesi_szint text, szak text, kar text,
+  szak_kod text, nyelv text, telephely text
+) on commit drop;
+create temp table nje_prev_courses (like nje_courses including all) on commit drop;
+create temp table nje_prev_teachers (code text primary key, name text) on commit drop;
+create temp table nje_prev_links (
+  term text, course_code text, teacher_code text, share_pct int,
+  primary key(term,course_code,teacher_code)
+) on commit drop;
+create temp table nje_report (section text, item text, detail text) on commit drop;
 
 -- INSERT_WORKBOOK_DATA
+
+create temp table nje_sync on commit drop as
+select exists (select 1 from nje_prev_courses) as enabled;
 
 -- Resolve teachers before users: a previously linked teacher may have a real email.
 create temp table nje_teacher_matches on commit drop as
@@ -67,30 +90,59 @@ update nje_teachers n set tid = m.id from nje_teacher_matches m where m.code = n
 update nje_teachers set tid = gen_random_uuid() where tid is null;
 
 create temp table nje_account_matches on commit drop as
-select n.key, u.id from nje_accounts n join auth.users u on lower(u.email) = n.email
+select n.key, u.id, 'email' as via from nje_accounts n join auth.users u on lower(u.email) = n.email
 union
-select n.key, a.profile_id from nje_accounts n join public.student_attributes a
+select n.key, a.profile_id, 'neptun' from nje_accounts n join public.student_attributes a
   on n.role = 'STUDENT' and upper(btrim(a.neptun)) = n.code
 union
-select n.key, t.profile_id from nje_teachers n join echo.teacher t on t.id = n.tid
+select n.key, t.profile_id, 'teacher' from nje_teachers n join echo.teacher t on t.id = n.tid
  where t.profile_id is not null
 union
-select n.key, u.id from nje_teachers n join echo.teacher t on t.id = n.tid
+select n.key, u.id, 'teacher' from nje_teachers n join echo.teacher t on t.id = n.tid
  join auth.users u on lower(u.email) = lower(t.email) where nullif(t.email, '') is not null;
+
+-- A student who signed in through NJE SSO before appearing in a workbook has
+-- an account without a Neptun attribute; its ePPN is <neptun>@<student scope>
+-- (same rule as saml_find_user in 79_saml_import_match.sql). Reuse it, or the
+-- next SSO login would land on that account and orphan the imported one.
+-- Only a fallback: an existing email/Neptun match always wins.
+do $$
+begin
+  if to_regclass('public.saml_identities') is not null then
+    execute $q$
+      insert into nje_account_matches
+      select n.key, s.user_id, 'sso' from nje_accounts n
+        join public.saml_identities s
+          on n.role = 'STUDENT'
+         and lower(split_part(s.eppn, '@', 2)) = any (string_to_array((select student_scopes from nje_settings), ','))
+         and upper(btrim(split_part(s.eppn, '@', 1))) = n.code
+       where not exists (select 1 from nje_account_matches m where m.key = n.key)
+         and not exists (select 1 from nje_account_matches m where m.id = s.user_id)$q$;
+  end if;
+end $$;
 
 do $$
 begin
   if exists (select key from nje_account_matches group by key having count(distinct id) > 1)
      or exists (select id from nje_account_matches group by id having count(distinct key) > 1) then
-    raise exception 'Ambiguous account match by email/Neptun/teacher; no data imported';
+    raise exception 'Ambiguous account match by email/Neptun/teacher/SSO; no data imported';
   end if;
 end $$;
-update nje_accounts n set uid = m.id from nje_account_matches m where m.key = n.key;
+update nje_accounts n set uid = m.id, matched_by = m.via
+  from (select distinct on (key) key, id, via from nje_account_matches order by key, via) m
+ where m.key = n.key;
 update nje_accounts set uid = gen_random_uuid(), is_new = true where uid is null;
 create unique index on nje_accounts(uid);
 
 do $$
+declare v_missing int;
 begin
+  select count(*) into v_missing from nje_accounts where in_previous and is_new;
+  if v_missing > 0 then
+    raise exception '% account(s) of the previous import are missing (e.g. %). Wrong database, or the previous import was never applied; nothing changed',
+      v_missing, (select string_agg(key, ', ') from (select key from nje_accounts
+                  where in_previous and is_new order by key limit 5) k);
+  end if;
   if exists (
     select 1 from nje_accounts n left join public.profiles p on p.id = n.uid
     join auth.users u on u.id = n.uid
@@ -114,6 +166,10 @@ begin
     raise exception 'Matched teacher is inactive; review before importing';
   end if;
 end $$;
+
+insert into nje_report
+select 'account reused (not in previous import)', key || ' ' || name, 'matched by ' || matched_by
+  from nje_accounts where not in_previous and not is_new and matched_by <> 'email';
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -155,12 +211,37 @@ from nje_accounts where is_new
 on conflict (id) do update set role=excluded.role, requested_role=excluded.requested_role,
   approval_status=excluded.approval_status, approved_at=excluded.approved_at, approved_by=excluded.approved_by;
 
+-- Sync: a name changed in the source follows only if nobody edited it since.
+with changed as (
+  update public.profiles p set name = n.name
+    from nje_accounts n join nje_prev_accounts o on o.key = n.key
+   where p.id = n.uid and not n.is_new and o.name <> n.name and p.name = o.name
+  returning n.key, o.name as old_name, n.name as new_name)
+insert into nje_report select 'name updated', key, old_name || ' -> ' || new_name from changed;
+insert into nje_report
+select 'name conflict (portal edit kept)', n.key, 'portal=' || p.name || ' workbook=' || n.name
+  from nje_accounts n join nje_prev_accounts o on o.key = n.key join public.profiles p on p.id = n.uid
+ where not n.is_new and o.name <> n.name and p.name not in (o.name, n.name);
+
 insert into public.student_attributes
   (profile_id,neptun,tagozat,kepzesi_szint,szak,kar,szak_kod,nyelv,telephely,forras)
 select a.uid,n.neptun,n.tagozat,n.kepzesi_szint,n.szak,n.kar,n.szak_kod,n.nyelv,n.telephely,'nje-workbook'
 from nje_attributes n join nje_accounts a on a.key=n.key
 on conflict (profile_id) do update set
   neptun=coalesce(nullif(btrim(student_attributes.neptun),''),excluded.neptun);
+
+with changed as (
+  update public.student_attributes s
+     set tagozat=n.tagozat, kepzesi_szint=n.kepzesi_szint, szak=n.szak, kar=n.kar,
+         szak_kod=n.szak_kod, nyelv=n.nyelv, telephely=n.telephely
+    from nje_attributes n join nje_prev_attributes o using (neptun) join nje_accounts a on a.key = n.key
+   where s.profile_id = a.uid
+     and (n.tagozat,n.kepzesi_szint,n.szak,n.kar,n.szak_kod,n.nyelv,n.telephely)
+         is distinct from (o.tagozat,o.kepzesi_szint,o.szak,o.kar,o.szak_kod,o.nyelv,o.telephely)
+     and (s.tagozat,s.kepzesi_szint,s.szak,s.kar,s.szak_kod,s.nyelv,s.telephely)
+         is not distinct from (o.tagozat,o.kepzesi_szint,o.szak,o.kar,o.szak_kod,o.nyelv,o.telephely)
+  returning n.neptun, n.szak)
+insert into nje_report select 'student program updated', neptun, szak from changed;
 
 -- Source gives organization codes but no names or verified hierarchy.
 insert into echo.org_unit (code,name_hu,kind,ext_source,ext_id,ext_synced_at)
@@ -174,6 +255,15 @@ select n.tid,n.code,n.name,u.email,a.uid,'nje-workbook',n.code,now()
 from nje_teachers n join nje_accounts a on a.key=n.key join auth.users u on u.id=a.uid
 on conflict (id) do update set profile_id=excluded.profile_id,
   email=coalesce(nullif(echo.teacher.email,''),excluded.email);
+
+-- Sync: a renamed teacher (TEACHER_ALIASES) keeps its record; the SSO name
+-- match (nje_name_key) then follows the new spelling.
+with changed as (
+  update echo.teacher t set name = n.name
+    from nje_teachers n join nje_prev_teachers o on o.code = n.code
+   where t.id = n.tid and o.name <> n.name and t.name = o.name
+  returning o.name as old_name, n.name as new_name)
+insert into nje_report select 'teacher renamed', old_name, new_name from changed;
 
 -- Mirror the OKTATO grant established by echo_teacher_link(). Do not revive
 -- a revoked/expired grant without explicit review.
@@ -192,35 +282,191 @@ from nje_teachers n join echo.teacher t on t.id=n.tid
 where not exists (select 1 from echo.role_grant g where g.person=t.profile_id
   and g.role='OKTATO' and g.scope_org is not distinct from t.org_unit_id);
 
+-- A course of the previous workbook that no longer exists was deleted in the
+-- portal on purpose: do not resurrect it.
+create temp table nje_skipped_courses on commit drop as
+select n.term, n.code from nje_courses n join nje_prev_courses o using (term, code)
+ where not exists (select 1 from echo.course c where c.code = n.code and c.term = n.term);
+insert into nje_report select 'course deleted in portal (not recreated)', term || ' ' || code, null
+  from nje_skipped_courses;
+
 insert into echo.course (code,name_hu,name_en,term,lang,org_unit_id,letszam,
   van_orarendi_info,vizsgakurzus,leiras,ext_source,ext_id,ext_synced_at)
 select n.code,n.name_hu,n.name_en,n.term,n.lang,o.id,n.letszam,
   n.van_orarendi_info,n.vizsgakurzus,n.leiras,'nje-workbook',n.term||':'||n.code,now()
 from nje_courses n join echo.org_unit o on o.code=n.org_code
+where not exists (select 1 from nje_skipped_courses s where s.term = n.term and s.code = n.code)
 on conflict (code,term) do nothing;
+
+-- Sync: three-way merge of course fields. A field takes the new workbook value
+-- only where the portal still holds the previous workbook value; a portal edit
+-- is kept and reported. Changes are recorded by the course audit trigger.
+alter table nje_courses add column org_unit_id uuid;
+alter table nje_prev_courses add column org_unit_id uuid;
+update nje_courses n set org_unit_id = o.id from echo.org_unit o where o.code = n.org_code;
+update nje_prev_courses n set org_unit_id = o.id from echo.org_unit o where o.code = n.org_code;
+do $$
+declare col text; cur text; v_n int;
+begin
+  foreach col in array array['name_hu','name_en','lang','org_unit_id','letszam',
+                             'van_orarendi_info','vizsgakurzus','leiras'] loop
+    -- The first import file had Windows line endings, so descriptions stored
+    -- from it may contain CR. Compare without CR, or every one looks edited.
+    cur := case when col = 'leiras' then 'replace(c.leiras, chr(13), '''')' else format('c.%I', col) end;
+    execute format($f$
+      insert into nje_report
+      select 'course conflict (portal edit kept)', n.term || ' ' || n.code,
+             %1$L || ': portal=' || coalesce(c.%1$I::text, '-') || ' workbook=' || coalesce(n.%1$I::text, '-')
+        from nje_courses n join nje_prev_courses o using (term, code)
+        join echo.course c on c.code = n.code and c.term = n.term and c.ext_source = 'nje-workbook'
+       where n.%1$I is distinct from o.%1$I and %2$s is distinct from o.%1$I
+         and %2$s is distinct from n.%1$I$f$, col, cur);
+    execute format($f$
+      update echo.course c set %1$I = n.%1$I, ext_synced_at = now()
+        from nje_courses n join nje_prev_courses o using (term, code)
+       where c.code = n.code and c.term = n.term and c.ext_source = 'nje-workbook'
+         and n.%1$I is distinct from o.%1$I and %2$s is not distinct from o.%1$I$f$, col, cur);
+    get diagnostics v_n = row_count;
+    if v_n > 0 then
+      insert into nje_report values ('course field updated', col, v_n || ' course(s)');
+    end if;
+  end loop;
+end $$;
+
+-- Sync: a course gone from the workbook keeps its record and history, but its
+-- headcount drops to 0 so ECHO eligibility excludes it (LETSZAM_ALATT).
+with gone as (
+  select c.id, o.term, o.code, o.letszam as old_letszam, c.letszam
+    from nje_prev_courses o join echo.course c on c.code = o.code and c.term = o.term
+   where c.ext_source = 'nje-workbook' and o.term in (select term from nje_courses)
+     and not exists (select 1 from nje_courses n where n.term = o.term and n.code = o.code)),
+changed as (
+  update echo.course c set letszam = 0, ext_synced_at = now() from gone g
+   where c.id = g.id and g.letszam is not distinct from g.old_letszam and g.letszam <> 0
+  returning c.term, c.code)
+insert into nje_report
+select 'course gone from workbook', g.term || ' ' || g.code,
+       case when exists (select 1 from changed x where x.term = g.term and x.code = g.code)
+            then 'headcount set to 0' when g.letszam = 0 then 'headcount already 0'
+            else 'headcount kept (portal edit): ' || coalesce(g.letszam::text, '-') end
+  from gone g;
+
+-- Sync: teacher assignments per course. Unchanged in the portal since the
+-- previous import -> follow the new workbook exactly. Edited in the portal
+-- (shares entered, teacher added/removed) -> keep as is; report only if the
+-- workbook also changed. Courses new to the workbook are inserted as before.
+create temp table nje_ct_sig on commit drop as
+select c.id as course_id, n.term, n.code,
+  (select coalesce(string_agg(t.id::text || '=' || l.share_pct::numeric(5,2)::text, ',' order by t.id::text), '')
+     from nje_prev_links l join nje_prev_teachers pt on pt.code = l.teacher_code
+     join echo.teacher t on t.code = pt.code or (t.ext_source = 'nje-workbook' and t.ext_id = pt.code)
+       or lower(btrim(t.name)) = lower(pt.name)
+    where l.term = n.term and l.course_code = n.code) as prev_sig,
+  (select coalesce(string_agg(t.tid::text || '=' || l.share_pct::numeric(5,2)::text, ',' order by t.tid::text), '')
+     from nje_links l join nje_teachers t on t.code = l.teacher_code
+    where l.term = n.term and l.course_code = n.code) as new_sig,
+  (select coalesce(string_agg(ct.teacher_id::text || '=' || ct.share_pct::numeric(5,2)::text, ',' order by ct.teacher_id::text), '')
+     from echo.course_teacher ct where ct.course_id = c.id) as db_sig
+from nje_courses n join nje_prev_courses o using (term, code)
+join echo.course c on c.code = n.code and c.term = n.term and c.ext_source = 'nje-workbook';
+
+insert into nje_report
+select 'teachers conflict (portal edit kept)', s.term || ' ' || s.code,
+       'workbook now: ' || coalesce((select string_agg(t.name || ' ' || l.share_pct || '%', ', ' order by t.name)
+         from nje_links l join nje_teachers t on t.code = l.teacher_code
+        where l.term = s.term and l.course_code = s.code), 'none')
+  from nje_ct_sig s where s.prev_sig <> s.new_sig and s.db_sig not in (s.prev_sig, s.new_sig);
+
+create temp table nje_ct_replace on commit drop as
+select * from nje_ct_sig where prev_sig <> new_sig and db_sig = prev_sig;
+delete from echo.course_teacher ct using nje_ct_replace s where ct.course_id = s.course_id;
+insert into echo.course_teacher (course_id,teacher_id,share_pct,role,ext_source,ext_synced_at)
+select s.course_id, t.tid, l.share_pct, 'oktato', 'nje-workbook', now()
+  from nje_ct_replace s join nje_links l on l.term = s.term and l.course_code = s.code
+  join nje_teachers t on t.code = l.teacher_code;
+insert into nje_report
+select 'teachers updated', s.term || ' ' || s.code,
+       coalesce((select string_agg(t.name || ' ' || l.share_pct || '%', ', ' order by t.name)
+         from nje_links l join nje_teachers t on t.code = l.teacher_code
+        where l.term = s.term and l.course_code = s.code), 'none')
+  from nje_ct_replace s;
 
 insert into echo.course_teacher (course_id,teacher_id,share_pct,role,ext_source,ext_synced_at)
 select c.id,t.tid,n.share_pct,'oktato','nje-workbook',now()
 from nje_links n join echo.course c on c.code=n.course_code and c.term=n.term
 join nje_teachers t on t.code=n.teacher_code
+where not exists (select 1 from nje_prev_courses o where o.term = n.term and o.code = n.course_code)
 on conflict (course_id,teacher_id) do nothing;
 
--- Preserve an intentional withdrawal instead of silently reactivating it.
+-- Sync: enrollments this import dropped earlier come back when the student
+-- re-registers. Only the import's own drops (ext_source 'nje-workbook-dropped');
+-- a drop made in the portal is intentional and stays.
+with changed as (
+  update echo.enrollment e set status = 'active', ext_source = 'nje-workbook', ext_synced_at = now()
+    from nje_enrollments n join echo.course c on c.code = n.course_code and c.term = n.term
+    join nje_accounts a on a.key = n.key
+   where e.course_id = c.id and e.student_key = a.uid
+     and e.ext_source = 'nje-workbook-dropped' and e.status = 'dropped'
+  returning e.id)
+insert into nje_report select 'enrollment reactivated', null, count(*)::text from changed having count(*) > 0;
+
+create temp table nje_kept_enrollments on commit drop as
+select n.term, n.course_code, n.key, 'dropped in portal (kept dropped)' as why
+  from nje_enrollments n join echo.course c on c.code = n.course_code and c.term = n.term
+  join nje_accounts a on a.key = n.key
+  join echo.enrollment e on e.course_id = c.id and e.student_key = a.uid
+ where e.status <> 'active'
+union all
+-- In the previous workbook, imported, then removed in the portal: not re-added.
+select n.term, n.course_code, n.key, 'removed in portal (not re-added)'
+  from nje_enrollments n join echo.course c on c.code = n.course_code and c.term = n.term
+  join nje_accounts a on a.key = n.key
+ where n.in_previous
+   and not exists (select 1 from echo.enrollment e where e.course_id = c.id and e.student_key = a.uid);
 do $$
 begin
-  if exists (select 1 from nje_enrollments n
-    join echo.course c on c.code=n.course_code and c.term=n.term
-    join nje_accounts a on a.key=n.key
-    join echo.enrollment e on e.course_id=c.id and e.student_key=a.uid
-    where e.status <> 'active') then
+  -- A first import keeps its original rule: never overrule a withdrawal silently.
+  if not (select enabled from nje_sync) and exists (select 1 from nje_kept_enrollments) then
     raise exception 'An existing enrollment is dropped; review before importing';
   end if;
 end $$;
+insert into nje_report select 'enrollment ' || why, term || ' ' || course_code, key from nje_kept_enrollments;
+
 insert into echo.enrollment (course_id,student_key,status,ext_source,ext_id,ext_synced_at)
 select c.id,a.uid,'active','nje-workbook',n.term||':'||n.course_code||':'||a.code,now()
 from nje_enrollments n join echo.course c on c.code=n.course_code and c.term=n.term
 join nje_accounts a on a.key=n.key
+where not n.in_previous
 on conflict (course_id,student_key) do nothing;
+
+-- Sync: an imported enrollment missing from the new workbook (the student
+-- dropped the course in Neptun, or the course vanished) becomes 'dropped'.
+-- Never deleted; ECHO participation and responses are untouched. Only rows
+-- this importer created, only for terms this workbook covers.
+create temp table nje_drop on commit drop as
+select e.id from echo.enrollment e join echo.course c on c.id = e.course_id
+ where (select enabled from nje_sync)
+   and e.ext_source = 'nje-workbook' and e.status = 'active'
+   and c.term in (select term from nje_courses)
+   and not exists (select 1 from nje_enrollments n join nje_accounts a on a.key = n.key
+                    where n.term = c.term and n.course_code = c.code and a.uid = e.student_key);
+do $$
+declare v_drop bigint; v_all bigint; v_max numeric;
+begin
+  select count(*) into v_drop from nje_drop;
+  select count(*) into v_all from echo.enrollment e join echo.course c on c.id = e.course_id
+   where e.ext_source = 'nje-workbook' and c.term in (select term from nje_courses);
+  select max_drop_pct into v_max from nje_settings;
+  if v_drop > 0 and v_drop * 100.0 > v_max * greatest(v_all, 1) then
+    raise exception 'Would drop % of % workbook enrollments (over % %%). Truncated export? Nothing changed',
+      v_drop, v_all, v_max;
+  end if;
+end $$;
+with changed as (
+  update echo.enrollment e set status = 'dropped', ext_source = 'nje-workbook-dropped', ext_synced_at = now()
+    from nje_drop d where e.id = d.id
+  returning e.id)
+insert into nje_report select 'enrollment dropped (gone from workbook)', null, count(*)::text from changed having count(*) > 0;
 
 create temp table nje_checks (item text, expected bigint, actual bigint) on commit drop;
 insert into nje_checks
@@ -234,16 +480,21 @@ select 'Teacher profiles and grants',count(*),count(t.id) filter(where t.profile
 union all
 select 'Courses',count(*),count(c.id) from nje_courses n
   left join echo.course c on c.code=n.code and c.term=n.term
+ where not exists (select 1 from nje_skipped_courses s where s.term=n.term and s.code=n.code)
 union all
+-- Portal-edited assignments of previously imported courses are left alone.
 select 'Teacher assignments',count(*),count(ct.teacher_id) from nje_links n
   join echo.course c on c.code=n.course_code and c.term=n.term
   join nje_teachers t on t.code=n.teacher_code
   left join echo.course_teacher ct on ct.course_id=c.id and ct.teacher_id=t.tid
+ where not exists (select 1 from nje_ct_sig s where s.course_id=c.id and s.db_sig <> s.prev_sig)
 union all
 select 'Enrollments',count(*),count(e.id) filter(where e.status='active') from nje_enrollments n
   join echo.course c on c.code=n.course_code and c.term=n.term
   join nje_accounts a on a.key=n.key
   left join echo.enrollment e on e.course_id=c.id and e.student_key=a.uid
+ where not exists (select 1 from nje_kept_enrollments k
+                    where k.term=n.term and k.course_code=n.course_code and k.key=n.key)
 union all
 select 'New email identities',count(*),count(i.id) from nje_accounts a
   left join auth.identities i on i.user_id=a.uid and i.provider='email' where a.is_new;
@@ -256,4 +507,21 @@ end $$;
 select item,expected,actual,expected=actual as ok from nje_checks
 union all select 'New accounts (CSV credentials apply)',count(*),count(*),true from nje_accounts where is_new
 union all select 'Reused accounts (keep existing credentials)',count(*),count(*),true from nje_accounts where not is_new;
+
+\echo '=== Changes and conflicts (summary) ==='
+select section, count(*) as rows from nje_report group by section order by section;
+\echo '=== Details (bulk enrollment rows omitted) ==='
+select section, item, detail from nje_report
+ where section not like 'enrollment %' or section like 'enrollment %portal%'
+ order by section, item;
+\echo '=== Open/processing ECHO campaigns for the imported term(s): eligibility is NOT rebuilt ==='
+select c.id, c.term, c.state from echo.campaign c
+ where c.term in (select term from nje_courses) and c.state not in ('draft','sealed','published');
+
+\if :{?apply}
 commit;
+\echo 'COMMITTED.'
+\else
+rollback;
+\echo 'PREVIEW ONLY - rolled back. Rerun with  -v apply=1  to commit.'
+\endif
