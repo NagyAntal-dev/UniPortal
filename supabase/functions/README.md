@@ -1,3 +1,24 @@
+# echo-receipt — kérdőív-kitöltés visszaigazoló levele
+
+Az ECHO kérdőív sikeres beküldése után a böngésző külön, azonosított kérésben
+hívja; a levél a hallgató saját címére megy, a felület nyelvén (hu/en).
+Válaszokat és időpontot nem tartalmaz. Részletek: `echo-receipt/index.ts` fejléce.
+
+Docker-telepítésen a `deploy/compose.uniportal.yml` csatolja, és a `.env`
+`SMTP_*` soraiból kapja a beállításokat. Felhős projekten:
+
+```bash
+supabase functions deploy echo-receipt
+supabase secrets set \
+  SMTP_HOST=smtp.resend.com SMTP_PORT=465 SMTP_USER=resend SMTP_PASS=<API-kulcs> \
+  SMTP_ADMIN_EMAIL=noreply@<domain> SMTP_SENDER_NAME="NJE UniPortal" \
+  UNIPORTAL_SITE_URL=https://<az oldal címe>
+```
+
+SMTP nélkül a függvény nem küld, csak `{ sent: false, reason: 'smtp_not_configured' }`-ot ad vissza.
+
+---
+
 # WhatsApp Business integráció — telepítés
 
 Két Edge Function. A WhatsApp access token **kizárólag** itt, szerveroldalon

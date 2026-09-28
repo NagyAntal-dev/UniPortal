@@ -433,6 +433,18 @@ const ECHO_api = {
                  }),
   issueTicket: (campaign, course) => ECHO_rpc('echo_issue_ticket', { p_campaign: campaign, p_course: course }),
 
+  /* Visszaigazoló e-mail a kitöltésről (supabase/functions/echo-receipt).
+     AZONOSÍTOTT út, a bejelentkezett window.sb-vel — a levelet a hallgató
+     saját címére kell küldeni. Csak a kampány/kurzus pár és a nyelv megy ki,
+     válasz-tartalom SOHA. A sikeres beküldés UTÁN fut, a draftDrop mellett. */
+  receipt:     async (campaign, course, lang) => {
+    const { data, error } = await window.sb.functions.invoke('echo-receipt', {
+      body: { campaign_id: campaign, course_id: course, lang },
+    });
+    if (error) throw error;
+    return data;
+  },
+
   // ANONIM ÚT. Lásd az ECHO_anonClient fölötti indoklást.
   submit: async (ticket, payload) => {
     const anon = ECHO_anonClient();
@@ -2111,6 +2123,11 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
       //    nyeljuk a hibat — a hallgatonak a bekuldes sikerult, es ez a fontos.
       try { await ECHO_api.draftDrop(course.campaign_id, course.course_id); }
       catch (e) { /* csendben — a szerveroldali takaritas elviszi */ }
+
+      // 4) VISSZAIGAZOLO E-MAIL — szinten kulon, AZONOSITOTT keresben, es nem
+      //    varjuk meg: a bekuldes sikeret a level sorsa nem befolyasolja (SMTP
+      //    nelkul a fuggveny csak jelzi, hogy nem kuldott).
+      ECHO_api.receipt(course.campaign_id, course.course_id, ECHO_lang()).catch(() => {});
 
       setDone(true);
       onSubmitted && onSubmitted(course);

@@ -15,10 +15,13 @@
 #    A sablont a web szolgáltatja: deploy/web/email/recovery.html
 #    A regisztráció-megerősítő levél ugyanígy: deploy/web/email/confirmation.html
 #    Mindkét levél az oldal nyelvén megy (részletek a sablonok fejlécében).
+#    Az ECHO-kitöltés visszaigazoló levelét NEM a GoTrue küldi, hanem az
+#    echo-receipt Edge Function, ugyanazzal az SMTP-vel (lásd 3) pont).
 #
 # 3) Edge Functions: a UniPortal függvényei közvetlenül a supabase/functions
 #    könyvtárból, csak olvasásra csatolva — nincs másolat, ami elavulhatna.
-#    Új függvénynél ide kell egy újabb sor. A titkaik a .env WHATSAPP_* soraiból.
+#    Új függvénynél ide kell egy újabb sor. A titkaik a .env WHATSAPP_* soraiból,
+#    az echo-receipt SMTP-adatai a .env SMTP_* soraiból (ugyanazok, mint az auth-é).
 #
 # 4) Tároló és képátalakítás: mennyiségi korlátok. A /storage/v1/render/image/
 #    útvonal alapból korlátlan, és ez a verem legolcsóbb túlterhelési pontja.
@@ -47,6 +50,7 @@ services:
     volumes:
       - ./supabase/functions/whatsapp-send:/home/deno/functions/whatsapp-send:ro,z
       - ./supabase/functions/whatsapp-webhook:/home/deno/functions/whatsapp-webhook:ro,z
+      - ./supabase/functions/echo-receipt:/home/deno/functions/echo-receipt:ro,z
     environment:
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
@@ -56,6 +60,15 @@ services:
       WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
       # Percenként ennyi WhatsApp-üzenetet küldhet EGY ügyintéző (0 = nincs korlát).
       WHATSAPP_MAX_SENDS_PER_MINUTE: ${WHATSAPP_MAX_SENDS_PER_MINUTE:-20}
+      # echo-receipt: a kérdőív-kitöltés visszaigazoló levele. SMTP nélkül nem
+      # küld, csak jelzi (smtp_not_configured). A linkek a SITE_URL-re mutatnak.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-}
+      SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-}
+      UNIPORTAL_SITE_URL: ${SITE_URL:-}
     # A hivatalos csomag mintafüggvénye (hello) hitelesítés nélkül elérhető
     # lenne a /functions/v1/hello címen. A vendorolt fát nem szerkesztjük,
     # ezért üres tmpfs-t borítunk rá: a futtató így nem találja meg.
