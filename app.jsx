@@ -6397,7 +6397,8 @@ return ImmigrationCompliance;
 
 /* ===== Evaluation ===== */
 const Evaluation = (() => {
-type EvaluationSubView = 'scorecard' | 'committee' | 'video' | 'recommendations';
+// A 'video' szándékosan hiányzik: az aszinkron interjú kikerült (09.23-i észrevétel).
+type EvaluationSubView = 'scorecard' | 'committee' | 'recommendations';
 
 const mockCriteria: Criterion[] = [
   { id: '1', label: 'Szakmai Motiváció', maxScore: 5, currentScore: 4 },
@@ -6816,12 +6817,11 @@ const Evaluation: React.FC = () => {
         >
           Bizottsági Nézet
         </button>
-        <button 
-          onClick={() => setActiveSubView('video')}
-          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeSubView === 'video' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
-        >
-          Videóinterjú (Aszinkron)
-        </button>
+        {/* „Videóinterjú (Aszinkron)" fül ELTÁVOLÍTVA 2026-09-28 — a külügyi
+            iroda 09.23-i észrevétele: „Az előre felvett interjú nem szükséges.
+            Mindenki élőben fog interjúzni." A jelentkezői oldalról már korábban
+            kikerült; itt, a bírálói nézetben maradt bent egy minta-felvételes
+            panel, ami azt sugallta, hogy mégis van aszinkron interjú. */}
         <button 
           onClick={() => setActiveSubView('recommendations')}
           className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeSubView === 'recommendations' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
@@ -6834,7 +6834,6 @@ const Evaluation: React.FC = () => {
       <div className="mt-8">
         {activeSubView === 'scorecard' && renderScorecard()}
         {activeSubView === 'committee' && renderCommitteeView()}
-        {activeSubView === 'video' && renderVideoInterview()}
         {activeSubView === 'recommendations' && renderRecommendations()}
       </div>
     </div>
