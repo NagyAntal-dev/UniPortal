@@ -677,7 +677,15 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
     if (saved) { const m = PROG_fromRow(saved); setCur(m); onSaved && onSaved(m); }
     return saved;
   };
-  const goNext = async () => { const n = Math.min(lepes + 1, rail.length - 1); setIdx(n); await persist({ student_step: Math.min(n, steps.length - 1) }); };
+  /* A „Folytatás" ugyanazt a zárat tiszteli, mint a sáv. A gomb tiltva van
+     hiányos lépésnél, de a záró feltétel ide is kell: a sáv és a gomb NE
+     kétféle szabály szerint működjön. */
+  const goNext = async () => {
+    const n = Math.min(lepes + 1, rail.length - 1);
+    if (!lepesNyithato(n)) return;
+    setIdx(n);
+    await persist({ student_step: Math.min(n, steps.length - 1) });
+  };
   const goPrev = () => setIdx(Math.max(0, lepes - 1));
   const stepKey = hallgatoiNezet ? (rail[lepes] || {}).key : null;
   /* NE ENGEDJEN TOVÁBB HIÁNYOS ADATTAL (külügyi iroda, 2026-09-24).
@@ -698,7 +706,15 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
     const l = rail[i];
     if (!l) return false;
     if (l.fazis === 'iroda' || l.fazis === 'utan') return true;   // megtekintés / felvétel utáni
-    return i <= Math.max(elsoHianyos, lepes);
+    /* A NYITOTT lépés csak akkor emelheti a plafont, ha maga is hallgatói
+       lépés. MÉRVE 2026-09-29: az irodai lépés megtekintésre mindig szabad,
+       és amíg a plafon a nyers `lepes` indexet is figyelembe vette, egyetlen
+       kattintás a „Dokumentum-ellenőrzés"-re kinyitotta az ÖSSZES előtte lévő
+       hallgatói lépést — hiányzó dokumentummal is el lehetett jutni a
+       motivációs levélig és a beadásig. */
+    const aktualis = rail[lepes];
+    const sajatPlafon = aktualis && aktualis.fazis === 'hallgato' ? lepes : 0;
+    return i <= Math.max(elsoHianyos, sajatPlafon);
   };
   const statusz = PROG_STATUS[cur.status] || null;
 
