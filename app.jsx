@@ -3634,19 +3634,28 @@ const AdmissionsCore = ({ user }) => {
               )}
             </div>
           </div>
-          {previewDoc && (
+          {/* ELŐNÉZET = OLDALRÓL NYÍLÓ OLVASÓ, ha van csatolt fájl. Csatolmány
+              nélkül marad a régi kis ablak (ott csak a kinyert adat van). */}
+          {previewDoc && (() => {
+            const e = (previewDoc.p.data && previewDoc.p.data.docs && previewDoc.p.data.docs[previewDoc.d.id]) || {};
+            if (e.path || e.dataUrl) return (
+              <DocReader entry={e} fileName={previewDoc.fileName} label={previewDoc.d.label}
+                Icon={previewDoc.d.Icon} onClose={() => setPreviewDoc(null)} />
+            );
+            return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setPreviewDoc(null)}>
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e2 => e2.stopPropagation()}>
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between"><div className="font-bold text-slate-800 text-sm flex items-center gap-2"><previewDoc.d.Icon size={16} className="text-primary" /> {previewDoc.d.label}</div><button onClick={() => setPreviewDoc(null)} className="text-slate-400 hover:text-slate-700"><Lucide.X size={18} /></button></div>
                 <div className="p-4 bg-slate-50">
-                  {(() => { const e = (previewDoc.p.data && previewDoc.p.data.docs && previewDoc.p.data.docs[previewDoc.d.id]) || {}; return (e.path || e.dataUrl) ? <DocViewer entry={e} fileName={previewDoc.fileName} /> : (
+                  {(
                     <div className="bg-white border border-slate-200 rounded-xl mx-auto max-h-[55vh] aspect-[3/4] w-full max-w-xs flex flex-col items-center justify-center text-center p-6"><previewDoc.d.Icon size={48} className="text-slate-300 mb-4" /><div className="font-mono text-xs text-slate-400">{previewDoc.fileName}</div><div className="font-bold text-slate-700 mt-2">{previewDoc.d.label}</div>{previewDoc.d.id === 'passport' && previewDoc.p.data && previewDoc.p.data.extracted && (<div className="mt-4 text-xs text-slate-500 space-y-0.5"><div>{previewDoc.p.data.extracted.name}</div><div>{previewDoc.p.data.extracted.passportNumber}</div><div>{previewDoc.p.data.extracted.country}</div><div>{genderLabel(previewDoc.p.data.extracted.gender)}</div></div>)}<div className="mt-4 text-[10px] text-slate-300">Nincs csatolt fájl</div></div>
-                  ); })()}
+                  )}
                 </div>
                 <div className="p-4 border-t border-slate-100 flex justify-end"><button onClick={() => downloadDoc(previewDoc.d, previewDoc.fileName, previewDoc.p)} className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5"><Lucide.Download size={14} /> Letöltés</button></div>
               </div>
             </div>
-          )}
+            );
+          })()}
           {aiReport && (() => {
             const d = aiReport.d, ap = aiReport.p; const R = aiReport.result || {};
             const auth = R.authenticity || 'review'; const ok = auth === 'authentic'; const sus = auth === 'suspicious';
@@ -7761,6 +7770,480 @@ function DocViewer({ entry, fileName }) {
     : <img src={src} alt={fileName || ''} className="max-h-[60vh] mx-auto rounded-xl border border-slate-200" />;
 }
 
+/* ============ DOKUMENTUM-OLVASÓ — oldalról nyíló ablak ============
+   AZ ÜGYINTÉZŐ EDDIG NEM TUDTA ELOLVASNI, AMIT ELLENŐRIZNIE KELL. Az előnézet
+   egy max-w-lg (512 px) ablakban jelent meg, fix 1,4-es nagyítással, legfeljebb
+   10 oldalt rajzolva, keresés és nagyítás nélkül: egy A4-es bizonyítvány vagy
+   egy útlevél adatoldala ebben olvashatatlan volt, a döntéshez pedig a
+   dokumentum apró betűs része kell.
+
+   Ez a nézet oldalról nyílik be, a képernyő majdnem teljes magasságában, és
+   azt adja, amit egy PDF-olvasótól elvárunk:
+     · nagyítás 50–400% között, és „szélességre igazítva" (alapérték),
+     · Ctrl+görgő nagyítás, kéz-eszközzel (vagy középső egérgombbal) pan,
+     · szövegkeresés a TELJES dokumentumban, találatok kiemelve, találatonként
+       léptetve — nem csak az első 10 oldalon,
+     · oldalozás és oldalszámláló, 90°-os forgatás (a beszkennelt lapok fele
+       fekve érkezik),
+     · a szöveg kijelölhető és másolható (valódi szövegréteg), így az
+       útlevélszám nem kézzel átírva kerül a rendszerbe.
+
+   MIÉRT NEM iframe/`<embed>` A BÖNGÉSZŐ PDF-NÉZŐJÉVEL: a fájl aláírt, lejáró
+   hivatkozáson érhető el, és a beágyazott néző viselkedése böngészőnként más
+   (a Safari letöltést kínál helyette). A pdf.js viszont mindenhol ugyanaz, és
+   a rajzoláshoz nem kell a fájlt új lapon megnyitni.
+
+   OLDALAK IGÉNY SZERINT RAJZOLÓDNAK (IntersectionObserver): egy 40 oldalas
+   mellékletnél 400%-on minden oldal egyszerre rajzolva megfogná a böngészőt. */
+const DOC_OLV_CSS = `
+.dokolv-lap { position: relative; }
+/* A szövegréteg a pdf.js saját elhelyezését használja, ezért kell a
+   --scale-factor változó; a betűk átlátszók, csak a kijelölés és a kiemelés
+   látszik a rajzolt lap fölött. */
+.dokolv-szoveg { position: absolute; inset: 0; overflow: hidden; line-height: 1;
+  text-align: initial; transform-origin: 0 0; --scale-factor: 1; }
+.dokolv-szoveg span, .dokolv-szoveg br { position: absolute; white-space: pre;
+  transform-origin: 0 0; color: transparent; cursor: text; }
+.dokolv-szoveg mark { background: rgba(250, 204, 21, .5); color: transparent; border-radius: 2px; }
+.dokolv-szoveg mark.aktiv { background: rgba(234, 88, 12, .65); }
+.dokolv-szoveg ::selection { background: rgba(37, 99, 235, .3); }
+.dokolv-kez, .dokolv-kez * { cursor: grab !important; user-select: none !important; }
+.dokolv-kez.fog, .dokolv-kez.fog * { cursor: grabbing !important; }
+`;
+const DOC_OLV_FOKOK = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+const DOC_OLV_esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/* A SZÖVEGRÉTEGET EGYMÁS UTÁN KELL RAJZOLNI. MÉRVE 2026-09-29: három oldalt
+   párhuzamosan rajzolva csak az UTOLSÓ lap szövegrétege lett kész (a pdf.js
+   TextLayer közös, statikus mérőállapotot használ), így az első két oldalon
+   nem lehetett kijelölni és keresni. Egy soros várólista megoldja. */
+let DOC_SZOVEG_SOR = Promise.resolve();
+function DOC_szovegSorban(f) {
+  const kov = DOC_SZOVEG_SOR.then(f, f);
+  DOC_SZOVEG_SOR = kov.catch(() => {});
+  return kov;
+}
+
+let DOC_PDFJS = null;
+async function DOC_pdfjs() {
+  if (DOC_PDFJS) return DOC_PDFJS;
+  const m = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs');
+  m.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs';
+  DOC_PDFJS = m;
+  return m;
+}
+
+/* Egy lap: a vászon és a szövegréteg. Csak akkor rajzol, ha a görgetősávban
+   közel van a látható területhez. */
+function DocReaderLap({ pdf, n, skala, forgatas, keres, aktivSorszam }) {
+  const kulsoRef = React.useRef(null);
+  const vaszonRef = React.useRef(null);
+  const szovegRef = React.useRef(null);
+  const munkaRef = React.useRef(null);     // a futó pdf.js rajzolás
+  const [latszik, setLatszik] = React.useState(n <= 2);
+  const [meret, setMeret] = React.useState(null);
+
+  // Méret előre (rajzolás nélkül is), hogy a görgetősáv hossza helyes legyen.
+  React.useEffect(() => {
+    let dead = false;
+    (async () => {
+      try {
+        const page = await pdf.getPage(n);
+        const vp = page.getViewport({ scale: skala, rotation: forgatas });
+        if (!dead) setMeret({ w: Math.floor(vp.width), h: Math.floor(vp.height) });
+      } catch (e) {}
+    })();
+    return () => { dead = true; };
+  }, [pdf, n, skala, forgatas]);
+
+  React.useEffect(() => {
+    if (latszik || !kulsoRef.current || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((be) => {
+      if (be.some(x => x.isIntersecting)) { setLatszik(true); io.disconnect(); }
+    }, { root: null, rootMargin: '800px 0px' });
+    io.observe(kulsoRef.current);
+    return () => io.disconnect();
+  }, [latszik]);
+
+  /* Rajzolás — nagyításkor és forgatáskor újra.
+
+     A FOLYAMATBAN LÉVŐ RAJZOLÁST MEG KELL SZAKÍTANI. MÉRVE 2026-09-29: amikor
+     a „szélességre igazítás" mérése átállította a nagyítást, az új rajzolás
+     ugyanarra a vászonra indult, amin az előző még futott — a pdf.js ilyenkor
+     kivételt dob („Cannot use the same canvas during multiple render
+     operations"), és a függvény a SZÖVEGRÉTEG rajzolása ELŐTT szakadt meg. Az
+     első két oldalon így nem lehetett kijelölni és keresni, csak az utolsón
+     (ami később, már stabil nagyításon rajzolódott). */
+  React.useEffect(() => {
+    if (!latszik) return;
+    let dead = false;
+    (async () => {
+      try {
+        const pdfjs = await DOC_pdfjs();
+        const page = await pdf.getPage(n);
+        const vp = page.getViewport({ scale: skala, rotation: forgatas });
+        const vaszon = vaszonRef.current;
+        if (dead || !vaszon) return;
+        // A kijelzőnél sűrűbb rajzolás: 400%-on se legyen pixeles a betű.
+        const suru = Math.min(window.devicePixelRatio || 1, 2);
+        const vpr = page.getViewport({ scale: skala * suru, rotation: forgatas });
+        vaszon.width = Math.floor(vpr.width); vaszon.height = Math.floor(vpr.height);
+        vaszon.style.width = Math.floor(vp.width) + 'px';
+        vaszon.style.height = Math.floor(vp.height) + 'px';
+        const munka = page.render({ canvasContext: vaszon.getContext('2d'), viewport: vpr });
+        munkaRef.current = munka;
+        try { await munka.promise; } catch (e) { return; }   // megszakítva: az új rajzolás veszi át
+        if (munkaRef.current === munka) munkaRef.current = null;
+        if (dead) return;
+        const sz = szovegRef.current;
+        if (sz) {
+          sz.innerHTML = '';
+          sz.style.width = Math.floor(vp.width) + 'px';
+          sz.style.height = Math.floor(vp.height) + 'px';
+          sz.style.setProperty('--scale-factor', String(skala));
+          const tcs = await page.getTextContent();
+          if (dead) return;
+          /* A 4.x-es pdf.js a TextLayer osztályt adja; a régebbi kiadás a
+             renderTextLayer függvényt. Ha egyik sincs, a lap akkor is
+             olvasható — csak kijelölni és kiemelni nem lehet benne. */
+          if (typeof pdfjs.TextLayer === 'function') {
+            await DOC_szovegSorban(() => new pdfjs.TextLayer({ textContentSource: tcs, container: sz, viewport: vp }).render());
+          } else if (typeof pdfjs.renderTextLayer === 'function') {
+            await DOC_szovegSorban(() => pdfjs.renderTextLayer({ textContentSource: tcs, container: sz, viewport: vp }).promise);
+          }
+        }
+      } catch (e) {}
+    })();
+    return () => {
+      dead = true;
+      if (munkaRef.current) { try { munkaRef.current.cancel(); } catch (e) {} munkaRef.current = null; }
+    };
+  }, [pdf, n, skala, forgatas, latszik]);
+
+  // Kiemelés: a rajzolás után és minden keresésre.
+  React.useEffect(() => {
+    const el = szovegRef.current;
+    if (!el) return;
+    const t = setTimeout(() => {
+      el.querySelectorAll('mark').forEach(m => { m.replaceWith(document.createTextNode(m.textContent || '')); });
+      el.querySelectorAll('span').forEach(s => { try { s.normalize(); } catch (e) {} });
+      const k = String(keres || '').toLowerCase();
+      if (!k) return;
+      let sorszam = 0;
+      el.querySelectorAll('span').forEach(s => {
+        const szoveg = s.textContent || '';
+        const kis = szoveg.toLowerCase();
+        const helyek = [];
+        let i = kis.indexOf(k);
+        while (i >= 0) { helyek.push(i); i = kis.indexOf(k, i + k.length); }
+        if (!helyek.length) return;
+        let html = '', utolso = 0;
+        helyek.forEach(p => {
+          html += DOC_OLV_esc(szoveg.slice(utolso, p))
+            + '<mark data-tal="' + (sorszam++) + '">' + DOC_OLV_esc(szoveg.substr(p, k.length)) + '</mark>';
+          utolso = p + k.length;
+        });
+        html += DOC_OLV_esc(szoveg.slice(utolso));
+        s.innerHTML = html;
+      });
+      if (aktivSorszam >= 0) {
+        const m = el.querySelector('mark[data-tal="' + aktivSorszam + '"]');
+        if (m) { m.classList.add('aktiv'); try { m.scrollIntoView({ block: 'center' }); } catch (e) {} }
+      }
+    }, 60);
+    return () => clearTimeout(t);
+  }, [keres, aktivSorszam, latszik, skala, forgatas]);
+
+  return (
+    <div ref={kulsoRef} data-olv-lap={n} className="mx-auto mb-4 last:mb-0" style={meret ? { width: meret.w } : undefined}>
+      <div className="dokolv-lap bg-white shadow-md rounded-sm ring-1 ring-slate-300/60 overflow-hidden"
+           style={meret ? { width: meret.w, height: meret.h } : { minHeight: 200 }}>
+        <canvas ref={vaszonRef} className="block" />
+        <div ref={szovegRef} className="dokolv-szoveg" />
+        {!latszik && <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-slate-300">{n}. oldal</div>}
+      </div>
+      <div className="text-center text-[10px] font-bold text-slate-400 mt-1">{n}</div>
+    </div>
+  );
+}
+
+/* Az oldalról benyíló olvasó. PDF-nél pdf.js, képnél ugyanaz a nagyítás-pan
+   kezelés (az útlevélmásolatok fele fénykép). */
+function DocReader({ entry, fileName, label, Icon, onClose }) {
+  const src = useDocSrc(entry);
+  const pdfE = /pdf/i.test((entry && entry.type) || '') || /\.pdf$/i.test(String(fileName || ''));
+  const [allapot, setAllapot] = React.useState('betolt');   // betolt | kesz | hiba
+  const [pdf, setPdf] = React.useState(null);
+  const [nagyitas, setNagyitas] = React.useState(0);        // 0 = szélességre igazítva
+  const [forgatas, setForgatas] = React.useState(0);
+  const [kez, setKez] = React.useState(false);
+  const [q, setQ] = React.useState('');
+  const [keres, setKeres] = React.useState('');
+  const [talalatok, setTalalatok] = React.useState([]);     // [{oldal, sorszam}]
+  const [tIdx, setTIdx] = React.useState(0);
+  const [aktOldal, setAktOldal] = React.useState(1);
+  const [illeszt, setIlleszt] = React.useState(1);          // szélességre igazító skála
+  const [illeszKesz, setIlleszKesz] = React.useState(false); // megvan-e már a mérés
+  const gorgetoRef = React.useRef(null);
+  const fogRef = React.useRef(null);
+
+  // Betöltés
+  React.useEffect(() => {
+    if (!src) return;
+    let dead = false;
+    setAllapot('betolt');
+    (async () => {
+      if (!pdfE) { if (!dead) setAllapot('kesz'); return; }
+      try {
+        const pdfjs = await DOC_pdfjs();
+        const bytes = await DOC_bytes(src);
+        if (dead || !bytes) return;
+        const doc = await pdfjs.getDocument({ data: bytes }).promise;
+        if (dead) return;
+        setPdf(doc); setAllapot('kesz');
+      } catch (e) { if (!dead) setAllapot('hiba'); }
+    })();
+    return () => { dead = true; };
+  }, [src, pdfE]);
+
+  // Szélességre igazítás: a görgető szélességéből és az első lap méretéből.
+  React.useEffect(() => {
+    if (!pdf || !gorgetoRef.current) return;
+    let dead = false;
+    const szamol = async () => {
+      try {
+        const page = await pdf.getPage(1);
+        const vp = page.getViewport({ scale: 1, rotation: forgatas });
+        const w = (gorgetoRef.current ? gorgetoRef.current.clientWidth : 800) - 48;
+        if (!dead) { setIlleszt(Math.max(0.2, Math.min(4, w / vp.width))); setIlleszKesz(true); }
+      } catch (e) {}
+    };
+    szamol();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(szamol) : null;
+    if (ro && gorgetoRef.current) ro.observe(gorgetoRef.current);
+    return () => { dead = true; if (ro) ro.disconnect(); };
+  }, [pdf, forgatas]);
+
+  const skala = nagyitas || illeszt;
+
+  // Keresés a TELJES dokumentumban. A találatok lapon belüli sorszáma
+  // ugyanabból a darabolásból jön, amit a szövegréteg is használ.
+  React.useEffect(() => {
+    if (!pdf) return;
+    let dead = false;
+    const k = String(keres || '').toLowerCase();
+    if (!k) { setTalalatok([]); setTIdx(0); return; }
+    (async () => {
+      const ki = [];
+      for (let n = 1; n <= pdf.numPages; n++) {
+        try {
+          const page = await pdf.getPage(n);
+          const tc = await page.getTextContent();
+          if (dead) return;
+          let sorszam = 0;
+          tc.items.forEach(it => {
+            const t = String(it.str || '').toLowerCase();
+            let i = t.indexOf(k);
+            while (i >= 0) { ki.push({ oldal: n, sorszam: sorszam++ }); i = t.indexOf(k, i + k.length); }
+          });
+        } catch (e) {}
+      }
+      if (!dead) { setTalalatok(ki); setTIdx(0); if (ki.length) ugrasOldalra(ki[0].oldal); }
+    })();
+    return () => { dead = true; };
+  }, [pdf, keres]);
+
+  /* Ugrás után rövid ideig nem a görgetés dönti az oldalszámot: a találatra
+     állás még mozgatja a nézetet (a kiemelés középre kerül), és a számláló
+     ilyenkor a FÖLÖTTE lévő lapra ugrott vissza. MÉRVE 2026-09-29: a 3. oldali
+     találatnál „2 / 3" látszott. */
+  const ugrasRef = React.useRef(0);
+  const ugrasOldalra = (n) => {
+    const g = gorgetoRef.current;
+    if (!g) return;
+    const el = g.querySelector('[data-olv-lap="' + n + '"]');
+    if (el) g.scrollTo({ top: el.offsetTop - 12, behavior: 'smooth' });
+    ugrasRef.current = Date.now() + 1500;
+    setAktOldal(n);
+  };
+  const talalatra = (i) => {
+    if (!talalatok.length) return;
+    const uj = (i + talalatok.length) % talalatok.length;
+    setTIdx(uj); ugrasOldalra(talalatok[uj].oldal);
+  };
+
+  // Oldalszámláló: amelyik lapból a LEGTÖBB látszik.
+  const gorgetes = () => {
+    const g = gorgetoRef.current;
+    if (!g || Date.now() < ugrasRef.current) return;
+    const teto = g.scrollTop, alj = teto + g.clientHeight;
+    let jo = 1, legtobb = -1;
+    g.querySelectorAll('[data-olv-lap]').forEach(el => {
+      const a = el.offsetTop, b = a + el.offsetHeight;
+      const latszik = Math.min(b, alj) - Math.max(a, teto);
+      if (latszik > legtobb) { legtobb = latszik; jo = Number(el.getAttribute('data-olv-lap')); }
+    });
+    setAktOldal(jo);
+  };
+
+  const zoom = (fel) => {
+    const most = skala;
+    const sor = fel ? DOC_OLV_FOKOK : [...DOC_OLV_FOKOK].reverse();
+    const kov = sor.find(x => fel ? x > most + 0.01 : x < most - 0.01);
+    setNagyitas(kov || (fel ? DOC_OLV_FOKOK[DOC_OLV_FOKOK.length - 1] : DOC_OLV_FOKOK[0]));
+  };
+
+  // Ctrl+görgő nagyítás.
+  React.useEffect(() => {
+    const g = gorgetoRef.current;
+    if (!g) return;
+    const ker = (e) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoom(e.deltaY < 0); };
+    g.addEventListener('wheel', ker, { passive: false });
+    return () => g.removeEventListener('wheel', ker);
+  }, [skala]);
+
+  // Esc = bezárás; +/- = nagyítás; Enter a keresőben lép a következő találatra.
+  React.useEffect(() => {
+    const lenyom = (e) => {
+      if (e.key === 'Escape') { onClose && onClose(); return; }
+      if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); zoom(true); }
+      if (e.key === '-') { e.preventDefault(); zoom(false); }
+    };
+    window.addEventListener('keydown', lenyom);
+    return () => window.removeEventListener('keydown', lenyom);
+  }, [skala, onClose]);
+
+  /* PAN. Kéz-eszközzel bal gombbal, egyébként középső gombbal — így a
+     szövegkijelölés megmarad, de aki csak nézni akar, egy kattintással
+     kézre vált. */
+  const panLe = (e) => {
+    const g = gorgetoRef.current;
+    if (!g) return;
+    if (!(kez && e.button === 0) && e.button !== 1) return;
+    e.preventDefault();
+    fogRef.current = { x: e.clientX, y: e.clientY, l: g.scrollLeft, t: g.scrollTop };
+    g.classList.add('fog');
+  };
+  const panMozog = (e) => {
+    const g = gorgetoRef.current, f = fogRef.current;
+    if (!g || !f) return;
+    g.scrollLeft = f.l - (e.clientX - f.x);
+    g.scrollTop = f.t - (e.clientY - f.y);
+  };
+  const panFel = () => { fogRef.current = null; const g = gorgetoRef.current; if (g) g.classList.remove('fog'); };
+
+  const IkonG = 'w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-transparent';
+  const szazalek = Math.round(skala * 100);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label={label || 'Dokumentum'} data-dok-olvaso="1">
+      <style dangerouslySetInnerHTML={{ __html: DOC_OLV_CSS }} />
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white h-full w-full sm:w-[92vw] lg:w-[78vw] xl:w-[68vw] max-w-[1200px] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        {/* fejléc */}
+        <div className="flex items-start justify-between gap-3 px-4 sm:px-5 py-3 border-b border-slate-100 flex-none">
+          <div className="min-w-0">
+            <div className="font-black text-slate-800 text-sm flex items-center gap-2">
+              {Icon ? <Icon size={16} className="text-primary flex-none" /> : <Lucide.FileText size={16} className="text-primary flex-none" />}
+              <span className="truncate">{label || 'Dokumentum'}</span>
+            </div>
+            <div className="text-[11px] text-slate-400 font-semibold truncate">
+              {fileName}{entry && entry.size ? ' · ' + DOC_fmtSize(entry.size) : ''}{pdf ? ' · ' + pdf.numPages + ' oldal' : ''}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-none">
+            <DocDownloadLink entry={entry} fileName={fileName} className="bg-primary text-white px-3 py-1.5 rounded-lg text-[13px] font-bold inline-flex items-center gap-1.5">
+              <Lucide.Download size={14} /> Letöltés
+            </DocDownloadLink>
+            <button onClick={onClose} aria-label="Bezárás" title="Bezárás (Esc)" className={IkonG}><Lucide.X size={18} /></button>
+          </div>
+        </div>
+
+        {/* eszköztár */}
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 px-3 sm:px-4 py-2 border-b border-slate-100 bg-slate-50/70 flex-none">
+          {pdfE && (
+            <div className="flex items-center gap-1 mr-2">
+              <button className={IkonG} title="Előző oldal" disabled={aktOldal <= 1} onClick={() => ugrasOldalra(Math.max(1, aktOldal - 1))}><Lucide.ChevronUp size={16} /></button>
+              <span className="text-[12px] font-bold text-slate-500 tabular-nums px-1" data-olv-oldalszam="1">{aktOldal} / {pdf ? pdf.numPages : '–'}</span>
+              <button className={IkonG} title="Következő oldal" disabled={!pdf || aktOldal >= pdf.numPages} onClick={() => ugrasOldalra(Math.min(pdf.numPages, aktOldal + 1))}><Lucide.ChevronDown size={16} /></button>
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <button className={IkonG} title="Kicsinyítés (−)" onClick={() => zoom(false)}><Lucide.ZoomOut size={16} /></button>
+            <span className="text-[12px] font-bold text-slate-500 tabular-nums w-12 text-center" data-olv-nagyitas="1">{szazalek}%</span>
+            <button className={IkonG} title="Nagyítás (+)" onClick={() => zoom(true)}><Lucide.ZoomIn size={16} /></button>
+            <button onClick={() => setNagyitas(0)} title="Szélességre igazítva"
+              className={'px-2 h-8 rounded-lg text-[12px] font-bold ' + (nagyitas === 0 ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:bg-slate-100')}>Szélesség</button>
+            <button onClick={() => setNagyitas(1)} title="Eredeti méret (100%)"
+              className={'px-2 h-8 rounded-lg text-[12px] font-bold ' + (nagyitas === 1 ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:bg-slate-100')}>100%</button>
+          </div>
+          <button onClick={() => setKez(v => !v)} title="Kéz — húzással mozgatás (középső egérgombbal mindig működik)"
+            className={'w-8 h-8 rounded-lg flex items-center justify-center ' + (kez ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:bg-slate-100')} data-olv-kez={kez ? '1' : '0'}>
+            <Lucide.Hand size={16} />
+          </button>
+          <button onClick={() => setForgatas(f => (f + 90) % 360)} title="Forgatás 90°-kal" className={IkonG}><Lucide.RotateCw size={16} /></button>
+
+          {pdfE && (
+            <div className="flex items-center gap-1 ml-auto">
+              <div className="relative">
+                <Lucide.Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={q} onChange={e => setQ(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); if (keres === q) talalatra(tIdx + 1); else setKeres(q); }
+                    if (e.key === 'Escape') { e.stopPropagation(); setQ(''); setKeres(''); }
+                  }}
+                  placeholder="Keresés a dokumentumban…" data-olv-kereso="1"
+                  className="w-44 sm:w-56 bg-white border border-slate-200 rounded-lg pl-8 pr-2 py-1.5 text-[13px] font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+              <button onClick={() => setKeres(q)} className="px-2 h-8 rounded-lg text-[12px] font-bold text-slate-500 hover:bg-slate-100">Keres</button>
+              {keres && (
+                <>
+                  <span className="text-[12px] font-bold text-slate-500 tabular-nums" data-olv-talalat="1">
+                    {talalatok.length ? (tIdx + 1) + ' / ' + talalatok.length : 'nincs találat'}
+                  </span>
+                  <button className={IkonG} title="Előző találat" disabled={!talalatok.length} onClick={() => talalatra(tIdx - 1)}><Lucide.ArrowUp size={15} /></button>
+                  <button className={IkonG} title="Következő találat" disabled={!talalatok.length} onClick={() => talalatra(tIdx + 1)}><Lucide.ArrowDown size={15} /></button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* tartalom */}
+        <div ref={gorgetoRef} onScroll={gorgetes}
+          onMouseDown={panLe} onMouseMove={panMozog} onMouseUp={panFel} onMouseLeave={panFel}
+          className={'flex-1 overflow-auto bg-slate-200 px-4 py-4 ' + (kez ? 'dokolv-kez' : '')}>
+          {!src && <div className="text-center text-slate-400 text-sm py-16 font-bold">Dokumentum betöltése…</div>}
+          {src && allapot === 'betolt' && <div className="text-center text-slate-400 text-sm py-16 font-bold">PDF betöltése…</div>}
+          {src && allapot === 'hiba' && (
+            <div className="text-center text-sm py-16 font-bold text-red-500">
+              A PDF nem jeleníthető meg.{' '}
+              <a href={src} download={fileName} target="_blank" rel="noreferrer" className="text-primary underline">Letöltés</a>
+            </div>
+          )}
+          {src && allapot === 'kesz' && pdfE && pdf && !illeszKesz && <div className="text-center text-slate-400 text-sm py-16 font-bold">Oldalak rajzolása…</div>}
+          {src && allapot === 'kesz' && pdfE && pdf && illeszKesz && Array.from({ length: pdf.numPages }, (_, i) => i + 1).map(n => (
+            <DocReaderLap key={n} pdf={pdf} n={n} skala={skala} forgatas={forgatas} keres={keres}
+              aktivSorszam={talalatok.length && talalatok[tIdx] && talalatok[tIdx].oldal === n ? talalatok[tIdx].sorszam : -1} />
+          ))}
+          {src && allapot === 'kesz' && !pdfE && (
+            <div className="flex items-start justify-center">
+              <img src={src} alt={fileName || ''} draggable={false}
+                style={{ width: (nagyitas ? nagyitas * 100 : 100) + '%', maxWidth: nagyitas ? 'none' : '100%', transform: 'rotate(' + forgatas + 'deg)' }}
+                className="bg-white shadow-md rounded-sm ring-1 ring-slate-300/60" />
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 py-2 border-t border-slate-100 text-[11px] text-slate-400 font-semibold flex-none">
+          Ctrl + görgő: nagyítás · középső egérgomb vagy a kéz eszköz: mozgatás · Esc: bezárás
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DocDownloadLink({ entry, fileName, className, children }) {
   const src = useDocSrc(entry);
   if (!src) return null;
@@ -8586,21 +9069,20 @@ const AdmissionsHub = (() => {
             </div>
           );
         })()}
-        {previewDoc && (
+        {/* ELŐNÉZET = OLDALRÓL NYÍLÓ OLVASÓ (nagyítás, mozgatás, keresés). */}
+        {previewDoc && (previewDoc.entry && (previewDoc.entry.path || previewDoc.entry.dataUrl) ? (
+          <DocReader entry={previewDoc.entry} fileName={previewDoc.fileName} label={previewDoc.d.label}
+            Icon={previewDoc.d.Icon} onClose={() => setPreviewDoc(null)} />
+        ) : (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setPreviewDoc(null)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="p-4 border-b border-slate-100 flex items-center justify-between"><div className="font-bold text-slate-800 text-sm flex items-center gap-2"><previewDoc.d.Icon size={16} className="text-primary" /> {previewDoc.d.label}</div><button onClick={() => setPreviewDoc(null)} className="text-slate-400 hover:text-slate-700"><Lucide.X size={18} /></button></div>
               <div className="p-4 bg-slate-50">
-                {previewDoc.entry && (previewDoc.entry.path || previewDoc.entry.dataUrl) ? (
-                  <DocViewer entry={previewDoc.entry} fileName={previewDoc.fileName} />
-                ) : (
-                  <div className="bg-white border border-slate-200 rounded-xl mx-auto max-h-[55vh] aspect-[3/4] w-full max-w-xs flex flex-col items-center justify-center text-center p-6"><previewDoc.d.Icon size={48} className="text-slate-300 mb-4" /><div className="font-mono text-xs text-slate-400">{previewDoc.fileName}</div><div className="font-bold text-slate-700 mt-2">{previewDoc.d.label}</div><div className="mt-4 text-[10px] text-slate-300">Nincs csatolt fájl</div></div>
-                )}
-                {previewDoc.entry && (previewDoc.entry.path || previewDoc.entry.dataUrl) && <div className="mt-3 text-right"><DocDownloadLink entry={previewDoc.entry} fileName={previewDoc.fileName} className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5"><Lucide.Download size={14} /> Letöltés</DocDownloadLink></div>}
+                <div className="bg-white border border-slate-200 rounded-xl mx-auto max-h-[55vh] aspect-[3/4] w-full max-w-xs flex flex-col items-center justify-center text-center p-6"><previewDoc.d.Icon size={48} className="text-slate-300 mb-4" /><div className="font-mono text-xs text-slate-400">{previewDoc.fileName}</div><div className="font-bold text-slate-700 mt-2">{previewDoc.d.label}</div><div className="mt-4 text-[10px] text-slate-300">Nincs csatolt fájl</div></div>
               </div>
             </div>
           </div>
-        )}
+        ))}
       </div>
     );
   };
@@ -12721,8 +13203,26 @@ Object.assign(HU_EN, {
 });
 
 const HU_EN_PHRASES = [
-  [/Aktív jelentkezések/g,'Active applications'],[/Akív jelentkezések/g,'Active applications'],[/Új jelentkező/g,'New applicant'],[/\bMód\b/g,'Mode'],[/Felvételi folyamat ·/g,'Admission process ·'],[/(\d+)\s*\/\s*(\d+)\s*lépés/g,'$1/$2 steps'],[/(\d+)\s*lépés/g,'$1 steps'],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)%\s*biztos/g,'$1% confidence'],[/(\d+)\s*lehetséges egyezés/g,'$1 possible match(es)'],[/TESZT — helyes válasz:/g,'TEST — correct answer:'],[/Helyes:/g,'Correct:'],[/(\d+)\s*\/\s*(\d+)\s*helyes/g,'$1 / $2 correct'],[/(\d+)\s*\/\s*(\d+)\s*kötelező hitelesítve/g,'$1 / $2 required verified'],[/(\d+)\s*hiányzik/g,'$1 missing'],[/(\d+)\s*új\b/g,'$1 new'],[/EUR \/ szemeszter/g,'EUR / semester'],[/szemeszter/g,'semester'],[/szem\./g,'sem.'],[/Egyszerűsítsd, majd értékeld ki, ha/g,'Simplify, then evaluate if'],[/Mennyi/g,'What is'],[/Értékeld ki a következő kifejezést!/g,'Evaluate the following expression!'],[/Érték =/g,'Value ='],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)\s*\/\s*(\d+)\s*kötelező/g,'$1 / $2 required'],[/(\d+)\s*napja lejárt/g,'expired $1 days ago'],[/Javasolt projektvezető:/g,'Proposed project lead:'],[/Erre alapozva:/g,'Based on:'],[/(\d+)\s*utolsó szerzős publikáció/g,'$1 last-author publication(s)'],[/(\d+)\s*pályázati előzmény/g,'$1 previous grant(s)'],[/(\d+)\s*pályázatot vezetett már/g,'has led $1 proposal(s)'],[/szabad kapacitás/g,'free capacity'],[/szűk kapacitás/g,'limited capacity'],[/vezetői előzmény nélkül/g,'no leadership track record'],[/már felkérve/g,'already invited'],
+  [/Aktív jelentkezések/g,'Active applications'],[/Akív jelentkezések/g,'Active applications'],[/Új jelentkező/g,'New applicant'],[/\bMód\b/g,'Mode'],[/Felvételi folyamat ·/g,'Admission process ·'],[/(\d+)\s*\/\s*(\d+)\s*lépés/g,'$1/$2 steps'],[/(\d+)\s*lépés/g,'$1 steps'],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)%\s*biztos/g,'$1% confidence'],[/(\d+)\s*lehetséges egyezés/g,'$1 possible match(es)'],[/TESZT — helyes válasz:/g,'TEST — correct answer:'],[/Helyes:/g,'Correct:'],[/(\d+)\s*\/\s*(\d+)\s*helyes/g,'$1 / $2 correct'],[/(\d+)\s*\/\s*(\d+)\s*kötelező hitelesítve/g,'$1 / $2 required verified'],[/(\d+)\s*hiányzik/g,'$1 missing'],[/(\d+)\s*új\b/g,'$1 new'],[/EUR \/ szemeszter/g,'EUR / semester'],[/szemeszter/g,'semester'],[/szem\./g,'sem.'],[/Egyszerűsítsd, majd értékeld ki, ha/g,'Simplify, then evaluate if'],[/Mennyi/g,'What is'],[/Értékeld ki a következő kifejezést!/g,'Evaluate the following expression!'],[/Érték =/g,'Value ='],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)\s*\/\s*(\d+)\s*kötelező/g,'$1 / $2 required'],[/(\d+)\s*napja lejárt/g,'expired $1 days ago'],[/Javasolt projektvezető:/g,'Proposed project lead:'],[/Erre alapozva:/g,'Based on:'],[/(\d+)\s*utolsó szerzős publikáció/g,'$1 last-author publication(s)'],[/(\d+)\s*pályázati előzmény/g,'$1 previous grant(s)'],[/(\d+)\s*pályázatot vezetett már/g,'has led $1 proposal(s)'],[/szabad kapacitás/g,'free capacity'],[/szűk kapacitás/g,'limited capacity'],[/vezetői előzmény nélkül/g,'no leadership track record'],[/már felkérve/g,'already invited'],[/(\d+)\s*oldal\b/g,'$1 page(s)'],
 ];
+/* A dokumentum-olvasó feliratai (2026-09-29). A címkék (title) és az
+   aria-label is fordul — a setupI18n mindhármat a HU_EN-ből veszi. */
+Object.assign(HU_EN, {
+  'Szélesség':'Fit width','Keres':'Find','nincs találat':'no match',
+  'Keresés a dokumentumban…':'Search in the document…',
+  'Oldalak rajzolása…':'Rendering pages…','PDF betöltése…':'Loading PDF…',
+  'Dokumentum betöltése…':'Loading document…',
+  'A PDF nem jeleníthető meg.':'This PDF cannot be displayed.',
+  'Előző oldal':'Previous page','Következő oldal':'Next page',
+  'Kicsinyítés (−)':'Zoom out (−)','Nagyítás (+)':'Zoom in (+)',
+  'Szélességre igazítva':'Fit to width','Eredeti méret (100%)':'Actual size (100%)',
+  'Forgatás 90°-kal':'Rotate by 90°',
+  'Előző találat':'Previous match','Következő találat':'Next match',
+  'Kéz — húzással mozgatás (középső egérgombbal mindig működik)':'Hand tool — drag to pan (the middle mouse button always works)',
+  'Bezárás (Esc)':'Close (Esc)','Dokumentum':'Document',
+  'Ctrl + görgő: nagyítás · középső egérgomb vagy a kéz eszköz: mozgatás · Esc: bezárás':'Ctrl + wheel: zoom · middle mouse button or the hand tool: pan · Esc: close',
+});
+
 // ------------------------------------------------------------------
 // A1/A3/A4/H1/I1 csomag új magyar szövegei. Külön Object.assign hívásban,
 // hogy a nagy HU_EN literált ne kelljen módosítani (kisebb ütközési felület
