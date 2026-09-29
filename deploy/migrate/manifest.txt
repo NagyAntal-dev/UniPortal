@@ -117,3 +117,4 @@
 104_grants_lejart_szuro.sql
 105_grants_projektvezeto.sql
 106_grants_konzorcium.sql
+107_vizum_iroda_kulcs.sql
