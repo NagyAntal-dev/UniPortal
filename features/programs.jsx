@@ -229,6 +229,15 @@ function PROG_felvettHallgato(apps) {
     return a && (a.status === 'accepted' || a.done === true);
   });
 }
+/* VISSZAVONT JELENTKEZÉS. A hallgató megszakíthatja a folyamatot; ilyenkor a
+   sor NEM törlődik — a felvételi iroda továbbra is látja, „Megszakítva"
+   állapottal, mert a visszavonás TÉNY, nem törlés (és a díjbefizetés, a
+   feltöltött dokumentum és az üzenetváltás sem tűnhet el nyomtalanul).
+   A hallgató oldalán viszont nem aktív jelentkezés: nem folytatható, nem
+   emeli ki a kártyát, és ugyanarra a képzésre indíthat újat. */
+const PROG_megszakitva = (a) => !!(a && ((a.data && a.data._cancelled) || a._cancelled));
+const PROG_elo = (a) => !!a && !PROG_megszakitva(a);
+
 // Egy jelentkezés képzései preferencia-sorrendben (azonosítók).
 const PROG_appIds = (a) => (a && Array.isArray(a.program_ids) && a.program_ids.length) ? a.program_ids
   : (a && a.data && Array.isArray(a.data.program_ids) && a.data.program_ids.length) ? a.data.program_ids
@@ -1512,13 +1521,30 @@ function PROG_hataridoSzoveg(p) {
   return { szoveg: d === 0 ? 'ma jár le a határidő' : `még ${d} nap a határidőig`, surgos: d <= 7 };
 }
 
-function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg, felev, setFelev, kijelolt, onKijelol }) {
+/* VISSZAVONÁS A KÁRTYÁRÓL. Egy gomb, megerősítéssel — a hallgató bármikor
+   kiszállhat, és ezt az iroda is látja („Megszakítva"). LEZÁRT folyamatnál
+   (döntés megszületett, vagy már visszavont) nincs mit visszavonni. */
+const PROG_VISSZAVONHATATLAN = ['accepted', 'admitted', 'rejected', 'withdrawn', 'cancelled'];
+function PROG_VisszavonGomb({ mine, st, onMegszakit }) {
+  if (!mine || !onMegszakit) return null;
+  if (st && st.fa && PROG_VISSZAVONHATATLAN.includes(st.fa.kod)) return null;
+  return (
+    <button type="button" onClick={(e) => { e.stopPropagation(); onMegszakit(mine); }}
+      data-jelentkezes-visszavon={mine.id}
+      aria-label="Jelentkezés visszavonása" title="Jelentkezés visszavonása"
+      className="ml-auto flex-none text-slate-400 hover:text-red-600 transition-colors">
+      <Lucide.Trash2 size={15} />
+    </button>
+  );
+}
+
+function PROG_Catalog({ programs, myApps, onOpen, onContinue, onMegszakit, isDeg, felev, setFelev, kijelolt, onKijelol }) {
   const [level, setLevel] = useState('all');
   const [q, setQ] = useState('');
   const evszak = isDeg ? PROG_termSeason(felev) : '';
   const alapLista = programs.filter(p => (level === 'all' || p.level === level) && (!q || (p.name + ' ' + p.faculty).toLowerCase().includes(q.toLowerCase())));
   // Képzésnél csak a választott félévben induló látszik — a saját jelentkezéseié mindig.
-  const list = alapLista.filter(p => !evszak || PROG_intakesOf(p).includes(evszak) || myApps.some(a => PROG_appIds(a).includes(p.id)));
+  const list = alapLista.filter(p => !evszak || PROG_intakesOf(p).includes(evszak) || myApps.some(a => PROG_elo(a) && PROG_appIds(a).includes(p.id)));
   const rejtett = alapLista.length - list.length;
   // Csak a saját kínálat típusai, és közülük is csak azok, amelyekből van tétel —
   // egy üres szűrőgomb csak zsákutca.
@@ -1531,7 +1557,7 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg, felev, setF
      sorrendben. A rendezés a SZŰRT listán fut, tehát a szint- és a keresőszűrő
      ugyanúgy működik, mint eddig. */
   const ordered = list
-    .map((p, i) => { const mine = myApps.find(a => PROG_appIds(a).includes(p.id)); return { p, i, mine, st: PROG_myState(p, mine, programs) }; })
+    .map((p, i) => { const mine = myApps.find(a => PROG_elo(a) && PROG_appIds(a).includes(p.id)); return { p, i, mine, st: PROG_myState(p, mine, programs) }; })
     .sort((a, b) => {
       if (a.st.tier !== b.st.tier) return a.st.tier - b.st.tier;
       if (a.st.tier === 0) {
@@ -1602,6 +1628,7 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg, felev, setF
                 <span>{`${st.lepes}/${st.osszes} lépés kész`}</span>
                 {st.kell > 0 && <span>{`${st.feltoltve}/${st.kell} dokumentum feltöltve`}</span>}
                 {hd && <span className={hd.surgos ? 'text-red-600' : ''}>{hd.szoveg}</span>}
+                <PROG_VisszavonGomb mine={mine} st={st} onMegszakit={onMegszakit} />
               </div>
             )}
             {st.tier === 1 && st.fa && (
@@ -1609,6 +1636,7 @@ function PROG_Catalog({ programs, myApps, onOpen, onContinue, isDeg, felev, setF
                 <span>{`${st.lepes}/${st.osszes} lépés kész`}</span>
                 {st.kell > 0 && <span>{`${st.feltoltve}/${st.kell} dokumentum feltöltve`}</span>}
                 {st.fa.aktualis && !['rejected', 'withdrawn', 'cancelled', 'accepted'].includes(st.fa.kod) && <span><span>Következő:</span> <span>{st.fa.aktualis.label}</span></span>}
+                <PROG_VisszavonGomb mine={mine} st={st} onMegszakit={onMegszakit} />
               </div>
             )}
             {st.tier === 2 && (
@@ -1925,12 +1953,33 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
   const sajatEmail = String((user && user.email) || '').toLowerCase();
   const myApps = (apps || []).filter(a => sajatEmail && String(a.applicant_email || '').toLowerCase() === sajatEmail);
 
+  /* A hallgató visszavonja a jelentkezést. NEM TÖRLÜNK: a sor marad, csak
+     megjelöljük — az iroda oldalán ettől lesz „Megszakítva", és megmarad a
+     nyoma annak, mi történt. A díj, a feltöltött dokumentumok és az
+     üzenetváltás sem tűnhet el egy kattintásra. */
+  const megszakitJelentkezes = async (app) => {
+    if (!app) return;
+    const nev = PROG_appIds(app).map(id => (keresProg(id) || {}).name).filter(Boolean).join(', ');
+    const kerdes = 'Biztosan visszavonod ezt a jelentkezést?'
+      + (nev ? '\n\n' + nev : '')
+      + '\n\nA felvételi iroda látni fogja, hogy megszakítottad. A feltöltött dokumentumaid megmaradnak, és később új jelentkezést indíthatsz.';
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm(kerdes)) return;
+    const ujData = { ...(app.data || {}), _cancelled: true, _cancelledAt: todayStr(), _cancelledBy: 'hallgato' };
+    const saved = await dlUpdate(APP_TABLE, app.id, { data: ujData, updated_at: new Date().toISOString() }, APP_LS);
+    if (!saved) {
+      alert('A visszavonás nem sikerült. Töltsd újra az oldalt, és ha így sem megy, írj a felvételi irodának.');
+      return;
+    }
+    if (applying && applying.app && applying.app.id === app.id) setApplying(null);
+    await refetch();
+  };
+
   const openApply = async (program) => {
     // Rövid program: csak felvett hallgató indíthat rá jelentkezést.
     if (PROG_kind(program) === 'program' && !felvett) { setDetail(null); setProgramZar(true); return; }
     // Célközönség: a lista már szűr, de a közvetlen hívás is védve legyen.
     if (!PROG_celzasOk(program, allampolgarsag)) { setDetail(null); setCelzasZar(PROG_audienceOf(program)); return; }
-    let app = myApps.find(a => a.program_id === program.id);
+    let app = myApps.find(a => PROG_elo(a) && a.program_id === program.id);
     if (!app) {
       const sor = {
         id: uid('APP'), program_id: program.id,
@@ -2066,6 +2115,7 @@ const ProgramsView = ({ user, scope = 'programs', embedded = false }) => {
         <>
           <PROG_Catalog programs={scopedPrograms} isDeg={isDeg} myApps={myApps} onOpen={setDetail}
             onContinue={(p, a) => setApplying({ program: (isDeg && scopedPrograms.find(x => x.id === PROG_appIds(a)[0])) || p, app: a })}
+            onMegszakit={megszakitJelentkezes}
             felev={felev} setFelev={setFelev} kijelolt={kijelolt} onKijelol={isDeg ? kijelol : null} />
           {isDeg && kijelolt.length > 0 && (
             <div className="sticky bottom-4 z-30 mt-6" data-kijeloles-sav="1">

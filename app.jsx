@@ -3372,6 +3372,25 @@ const AdmissionsCore = ({ user }) => {
             </div>
             <span data-fejlec-allapot="1" className={'text-xs font-bold px-3 py-1.5 rounded-full ' + ((faD.kod === 'accepted' || faD.kod === 'admitted') ? 'bg-emerald-50 text-emerald-600' : (faD.kod === 'rejected' || faD.kod === 'cancelled') ? 'bg-red-50 text-red-600' : faD.kod === 'student' ? 'bg-amber-50 text-amber-700' : 'bg-primary/10 text-primary')}>{faD.cimke}</span>
           </div>
+          {/* A JELENTKEZŐ VISSZALÉPETT. A fejléc jelvénye könnyen elsiklik, pedig
+              ez a legfontosabb tudnivaló a folyamatról: ne dolgozzon rajta tovább
+              az ügyintéző, és ne várjon hiányzó dokumentumra. A sort szándékosan
+              NEM töröljük — a feltöltött dokumentumok, a díj és az üzenetváltás
+              megmarad. */}
+          {p.data && p.data._cancelled && (
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4" data-megszakitva="1">
+              <ICONS.XCircle size={20} className="text-red-600 flex-none" />
+              <div className="min-w-0">
+                <div className="text-sm font-black text-red-700">
+                  {p.data._cancelledBy === 'iroda' ? 'A felvételi iroda zárta le ezt a folyamatot' : 'A jelentkező megszakította ezt a folyamatot'}
+                </div>
+                <div className="text-[12px] font-semibold text-red-700/80">
+                  {(p.data._cancelledAt ? ADM_datum(p.data._cancelledAt) + ' · ' : '')}
+                  <span>A jelentkezés nem folytatódik. A feltöltött dokumentumok és az üzenetváltás megmaradt.</span>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
               <ADM_FiokElozmeny items={ADM_fiokElozmenyek(p, journeyProcs, students, progKat)} />
@@ -13208,6 +13227,10 @@ const HU_EN_PHRASES = [
 /* A dokumentum-olvasó feliratai (2026-09-29). A címkék (title) és az
    aria-label is fordul — a setupI18n mindhármat a HU_EN-ből veszi. */
 Object.assign(HU_EN, {
+  'Jelentkezés visszavonása':'Withdraw application',
+  'A jelentkező megszakította ezt a folyamatot':'The applicant cancelled this process',
+  'A felvételi iroda zárta le ezt a folyamatot':'The admissions office closed this process',
+  'A jelentkezés nem folytatódik. A feltöltött dokumentumok és az üzenetváltás megmaradt.':'The application will not continue. The uploaded documents and the message thread have been kept.',
   'Szélesség':'Fit width','Keres':'Find','nincs találat':'no match',
   'Keresés a dokumentumban…':'Search in the document…',
   'Oldalak rajzolása…':'Rendering pages…','PDF betöltése…':'Loading PDF…',
