@@ -219,6 +219,10 @@ function canSeeView(currentUser, viewId) {
         || (currentUser.groupPerms || []).includes(viewId)
         || (currentUser.userPerms || []).includes(viewId)
       : null;
+    // Ugyanez a 108_rbac_uj_modulok.sql-lel felvett modulokra. Ha a mátrix még
+    // NEM ismeri a modult (a 108 nem futott le), null — a mai szabály dönt.
+    // Lásd perm.jsx: PERM_ismert.
+    const ujModulView = () => PERM_ismert(currentUser, viewId) ? matrixView() : null;
     // Approving registrations is the superadmin's alone — not even ADMIN.
     if (viewId === AppView.REGISTRATIONS) return currentUser.role === 'SUPERADMIN';
     // A hozzájárulási napló személyes adatot tartalmaz: csak rendszergazda (az RLS is így szűr).
@@ -229,8 +233,16 @@ function canSeeView(currentUser, viewId) {
     // Webshop: vásárolni mindenki tud az ügynök kivételével (a 74-es migráció is
     // így szűr); a kezelés a pénzügyé és az adminé. A fail-open ág ELŐTT dönt,
     // különben a szerepkör-táblák (39) a hallgatónál elrejtenék a boltot.
-    if (viewId === AppView.SHOP) return currentUser.role !== 'AGENT';
-    if (viewId === AppView.SHOP_ADMIN) return ['SUPERADMIN', 'ADMIN', 'FINANCE'].includes(currentUser.role);
+    // A mátrix (108) itt csak SZŰKÍTHET: a szerver a vásárlásnál és a
+    // kezelésnél (shop.is_manager) nem a mátrixot nézi, tehát egy bepipált,
+    // de a szerver által úgysem engedett jog csak üres képernyőt nyitna.
+    if (viewId === AppView.SHOP) {
+      if (currentUser.role === 'AGENT') return false;
+      return ujModulView() ?? true;
+    }
+    if (viewId === AppView.SHOP_ADMIN) {
+      return ['SUPERADMIN', 'ADMIN', 'FINANCE'].includes(currentUser.role) && (ujModulView() ?? true);
+    }
     // Az ECHO kampánykezelés a REGISTRATIONS mintájára a fail-open ág ELŐTT dönt,
     // különben a lenti 'SUPERADMIN || ADMIN → true' után minden ügyintéző látná.
     if (viewId === AppView.ECHO_ADMIN) return currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN';
@@ -256,15 +268,13 @@ function canSeeView(currentUser, viewId) {
     // A hallgatoi nyilvantartas szemelyes adatot mutat: ugyintezoi kepernyo.
     // A szerver oldali parja a 71-es migracio is_staff() feltetele.
     //
-    // MIERT NEM matrixView(): a 'students' MODULKENT nincs benne a 72-es
-    // rbac_actions seedjeben (a 'teachers' igen, lasd 72:290). A PERM_can a
-    // sor nelkuli modulra FALSE-t ad (perm.jsx:67), nem null-t, tehat a '??'
-    // tartalek AGA SEM futna le: a Hallgatok menupont elo matrix mellett
-    // eltunne az ADMIN / ADMISSIONS / FINANCE szerepkor alol.
-    // HA a modul bekerul a matrixba egy kesobbi migracioval, ez az ag
-    // atirhato matrixView() ?? [...] alakra, a TEACHERS mintajara.
+    // A 108-as migracio ota a 'students' modul a matrixban van. A matrix itt
+    // csak SZUKITHET: a szerver is_staff()-ot ker, tehat egy nem-ugyintezonek
+    // bepipalt jog csak ures kepernyot nyitna. Ha a 108 meg nem futott le,
+    // az ujModulView() null, es a mai szabaly dont.
     if (viewId === AppView.STUDENTS) {
-      return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role);
+      return ['SUPERADMIN', 'ADMIN', 'ADMISSIONS', 'FINANCE'].includes(currentUser.role)
+          && (ujModulView() ?? true);
     }
     if (viewId === AppView.COURSES) {
       // Az 'OKTATO' ECHO-grant saját szabály, nem szerepkör-beállítás: a mátrix nem veszi el.
@@ -322,12 +332,18 @@ function canSeeView(currentUser, viewId) {
     // „Pályázati felkéréseim": a „Szállásom" mintájára mindenkinek jár az
     // ügynök kivételével. Aki nincs a kutatói törzsben, annak a NÉZET mondja
     // meg — nem a menüből tűnik el, mert akkor nem is tudná, hogy létezik.
-    if (viewId === AppView.GRANTS_INVITES) return currentUser.role !== 'AGENT';
-    // Pályázatfigyelő: a 'grants_office' kulcs NINCS a 72-es modul-mátrixban,
-    // így a lenti PERM_can élő mátrix mellett mindenkinek FALSE-t adna. A
-    // szerver grants.has_perm() szabályát követjük (77_grants_core.sql):
-    // admin, VAGY szerepkör- (39), csoport- vagy egyéni jog.
+    if (viewId === AppView.GRANTS_INVITES) {
+      if (currentUser.role === 'AGENT') return false;
+      return ujModulView() ?? true;
+    }
+    // Pályázatfigyelő: a 108-as migráció óta a mátrix VALÓDI jog — a VIEW a
+    // role_permission-on át a szerver grants.has_perm()-jéig ér (72:
+    // role_module_actions_set szinkronja), tehát itt a mátrix ad ÉS elvesz.
+    // Ha a 108 még nem futott le, a szerver 77-es szabálya dönt: admin, VAGY
+    // szerepkör- (39), csoport- vagy egyéni jog.
     if (viewId === AppView.GRANTS_OFFICE) {
+      const m = ujModulView();
+      if (m !== null) return m;
       return ['SUPERADMIN', 'ADMIN'].includes(currentUser.role)
           || (currentUser.rolePerms || []).includes(viewId)
           || (currentUser.groupPerms || []).includes(viewId)
@@ -3894,8 +3910,11 @@ const AdmissionsCore = ({ user }) => {
                   <p className="text-[12px] font-semibold text-slate-500 mb-3">
                     Az iroda nyilvántartása arról, hogy a hallgató megkapta-e a vízumot. A hallgató saját bejelentése alul látszik.
                   </p>
+                  {/* Az irodai bejegyzés a 'immigration' modul EDIT joga (72: ADMIN,
+                      ADMISSIONS). Jog nélkül a panel csak olvasható: a
+                      hallgató bejelentése és az irodáé továbbra is látszik. */}
                   <VIZ_Panel data={p.data || {}} iroda={true} mentes={vizumBusy === p.id}
-                    onMent={(rek) => vizumMent(p, rek)} />
+                    onMent={PERM_can(user, 'immigration', 'EDIT', canEditStatus) ? (rek) => vizumMent(p, rek) : null} />
                   {vizumUzenet && vizumUzenet.id === p.id && (
                     <p className="mt-2 text-[12px] font-bold text-red-600">{vizumUzenet.text}</p>
                   )}

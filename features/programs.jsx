@@ -399,11 +399,12 @@ function VIZ_Panel({ data, iroda, onMent, mentes }) {
       {sajat.allapot
         ? <p className="text-[12px] font-bold text-slate-500" data-vizum-sajat="1">
             {(VIZ_def(sajat.allapot) || {}).rovid}{sajat.datum ? ' · ' + sajat.datum : ''}
-            <span className="font-semibold text-slate-400"> — a gombra újra kattintva törölhető</span>
+            {onMent && <span className="font-semibold text-slate-400"> — a gombra újra kattintva törölhető</span>}
+            {!onMent && sajat.megjegyzes ? <span className="font-semibold text-slate-500"> — {sajat.megjegyzes}</span> : null}
           </p>
         : <p className="text-[12px] font-semibold text-slate-400">Még nincs bejegyzés.</p>}
 
-      {iroda && (
+      {iroda && onMent && (
         <div className="flex flex-col sm:flex-row gap-2">
           <input value={megj} onChange={e => setMegj(e.target.value)} placeholder="Megjegyzés (pl. a konzulátus neve, ügyszám)…"
             className={U_input + ' text-[13px] py-2'} data-vizum-megjegyzes="1" />

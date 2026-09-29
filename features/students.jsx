@@ -258,7 +258,10 @@ function STU_View({ user }) {
   const bontas = (stat && stat.bontas) || {};
 
   /* A szűrt névsor letöltése. Személyes adat: azt viszi, ami a képernyőn
-     amúgy is látszik, és csak azt a lapot, amit a szerver kiadott. */
+     amúgy is látszik, és csak azt a lapot, amit a szerver kiadott.
+     Az export a 'students' modul USE joga (108_rbac_uj_modulok.sql): adatot
+     visz ki, ezért a mátrixban a megtekintéstől külön elvehető. */
+  const exportJog = PERM_canUj(user, 'students', 'USE', true);
   const letolt = () => {
     const fej = ['Név', 'E-mail', 'Szerepkör', 'Állapot', 'Neptun', 'Tagozat', 'Képzési szint', 'Szak', 'Kar', 'Csoportok', 'Kurzus', 'Felvételi'];
     const ido = (t) => '"' + String(t == null ? '' : t).replace(/"/g, '""') + '"';
@@ -295,9 +298,11 @@ function STU_View({ user }) {
           <button onClick={() => setNyitva(v => !v)} className={U_btnGhost}>
             <Lucide.SlidersHorizontal size={16} /> Szűrők{szurDb > 0 ? ' (' + szurDb + ')' : ''}
           </button>
-          <button onClick={letolt} disabled={sorok.length === 0} className={U_btnGhost}>
-            <Lucide.Download size={16} /> CSV
-          </button>
+          {exportJog && (
+            <button onClick={letolt} disabled={sorok.length === 0} className={U_btnGhost}>
+              <Lucide.Download size={16} /> CSV
+            </button>
+          )}
         </div>
       </div>
 

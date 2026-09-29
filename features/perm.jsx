@@ -95,6 +95,30 @@ function PERM_of(user, modul, regi) {
    használja annak eldöntésére, hogy kiírhatja-e: „ez a mátrixból jön". */
 const PERM_elo = (user) => !!(user && user.perms && typeof user.perms === 'object');
 
+/* Igaz, ha a mátrix ISMERI a modult. A 108-as migráció óta a
+   my_module_permissions() minden aktív modul kulcsát visszaadja (jog nélkül
+   üres tömbbel), tehát a hiányzó kulcs azt jelenti: a modult felvevő migráció
+   még nem futott le. A 108 előtt ez csak a jogot adó modulokra igaz. */
+const PERM_ismert = (user, modul) =>
+  PERM_elo(user) && (Array.isArray(user.perms['*']) || Array.isArray(user.perms[modul]));
+
+/* ---------------------------------------------------------------------------
+   PERM_canUj — a 108_rbac_uj_modulok.sql-lel felvett modulokhoz
+   (students, shop, shop_admin, grants_office, grants_invites)
+
+   A PERM_can a sor nélküli modulra FALSE-t ad — élő mátrix, de még le nem
+   futott 108 mellett (a GitHub Pages bundle előbb frissülhet, mint az
+   adatbázis) ez mindenki elől elvenné ezeket a menüpontokat. Itt ilyenkor a
+   `regi` dönt, mintha a mátrix nem is élne. A régi modulokra SZÁNDÉKOSAN nem
+   ezt használjuk: ott a hiányzó kulcs a 108 előtt „elvett jog" is lehet.
+   --------------------------------------------------------------------------- */
+function PERM_canUj(user, modul, action, regi) {
+  if (PERM_elo(user) && !PERM_ismert(user, modul)) {
+    return PERM_can({ ...user, perms: null }, modul, action, regi);
+  }
+  return PERM_can(user, modul, action, regi);
+}
+
 /* ---------------------------------------------------------------------------
    PERM_Denied — „nincs jogosultsága" panel
 
