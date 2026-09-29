@@ -139,3 +139,5 @@
 106_grants_konzorcium.sql
 # --- merge: a 76 (upstream) es a 80/82 (mi) eligibility_rebuild-jenek egyesitese ---
 107_echo_eligibility_merge.sql
+# --- upstream/main (vizum-jeloles) ---
+107_vizum_iroda_kulcs.sql

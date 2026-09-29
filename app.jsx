@@ -2828,7 +2828,13 @@ function ADM_FiokElozmeny({ items }) {
    a részletes nézetben. Képzés-jelentkezésnél külön a hallgatói és az irodai szakasz. */
 function ADM_FolyamatLepesek({ fa }) {
   if (!fa) return null;
-  const csoportok = fa.tipus === 'kepzes' ? [['hallgato', 'Hallgató'], ['iroda', 'Felvételi iroda']] : [['', '']];
+  /* A „Felvétel után" szakasz (jelentkezési díj, vízum) EDDIG KIMARADT az
+     irodai nézetből: csak a hallgatói és az irodai fázis chipjei látszottak,
+     így az ügyintéző a folyamat állapotánál nem látta, rendezte-e a díjat vagy
+     megvan-e a vízum. A hallgató sávján mindig is ott volt. */
+  const csoportok = fa.tipus === 'kepzes'
+    ? [['hallgato', 'Hallgató'], ['iroda', 'Felvételi iroda'], ['utan', 'Felvétel után']]
+    : [['', '']];
   let n = 0;
   return (
     <div className="space-y-2.5" data-folyamat-allapot={fa.kod}>
@@ -3662,6 +3668,35 @@ const AdmissionsCore = ({ user }) => {
         return false;
       } finally { setLevelBusy(false); }
     };
+    /* VÍZUM — az IRODA nyilvántartása (data.visa_iroda). Ugyanaz az út, mint a
+       levélnél: KÖZVETLEN update, hogy lássuk, átment-e (RLS mellett a csendes
+       mentés 0 sort érintene, hibaüzenet nélkül). A hallgató saját bejelentése
+       (data.visa) ettől független, azt innen nem írjuk felül. */
+    const [vizumBusy, setVizumBusy] = useState('');
+    const [vizumUzenet, setVizumUzenet] = useState(null);
+    const vizumMent = async (proc, rekord) => {
+      setVizumBusy(proc.id); setVizumUzenet(null);
+      const most = new Date().toISOString();
+      const ujData = { ...(proc.data || {}) };
+      if (rekord) ujData.visa_iroda = { ...rekord, rogzitette: (user && (user.name || user.email)) || 'Ügyintéző' };
+      else delete ujData.visa_iroda;
+      try {
+        if (!String(proc.id || '').startsWith('PROC-demo')) {
+          if (!window.sb) throw new Error('Nincs kapcsolat az adatbázissal.');
+          const { data: sorok, error } = await sb.from('admission_processes').update({ data: ujData, updated_at: most }).eq('id', proc.id).select('id');
+          if (error) throw error;
+          if (!sorok || !sorok.length) throw new Error('nincs jogosultságod ehhez a jelentkezéshez, vagy az már nem létezik.');
+        }
+        const owner = proc._owner || 'demo';
+        try { const k = 'nje_processes_' + owner; const arr = JSON.parse(localStorage.getItem(k) || '[]'); const i = Array.isArray(arr) ? arr.findIndex(x => x.id === proc.id) : -1; if (i >= 0) { arr[i] = { ...arr[i], data: ujData }; localStorage.setItem(k, JSON.stringify(arr)); } } catch (e) {}
+        const kesz = { ...proc, data: ujData, updatedAt: most };
+        setJourneyProcs(ps => ps.map(x => x.id === proc.id ? kesz : x));
+        setDetailFull(kesz);
+      } catch (e) {
+        setVizumUzenet({ id: proc.id, text: 'A mentés nem sikerült: ' + ((e && e.message) || e) });
+      } finally { setVizumBusy(''); }
+    };
+
     const levelKuld = async (proc) => {
       const L = (proc.data && proc.data.letter) || {};
       if (typeof window !== 'undefined' && window.confirm && !window.confirm('Kiküldöd a felvételi levelet ' + pName(proc) + ' részére? A hallgató azonnal látja, és a folyamata lezárul.')) return;
@@ -3848,6 +3883,24 @@ const AdmissionsCore = ({ user }) => {
               {/* Interjú: az ügyintéző itt is módosíthatja az időpontot (interview_move / interview_assign). */}
               <IV_AdminProcessInterview processId={p.id} canEdit={canEditStatus} onChanged={() => frissitFolyamat(p.id)}
                 fallback={(iv.booked || iv.proposed) ? <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6"><div className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Interjú</div><div className="text-sm font-bold text-slate-700">{ADM_ivIdo(iv)}</div></div> : null} />
+              {/* VÍZUM — a felvétel után. Csak akkor van értelme, ha felvettük a
+                  jelentkezőt: addig nincs mire vízumot kérni. */}
+              {faD.kod === 'admitted' || faD.kod === 'accepted' ? (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6" data-vizum-doboz="1">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ICONS.Stamp size={16} className="text-primary" />
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Vízum</span>
+                  </div>
+                  <p className="text-[12px] font-semibold text-slate-500 mb-3">
+                    Az iroda nyilvántartása arról, hogy a hallgató megkapta-e a vízumot. A hallgató saját bejelentése alul látszik.
+                  </p>
+                  <VIZ_Panel data={p.data || {}} iroda={true} mentes={vizumBusy === p.id}
+                    onMent={(rek) => vizumMent(p, rek)} />
+                  {vizumUzenet && vizumUzenet.id === p.id && (
+                    <p className="mt-2 text-[12px] font-bold text-red-600">{vizumUzenet.text}</p>
+                  )}
+                </div>
+              ) : null}
               {/* Felvételi döntés (60) — az interjú után: melyik megjelölt képzésre vettük fel, vagy elutasítás. */}
               {(() => {
                 const info = procInfo(p);
@@ -13564,6 +13617,19 @@ const HU_EN_PHRASES = [
 /* A dokumentum-olvasó feliratai (2026-09-29). A címkék (title) és az
    aria-label is fordul — a setupI18n mindhármat a HU_EN-ből veszi. */
 Object.assign(HU_EN, {
+  // Vízum (2026-09-29) — hallgatói és irodai bejegyzés
+  'Vízum':'Visa','Kérelem beadva':'Application submitted','Megkapta':'Received',
+  'Vízum megvan':'Visa granted','Vízum elutasítva':'Visa refused',
+  'Vízum megvan · az iroda igazolta':'Visa granted · confirmed by the office',
+  'Vízum megvan · az iroda még nem igazolta':'Visa granted · not yet confirmed by the office',
+  'Még nincs bejegyzés.':'No entry yet.',
+  'A hallgató bejelentése':'The applicant\u2019s own report',
+  'A felvételi iroda nyilvántartása':'The admissions office record',
+  'Megjegyzés mentése':'Save note',
+  'Megjegyzés (pl. a konzulátus neve, ügyszám)…':'Note (e.g. consulate, case number)…',
+  'Jelöld, hol tart a vízumügyintézésed — a felvételi iroda ebből látja, hogy tudsz-e időben beutazni.':'Mark where your visa process stands \u2014 this tells the admissions office whether you can enter the country in time.',
+  'Az iroda nyilvántartása arról, hogy a hallgató megkapta-e a vízumot. A hallgató saját bejelentése alul látszik.':'The office record of whether the applicant has received the visa. The applicant\u2019s own report is shown below.',
+  'Ez a bejelentés a te jelzésed. A vízumot az iroda a beutazáskor (vagy a beküldött másolat alapján) igazolja — addig „az iroda még nem igazolta" felirat áll mellette.':'This is your own report. The office confirms the visa on arrival (or from the copy you send) \u2014 until then it is marked as not yet confirmed.',
   'Jelentkezés visszavonása':'Withdraw application',
   'A jelentkező megszakította ezt a folyamatot':'The applicant cancelled this process',
   'A felvételi iroda zárta le ezt a folyamatot':'The admissions office closed this process',

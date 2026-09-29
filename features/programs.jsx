@@ -68,9 +68,12 @@ const PROG_STEP_DEFS = {
   interview:  { label: 'Online interjú',     icon: Lucide.Video },
   // A folyamatban már nem szerepel; a felvétel UTÁN külön lépésként jelenik meg.
   fee:        { label: 'Jelentkezési díj',       icon: Lucide.CreditCard },
+  // Szintén a felvétel után: a vízum a beutazás feltétele, nem a jelentkezésé.
+  visa:       { label: 'Vízum',                  icon: Lucide.Stamp },
 };
-// Ami a jelentkezési folyamatban szerepelhet (a díj nem).
-const PROG_FOLYAMAT_LEPESEK = Object.keys(PROG_STEP_DEFS).filter(k => k !== 'fee');
+// Ami a jelentkezési folyamatban szerepelhet (a díj és a vízum nem: azok a
+// felvételi döntés UTÁN jönnek, ezért a képzés lépéssorába nem vehetők fel).
+const PROG_FOLYAMAT_LEPESEK = Object.keys(PROG_STEP_DEFS).filter(k => k !== 'fee' && k !== 'visa');
 // Ezek a lépések a BEADÁS UTÁN következnek — a beadás nem függ tőlük.
 const PROG_BEADAS_UTAN = ['math', 'interview'];
 const PROG_beadasElott = (k) => !PROG_BEADAS_UTAN.includes(k) && k !== 'review';
@@ -318,6 +321,111 @@ function PROG_dokKovetelmeny(data, valasztott, required) {
   return PROG_dokOsszegzes(items, extra);
 }
 
+/* ===================== VÍZUM ÁLLAPOT =====================
+   A felvett hallgatónak vízumot kell szereznie a beutazáshoz. Ezt eddig sehol
+   nem tartottuk nyilván: az iroda telefonon és levelezésből tudta meg, hol
+   tart, a hallgató pedig nem tudta jelezni, hogy megvan.
+
+   KÉT KÜLÖN BEJEGYZÉS VAN, ÉS EZ SZÁNDÉKOS:
+     data.visa       — a HALLGATÓ bejelentése („beadtam a kérelmet", „megkaptam")
+     data.visa_iroda — az IRODA nyilvántartása (ő látta a vízumot)
+   A kettő nem ugyanaz: a hallgató bejelentése önbevallás, az irodáé igazolás.
+   Ha egybeolvasztanánk, az ügyintéző nem tudná, mit ellenőrzött már ő maga, és
+   mit csak a hallgató állít. A felületen mindkét oldal LÁTJA MINDKETTŐT.
+
+   A `visa_iroda` külön FELSŐ SZINTŰ kulcs, hogy a 107-es migráció után a
+   60-as védelem (admission_office_keys) meg tudja védeni: amíg az nem futott
+   le, a mező ugyanúgy működik, csak nem védett. */
+const VIZ_ALLAPOTOK = [
+  { kod: 'beadva',     label: 'Kérelem beadva', rovid: 'Kérelem beadva' },
+  { kod: 'megvan',     label: 'Megkapta',       rovid: 'Vízum megvan' },
+  { kod: 'elutasitva', label: 'Elutasítva',     rovid: 'Vízum elutasítva' },
+];
+const VIZ_def = (kod) => VIZ_ALLAPOTOK.find(x => x.kod === kod) || null;
+const VIZ_hallgatoi = (data) => ((data || {}).visa) || null;
+const VIZ_irodai = (data) => ((data || {}).visa_iroda) || null;
+// Az IRODA bejegyzése az irányadó; ha nincs, a hallgatóé látszik.
+const VIZ_ervenyes = (data) => {
+  const i = VIZ_irodai(data), h = VIZ_hallgatoi(data);
+  return (i && i.allapot) ? i : ((h && h.allapot) ? h : null);
+};
+const VIZ_megvan = (data) => { const e = VIZ_ervenyes(data); return !!e && e.allapot === 'megvan'; };
+const VIZ_igazolt = (data) => { const i = VIZ_irodai(data); return !!i && i.allapot === 'megvan'; };
+const VIZ_TONE = { beadva: 'amber', megvan: 'green', elutasitva: 'red' };
+/* A lépéssor rövid szövege: mit lát az iroda és a hallgató a sávon. */
+function VIZ_megjegyzes(data) {
+  const e = VIZ_ervenyes(data);
+  if (!e) return '';
+  const d = VIZ_def(e.allapot);
+  const alap = d ? d.rovid : e.allapot;
+  if (e.allapot === 'megvan') return alap + (VIZ_igazolt(data) ? ' · az iroda igazolta' : ' · az iroda még nem igazolta');
+  return alap;
+}
+
+/* A jelölő felület. Ugyanaz a komponens mindkét oldalon: `iroda` igaz esetén
+   az IRODA bejegyzését szerkeszti (és megjegyzést is írhat), egyébként a
+   hallgatóét. A másik fél bejegyzése mindkét oldalon látszik. */
+function VIZ_Panel({ data, iroda, onMent, mentes }) {
+  const sajat = (iroda ? VIZ_irodai(data) : VIZ_hallgatoi(data)) || {};
+  const masik = (iroda ? VIZ_hallgatoi(data) : VIZ_irodai(data)) || {};
+  const masikCim = iroda ? 'A hallgató bejelentése' : 'A felvételi iroda nyilvántartása';
+  const [megj, setMegj] = React.useState(sajat.megjegyzes || '');
+  React.useEffect(() => { setMegj(sajat.megjegyzes || ''); }, [sajat.megjegyzes]);
+
+  const allit = (kod) => {
+    if (!onMent) return;
+    if (kod === sajat.allapot) { onMent(null); return; }            // ismételt kattintás = törlés
+    onMent({ allapot: kod, datum: todayStr(), megjegyzes: megj || '' });
+  };
+
+  const masikDef = VIZ_def(masik.allapot);
+  return (
+    <div className="space-y-3" data-vizum-panel={iroda ? 'iroda' : 'hallgato'}>
+      <div className="flex flex-wrap gap-2">
+        {VIZ_ALLAPOTOK.map(a => {
+          const on = sajat.allapot === a.kod;
+          const szin = a.kod === 'megvan' ? 'bg-emerald-600 border-emerald-600'
+            : a.kod === 'elutasitva' ? 'bg-red-600 border-red-600' : 'bg-amber-500 border-amber-500';
+          return (
+            <button key={a.kod} type="button" disabled={!onMent || !!mentes} onClick={() => allit(a.kod)}
+              aria-pressed={on} data-vizum-gomb={a.kod}
+              className={'px-4 py-2 rounded-xl text-[13px] font-black border transition-all disabled:opacity-50 '
+                + (on ? szin + ' text-white' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>
+              {a.label}
+            </button>
+          );
+        })}
+      </div>
+      {sajat.allapot
+        ? <p className="text-[12px] font-bold text-slate-500" data-vizum-sajat="1">
+            {(VIZ_def(sajat.allapot) || {}).rovid}{sajat.datum ? ' · ' + sajat.datum : ''}
+            <span className="font-semibold text-slate-400"> — a gombra újra kattintva törölhető</span>
+          </p>
+        : <p className="text-[12px] font-semibold text-slate-400">Még nincs bejegyzés.</p>}
+
+      {iroda && (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input value={megj} onChange={e => setMegj(e.target.value)} placeholder="Megjegyzés (pl. a konzulátus neve, ügyszám)…"
+            className={U_input + ' text-[13px] py-2'} data-vizum-megjegyzes="1" />
+          <button type="button" disabled={!onMent || !!mentes || !sajat.allapot}
+            onClick={() => onMent({ ...sajat, megjegyzes: megj })}
+            className={U_btnGhost + ' !py-2 text-[13px] flex-none disabled:opacity-40'}>Megjegyzés mentése</button>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5" data-vizum-masik="1">
+        <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">{masikCim}</div>
+        {masikDef
+          ? <div className="text-[13px] font-bold text-slate-700">
+              {masikDef.rovid}{masik.datum ? ' · ' + masik.datum : ''}
+              {masik.megjegyzes ? <span className="font-semibold text-slate-500"> — {masik.megjegyzes}</span> : null}
+            </div>
+          : <div className="text-[13px] font-semibold text-slate-400">Még nincs bejegyzés.</div>}
+      </div>
+    </div>
+  );
+}
+
 const PROG_DONTES_CIMKE = { admitted: 'Felvéve', rejected: 'Elutasítva', withdrawn: 'Visszalépett' };
 const PROG_allapotTone = (fa) => !fa ? 'blue'
   : (fa.kod === 'rejected' || fa.kod === 'cancelled') ? 'red'
@@ -357,6 +465,11 @@ function PROG_folyamatAllapot(proc, katalogus) {
       const fee = data.fee || {};
       lepesek.push({ key: 'fee', fazis: 'utan', label: 'Jelentkezési díj', kesz: !!(fee.paid || fee.declared),
                      megj: fee.paid ? 'Befizetés jóváhagyva' : fee.declared ? 'Átutalás bejelentve' : '' });
+      /* VÍZUM — szintén a felvétel után. A lépés akkor kész, ha a vízum
+         megvan; az „elutasítva" és a „kérelem beadva" is látszik a sávon. */
+      const vz = VIZ_ervenyes(data);
+      lepesek.push({ key: 'visa', fazis: 'utan', label: 'Vízum', kesz: VIZ_megvan(data),
+                     elutasitva: !!vz && vz.allapot === 'elutasitva', megj: VIZ_megjegyzes(data) });
     }
   } else {
     tipus = 'irodai';
@@ -1190,6 +1303,20 @@ function PROG_StepBody({ stepKey, program, data, setData, mentData, user, cur, o
           </>
         )}
         <p className="text-[12px] text-slate-500 leading-relaxed">A díjat banki átutalással kell rendezni a fenti közleménnyel. A bejelentés után a jelentkezés folytatható; a befizetést a pénzügy a bankkivonaton ellenőrzi, és csak azután lesz jóváhagyva.</p>
+      </div>
+    );
+  }
+  if (stepKey === 'visa') {
+    /* A hallgató a SAJÁT bejelentését állítja (data.visa); az iroda
+       nyilvántartása alatta látszik, de nem szerkeszthető innen. */
+    return (
+      <div className="space-y-5">
+        <PROG_Head icon={Lucide.Stamp} title="Vízum"
+          sub="Jelöld, hol tart a vízumügyintézésed — a felvételi iroda ebből látja, hogy tudsz-e időben beutazni." />
+        <VIZ_Panel data={data} iroda={false} onMent={(rek) => mentData({ visa: rek })} />
+        <p className="text-[12px] text-slate-500 leading-relaxed">
+          Ez a bejelentés a te jelzésed. A vízumot az iroda a beutazáskor (vagy a beküldött másolat alapján) igazolja — addig „az iroda még nem igazolta" felirat áll mellette.
+        </p>
       </div>
     );
   }
