@@ -2859,6 +2859,94 @@ function ADM_rendez(lista, rend, kulcsok) {
     return c ? c * irany : a.i - b.i;
   }).map(o => o.x);
 }
+/* VÍZSZINTES GÖRGETŐ A TÁBLÁZAT FÖLÉ IS.
+   A felvételi lista szélesebb, mint a képernyő, a böngésző görgetősávja
+   viszont a tartalom ALJÁN ül: egy 40 soros listánál az ügyintézőnek végig
+   kellett görgetnie a listát ahhoz, hogy jobbra tudjon lépni. Ez a burkoló a
+   táblázat FÖLÉ tesz egy húzható csúszkát, ami a táblázattal együtt mozog.
+
+   MIÉRT SAJÁT CSÚSZKA, ÉS NEM EGY MÁSODIK GÖRGETŐSÁV: a kézenfekvő megoldás
+   egy `overflow-x: auto` csík a táblázat fölött — de MÉRVE (2026-09-29) az
+   így kapott sáv ÜRES marad: macOS-en (és a Chromium alapbeállításában) a
+   görgetősáv átfedő, és csak görgetés közben villan fel. Épp azt nem hívja
+   meg, amiért odatettük. A kirajzolt fogantyú viszont mindig látszik, és
+   egérrel húzható; a billentyűzetes görgetés a táblázaton változatlan.
+
+   A csúszka a képernyőolvasó elől rejtett (aria-hidden): ugyanazt a
+   táblázatot mozgatja, nem új tartalom. Ha a tartalom kifér, meg sem jelenik. */
+function ADM_VizszintesGorgeto({ children, className }) {
+  const also = React.useRef(null);
+  const palya = React.useRef(null);
+  const fogas = React.useRef(null);      // { x, poz } — a húzás kezdete
+  const [m, setM] = React.useState({ tartalom: 0, keret: 0, poz: 0 });
+
+  React.useEffect(() => {
+    const el = also.current;
+    if (!el) return;
+    const meres = () => setM({ tartalom: el.scrollWidth, keret: el.clientWidth, poz: el.scrollLeft });
+    meres();
+    /* A táblázatot IS figyeljük, ne csak a keretet: szűréskor és rendezéskor a
+       tartalom mérete is változhat. */
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(meres) : null;
+    if (ro) { ro.observe(el); if (el.firstElementChild) ro.observe(el.firstElementChild); }
+    el.addEventListener('scroll', meres, { passive: true });
+    window.addEventListener('resize', meres);
+    return () => {
+      if (ro) ro.disconnect();
+      el.removeEventListener('scroll', meres);
+      window.removeEventListener('resize', meres);
+    };
+  }, []);
+
+  const kell = m.tartalom > m.keret + 2;
+  const maxPoz = Math.max(1, m.tartalom - m.keret);
+  // A fogantyú akkora a pályán, amekkora rész látszik — de legalább 44 px,
+  // hogy egérrel is meg lehessen fogni egy nagyon széles táblázatnál.
+  const fogSzeles = kell ? Math.max(44, Math.round(m.keret * (m.keret / m.tartalom))) : 0;
+  const fogBal = kell ? Math.round((m.poz / maxPoz) * Math.max(0, m.keret - fogSzeles)) : 0;
+
+  const alloit = (kliensX, kezdet) => {
+    const p = palya.current, el = also.current;
+    if (!p || !el) return;
+    const doboz = p.getBoundingClientRect();
+    const futas = Math.max(1, doboz.width - fogSzeles);
+    const cel = kezdet
+      ? (kezdet.poz + ((kliensX - kezdet.x) / futas) * maxPoz)     // húzás
+      : (((kliensX - doboz.left - fogSzeles / 2) / futas) * maxPoz); // pályára kattintás
+    el.scrollLeft = Math.max(0, Math.min(maxPoz, cel));
+  };
+
+  const le = (e) => {
+    if (!kell) return;
+    const fogantyun = e.target && e.target.getAttribute && e.target.getAttribute('data-gorgeto-fogantyu') === '1';
+    if (fogantyun) fogas.current = { x: e.clientX, poz: (also.current || {}).scrollLeft || 0 };
+    else { fogas.current = null; alloit(e.clientX, null); }
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) {}
+    e.preventDefault();
+  };
+  const mozog = (e) => { if (fogas.current) alloit(e.clientX, fogas.current); };
+  const fel = (e) => { fogas.current = null; try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (x) {} };
+
+  return (
+    <>
+      {kell && (
+        <div ref={palya} aria-hidden="true" data-tabla-felso-gorgeto="1"
+             onPointerDown={le} onPointerMove={mozog} onPointerUp={fel} onPointerCancel={fel}
+             className="relative h-3 bg-slate-100 border-b border-slate-100 cursor-pointer select-none touch-none">
+          {/* A fogantyú színe NYERS CSS-ből jön (app.html), nem Tailwind
+              osztályból: a sötét mód generált leképezése a hover-állapotot épp
+              sötétebbre vinné, mint az alapállapot — a fogantyú hover közben
+              tűnne el a sötét sávban. */}
+          <div data-gorgeto-fogantyu="1"
+               style={{ width: fogSzeles, transform: 'translateX(' + fogBal + 'px)' }}
+               className="absolute top-0.5 left-0 h-2 rounded-full transition-colors" />
+        </div>
+      )}
+      <div ref={also} className={className}>{children}</div>
+    </>
+  );
+}
+
 function ADM_Fej({ cim, oszlop, rend, setRend, className }) {
   const aktiv = rend.col === oszlop;
   return (
@@ -3781,7 +3869,7 @@ const AdmissionsCore = ({ user }) => {
               : <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold">{szurtE ? `${procLista.length}/${procAll.length} folyamat` : `${procAll.length} folyamat`}</span>}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <ADM_VizszintesGorgeto className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
               <tr>
@@ -3835,7 +3923,7 @@ const AdmissionsCore = ({ user }) => {
               {journeyProcs.length === 0 && <tr><td colSpan={9} className="px-6 py-8 text-center text-slate-400 text-sm">Nincs aktív felvételi folyamat.</td></tr>}
             </tbody>
           </table>
-        </div>
+        </ADM_VizszintesGorgeto>
       </div>
 
       {detailProc && (() => {
@@ -3917,7 +4005,7 @@ const AdmissionsCore = ({ user }) => {
             <ICONS.AlertCircle size={15} className="shrink-0 mt-0.5" /><span>{statusError}</span>
           </div>
         )}
-        <div className="overflow-x-auto">
+        <ADM_VizszintesGorgeto className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
               <tr>
@@ -4023,7 +4111,7 @@ const AdmissionsCore = ({ user }) => {
               )}
             </tbody>
           </table>
-        </div>
+        </ADM_VizszintesGorgeto>
       </div>
     </div>
   );

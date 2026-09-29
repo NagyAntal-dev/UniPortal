@@ -496,3 +496,5 @@ html.sotet .to-slate-700 { --tw-gradient-to: #16213a; }
 html.sotet .to-teal-600 { --tw-gradient-to: rgba(20, 184, 166, 0.22); }
 html.sotet .ring-slate-300\/60 { --tw-ring-color: rgba(148, 163, 184, 0.6); }
 html.sotet .text-red-700\/80 { color: #fca5a5; }
+html.sotet .bg-slate-400\/70 { background-color: rgba(148, 163, 184, 0.7); }
+html.sotet .hover\:bg-slate-500:hover { background-color: #3a4b69; }

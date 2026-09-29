@@ -65,6 +65,19 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+    /* ============================================================
+       A SZÉLES TÁBLÁZATOK FÖLÖTTI CSÚSZKA FOGANTYÚJA
+       ------------------------------------------------------------
+       Miért nem Tailwind osztály: a sötét mód generált leképezésében a
+       hover-árnyalat (slate-500) SÖTÉTEBB, mint az alapállapot, tehát a
+       fogantyú épp az egér alatt tűnne el. Itt mindkét témára kézzel
+       adjuk meg a párt. */
+    [data-gorgeto-fogantyu] { background-color: rgba(100, 116, 139, 0.55); }
+    [data-gorgeto-fogantyu]:hover { background-color: rgba(71, 85, 105, 0.85); }
+    html.sotet [data-gorgeto-fogantyu] { background-color: rgba(148, 163, 184, 0.55); }
+    html.sotet [data-gorgeto-fogantyu]:hover { background-color: rgba(203, 213, 225, 0.85); }
+
     /* ============================================================
        Reszponzív tartalom — érintési célpontok kis kijelzőn
        ------------------------------------------------------------
@@ -222,7 +235,7 @@
     // modul-gyorsitotarabol pedig tovabb — a REGI kodot futtatta, es a
     // felhasznalo joggal hitte, hogy a javitas nem keszult el. Mert(ve): az elo
     // csomagban mar benne volt a javitas, a bongeszo megis a regit mutatta.
-    const BUNDLE_V = 'dad2e5804ffe';
+    const BUNDLE_V = 'a446804838e7';
     const BUNDLE_URL = './app.bundle.js?v=' + BUNDLE_V;
 
     async function hasPrebuilt() {
