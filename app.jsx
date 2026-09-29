@@ -75,6 +75,12 @@ const AppView = {
   ENGAGEMENT_CRM: 'engagement_crm',
   FINANCE: 'finance',
   IMMIGRATION: 'immigration',
+  /* A „Felvételi Bírálat" nézet 2026-09-29 óta NINCS a menüben: a bírálat a
+     felvételi folyamat részleteinél zajlik (dokumentum-jóváhagyás, interjú,
+     döntés), ez a külön pontszámozó felület pedig nem kapcsolódott hozzá — a
+     felhasználónak nem volt értelme. Az azonosítót és az útvonalat
+     szándékosan MEGTARTJUK: a jogosultsági táblákban (39-es migráció) benne
+     van az 'evaluation' kulcs, és a nézet egy menüsorral visszahozható. */
   EVALUATION: 'evaluation',
   SYSTEM_ADMIN: 'system_admin',
   INTERVIEWS: 'interviews',
@@ -134,7 +140,6 @@ const MENU_ITEMS = [
   { id: AppView.ENGAGEMENT_CRM, label: 'Kommunikáció és CRM', icon: <Lucide.MessageSquare size={20} /> },
   { id: AppView.FINANCE, label: 'Pénzügyek', icon: <Lucide.Wallet size={20} /> },
   { id: AppView.IMMIGRATION, label: 'Vízum és Compliance', icon: <Lucide.ShieldCheck size={20} /> },
-  { id: AppView.EVALUATION, label: 'Felvételi Bírálat', icon: <Lucide.PieChart size={20} /> },
   { id: AppView.INTERVIEWS, label: 'Interjú Foglalás', icon: <Lucide.Calendar size={20} /> },
   { id: AppView.MARKETING_LEADS, label: 'Marketing és Lead kezelés', icon: <Lucide.Target size={20} /> },
   { id: AppView.STUDENT_PORTAL, label: 'Hallgatói Portál', icon: <Lucide.Users size={20} /> },
@@ -172,7 +177,7 @@ const MENU_GROUPS = [
   // Kutatás és pályázatok: külön csoport, mert más a közönség (kutatók és a
   // pályázati iroda), más a jogosultság és más az életciklus, mint a képzésnél.
   { key: 'kutatas',   label: 'Kutatás és pályázatok',   ids: [AppView.GRANTS_OFFICE, AppView.GRANTS_INVITES] },
-  { key: 'felveteli', label: 'Felvételi',                 ids: [AppView.ADMISSIONS_CORE, AppView.EVALUATION, AppView.INTERVIEWS, AppView.IMMIGRATION, AppView.STUDENT_PORTAL] },
+  { key: 'felveteli', label: 'Felvételi',                 ids: [AppView.ADMISSIONS_CORE, AppView.INTERVIEWS, AppView.IMMIGRATION, AppView.STUDENT_PORTAL] },
   { key: 'partner',   label: 'Partnerek és kommunikáció', ids: [AppView.AGENT_PORTAL, AppView.ENGAGEMENT_CRM, AppView.MARKETING_LEADS] },
   { key: 'penzugy',   label: 'Pénzügy és elemzés',        ids: [AppView.FINANCE, AppView.SHOP_ADMIN, AppView.REPORTS, AppView.INTELLIGENCE] },
   { key: 'echo',      label: 'Minőségbiztosítás (ECHO)',  ids: [AppView.ECHO_STUDENT, AppView.ECHO_ADMIN, AppView.ECHO_TEACHER] },
@@ -12881,7 +12886,7 @@ const App: React.FC = () => {
     if (currentUser.role === 'ADMIN') return true;
     if (currentUser.role === 'AGENT') return [AppView.FEED, AppView.PROGRAMS, AppView.ASSISTANT, AppView.AGENT_PORTAL, AppView.INTERVIEWS].includes(item.id);
     if (currentUser.role === 'FINANCE') return [AppView.FEED, AppView.ASSISTANT, AppView.FINANCE, AppView.AGENT_PORTAL, AppView.INTERVIEWS, AppView.REPORTS].includes(item.id);
-    if (currentUser.role === 'ADMISSIONS') return [AppView.FEED, AppView.ASSISTANT, AppView.ADMISSIONS_CORE, AppView.EVALUATION, AppView.ENGAGEMENT_CRM, AppView.IMMIGRATION, AppView.INTERVIEWS, AppView.MARKETING_LEADS, AppView.REPORTS, AppView.INTELLIGENCE].includes(item.id);
+    if (currentUser.role === 'ADMISSIONS') return [AppView.FEED, AppView.ASSISTANT, AppView.ADMISSIONS_CORE, AppView.ENGAGEMENT_CRM, AppView.IMMIGRATION, AppView.INTERVIEWS, AppView.MARKETING_LEADS, AppView.REPORTS, AppView.INTELLIGENCE].includes(item.id);
     if (currentUser.role === 'STUDENT') return [AppView.FEED, AppView.PROGRAMS, AppView.ASSISTANT, AppView.STUDENT_PORTAL].includes(item.id);
     // CSOPORT-JOGOSULTSÁG — közvetlenül a fail-closed ág ELŐTT.
     // Ez a sorrend a lényeg: a szerepkör-ágak már lefutottak, tehát a csoport
