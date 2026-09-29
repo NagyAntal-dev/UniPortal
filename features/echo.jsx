@@ -2974,6 +2974,12 @@ function ECHO_termLabel(term) {
   return term + ' \u00b7 ' + (m[3] === '1' ? 'őszi' : 'tavaszi') + ' félév';
 }
 
+// Tanév a félévből: '2025/26/1' -> '2025/26'. Ismeretlen alakú félév önmaga.
+function ECHO_termYear(term) {
+  const m = /^(\d{4}\/\d{2})\/[12]$/.exec(term || '');
+  return m ? m[1] : (term || '');
+}
+
 function ECHO_termOptions(rows, now) {
   const d = now || new Date();
   const base = d.getFullYear() - (d.getMonth() >= 7 ? 0 : 1);
@@ -5640,6 +5646,7 @@ function ECHO_TeacherView({ user }) {
   const [mine, setMine] = useState(null);   // echo_my_teacher_courses() nyers válasza
   const [adminCamps, setAdminCamps] = useState(null);  // echo_campaigns(); null = nem járható
   const [camps, setCamps] = useState(null);
+  const [year, setYear] = useState('');     // tanév szűrő; '' = minden tanév
   const [cid, setCid] = useState('');
   const [rate, setRate] = useState(null);
   const [courseId, setCourseId] = useState('');
@@ -5695,6 +5702,8 @@ function ECHO_TeacherView({ user }) {
         })))
       : (adminCamps || []);
     setCamps(arr);
+    // Alapból a legfrissebb tanév: a lista opens_at szerint csökkenő.
+    setYear(arr[0] ? ECHO_termYear(arr[0].term) : '');
     setCid(arr[0] ? arr[0].id : '');
   }, [mode, mine, adminCamps]);
 
@@ -5766,7 +5775,17 @@ function ECHO_TeacherView({ user }) {
     return () => { el = false; };
   }, [mode, cid]);
 
-    const camp = (camps || []).find(c => c.id === cid) || null;
+  const camp = (camps || []).find(c => c.id === cid) || null;
+  // Tanév -> kampány -> kurzus. A tanév csak a kampánylistát szűri; alatta
+  // minden (arány, eredmény, szövegek, kivitel) a cid/courseId-ből következik.
+  const years = Array.from(new Set((camps || []).map(c => ECHO_termYear(c.term)).filter(Boolean)))
+    .sort().reverse();
+  const campsInYear = (camps || []).filter(c => !year || ECHO_termYear(c.term) === year);
+  const valtYear = (v) => {
+    setYear(v);
+    const elso = (camps || []).find(c => !v || ECHO_termYear(c.term) === v);
+    setCid(elso ? elso.id : '');
+  };
   const courses = (rate && rate.kurzusonkent) || [];
   const course = courses.find(k => k.course_id === courseId) || null;
   const campState = camp ? (ECHO_CAMPAIGN_STATE[camp.state] || { label: camp.state, tone: 'slate' }) : null;
@@ -5837,10 +5856,20 @@ function ECHO_TeacherView({ user }) {
             : undefined} />
       ) : camps.length > 0 && (
         <div className="bg-white rounded-3xl border border-slate-100 p-5 mb-6">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <UField label="Tanév">
+              <select className={U_input} value={year} onChange={e => valtYear(e.target.value)}>
+                <option value="">Minden tanév</option>
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </UField>
             <UField label="Kampány">
-              <select className={U_input} value={cid} onChange={e => setCid(e.target.value)}>
-                {camps.map(c => <option key={c.id} value={c.id}>{ECHO_kampanyAzon(c.ref_no, c.code)} — {c.name}</option>)}
+              <select className={U_input} value={cid} onChange={e => setCid(e.target.value)} disabled={campsInYear.length === 0}>
+                {campsInYear.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {ECHO_kampanyAzon(c.ref_no, c.code)} — {c.name}{c.term ? ' · ' + ECHO_termLabel(c.term) : ''}
+                  </option>
+                ))}
               </select>
             </UField>
             <UField label="Kurzus" hint={courses.length === 0 ? 'Ehhez a kampányhoz nincs véleményezhető kurzus.' : ''}>
@@ -5852,6 +5881,7 @@ function ECHO_TeacherView({ user }) {
           {camp && (
             <div className="flex flex-wrap items-center gap-2 mt-4">
               <UBadge tone={campState.tone}>{campState.label}</UBadge>
+              {camp.term && <UBadge tone="slate">{ECHO_termLabel(camp.term)}</UBadge>}
               <span className="text-[11px] font-bold text-slate-400">
                 {ECHO_date(camp.opens_at)} — {ECHO_date(camp.closes_at)}
               </span>

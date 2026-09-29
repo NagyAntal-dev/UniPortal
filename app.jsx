@@ -15299,6 +15299,8 @@ Object.entries({
 // Pénzügyek, ECHO-kampányok, Oktatói eredmények, Rendszerkezelés, Regisztrációk.
 Object.entries({
   'Új': 'New',
+  'Tanév': 'Academic year',
+  'Minden tanév': 'All academic years',
   'Bírálat Mentése': 'Save review',
   'képzés': 'degree',
   'Kurzusok, oktatók, hallgatói névsor és tananyagok · törzsadat, amire az ECHO kampányok célközönsége is épül': 'Courses, teachers, student rosters and materials · master data that ECHO campaign audiences are built on',
