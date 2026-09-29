@@ -105,3 +105,37 @@
 81_echo_repeat_teacher_goal.sql
 82_audience_course_or.sql
 83_exchange_student.sql
+# --- upstream/main (ECHO kizarasi beallitas, palyazatok 77-106) ---
+76_echo_exclusion_config.sql
+77_grants_core.sql
+78_grants_calendar.sql
+79_grants_researchers.sql
+80_grants_discovery.sql
+81_grants_mtmt_source.sql
+82_grants_roster.sql
+83_grants_roster_import.sql
+84_grants_name_key.sql
+85_program_audience.sql
+86_grants_match_fast.sql
+87_grants_sync_queue.sql
+88_grants_invite.sql
+89_grants_semantic.sql
+90_grants_teams.sql
+91_grants_coauthor_fix.sql
+92_grants_match_speed.sql
+93_grants_etl_cron.sql
+94_grants_report.sql
+95_grants_match_calibration.sql
+96_grants_team_auto.sql
+97_grants_suly_ujrahangolas.sql
+98_grants_rerank.sql
+99_grants_call_details.sql
+100_grants_pontozas_ui.sql
+101_grants_details_mind.sql
+102_grants_details_frissites.sql
+103_grants_lejart_hatarido.sql
+104_grants_lejart_szuro.sql
+105_grants_projektvezeto.sql
+106_grants_konzorcium.sql
+# --- merge: a 76 (upstream) es a 80/82 (mi) eligibility_rebuild-jenek egyesitese ---
+107_echo_eligibility_merge.sql

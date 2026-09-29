@@ -83,6 +83,15 @@ const CRS_MEZO = {
   leiras: 'leírás', leiras_en: 'angol leírás', oktato: 'oktató',
 };
 
+/* A KURZUS NYELVE — nem csak leíró adat: ez dönti el, milyen nyelven kapja a
+   hallgató a kurzusértékelő kérdőívet (echo.course.lang → ECHO_courseLang).
+   A kérdőívnek magyar és angol változata van; a német és az „egyéb” nyelvű
+   kurzuson ezért magyarul kérdezünk. */
+const CRS_NYELVEK = { hu: 'magyar', en: 'angol', de: 'német', other: 'egyéb' };
+const CRS_NYELV_ROVID = (v) => CRS_NYELVEK[v || 'hu'] || String(v || '');
+// Milyen nyelven megy a kérdőív ezen a kurzuson?
+const CRS_KERDOIV_NYELV = (v) => (v === 'en' ? 'angol' : 'magyar');
+
 const CRS_FAJTA = {
   tanterv:  'Tanterv',
   tananyag: 'Tananyag',
@@ -236,11 +245,27 @@ function CRS_Form({ open, kurzus, onClose, onDone }) {
         <UField label="Megnevezés (angol)" hint="Nem kötelező.">
           <input className={U_input} value={f.name_en || ''} onChange={e => set('name_en')(e.target.value)} maxLength={200} />
         </UField>
-        <UField label="Oktatás nyelve">
-          <select className={U_input} value={f.lang || 'hu'} onChange={e => set('lang')(e.target.value)}>
+        {/* A NYELV NEM CSAK LEÍRÓ ADAT: ez dönti el, milyen nyelven kapja a
+            hallgató a kurzusértékelő kérdőívet (28/2023. 3. § (1)). Ezt a
+            szerkesztőben is ki kell mondani, különben az alapértelmezett
+            „magyar” csendben magyar kérdőívet ad egy angol nyelvű kurzuson. */}
+        <UField label="Oktatás nyelve"
+          hint="Ez dönti el, milyen nyelven kapja a hallgató a kurzusértékelő kérdőívet. Német vagy egyéb nyelvnél magyarul kérdezünk.">
+          <select className={U_input} value={f.lang || 'hu'} onChange={e => set('lang')(e.target.value)} data-kurzus-nyelv="1">
             <option value="hu">magyar</option><option value="en">angol</option>
             <option value="de">német</option><option value="other">egyéb</option>
           </select>
+          {f.lang === 'en' && !String(f.name_en || '').trim() && (
+            <p className="mt-1.5 text-[11px] font-bold text-amber-700 inline-flex items-start gap-1.5" data-nyelv-figyelmeztetes="1">
+              <Lucide.AlertTriangle size={13} className="flex-none mt-px" />
+              Angol nyelvű kurzus angol megnevezés nélkül: a kérdőív fölött a magyar cím fog állni.
+            </p>
+          )}
+          {(f.lang === 'de' || f.lang === 'other') && (
+            <p className="mt-1.5 text-[11px] font-bold text-slate-400" data-nyelv-megjegyzes="1">
+              A kérdőívnek csak magyar és angol változata van, ezért ezen a kurzuson magyarul kérdezünk.
+            </p>
+          )}
         </UField>
         <UField label="Szervezeti egység" hint="Kar vagy tanszék. A jelentések eszerint csoportosítanak.">
           <select className={U_input} value={f.org_unit_id || ''} onChange={e => set('org_unit_id')(e.target.value)}>
@@ -300,6 +325,7 @@ function CRS_Tab({ user }) {
   const [term, setTerm]     = useState('');
   const [terms, setTerms]   = useState([]);
   const [q, setQ]           = useState('');
+  const [nyelv, setNyelv]   = useState('');      // oktatási nyelv szerinti szűrés
   const [sel, setSel]       = useState(null);     // a kiválasztott kurzus id-ja
   const [det, setDet]       = useState(null);     // echo_course_get()
   const [detBusy, setDetBusy] = useState(false);
@@ -319,12 +345,13 @@ function CRS_Tab({ user }) {
     setErr('');
     try {
       const d = await CRS_api.list(term, q);
-      const arr = Array.isArray(d) ? d : [];
+      // A nyelvre a szerver nem szűr; a lista úgyis félévre szűkítve érkezik.
+      const arr = (Array.isArray(d) ? d : []).filter(k => !nyelv || (k.lang || 'hu') === nyelv);
       setRows(arr);
       if (!arr.some(k => k.id === sel)) setSel(arr.length ? arr[0].id : null);
     } catch (e) { setRows([]); setErr(CRS_msg(e)); }
   };
-  useEffect(() => { const t = setTimeout(load, q ? 300 : 0); return () => clearTimeout(t); }, [term, q]);
+  useEffect(() => { const t = setTimeout(load, q ? 300 : 0); return () => clearTimeout(t); }, [term, q, nyelv]);
   useEffect(() => {
     CRS_api.options('term').then(d => setTerms(Array.isArray(d) ? d : [])).catch(() => setTerms([]));
   }, []);
@@ -416,6 +443,13 @@ function CRS_Tab({ user }) {
           <option value="">Minden félév</option>
           {terms.map(t => <option key={t.id} value={t.id}>{t.cimke} · {t.reszlet}</option>)}
         </select>
+        {/* Nyelv szerinti szűrés: kampányindítás előtt így ellenőrizhető
+            egy mozdulattal, hogy melyik kurzuson milyen nyelvű kérdőív megy ki. */}
+        <select className={U_input + ' w-auto min-w-40'} value={nyelv} onChange={e => setNyelv(e.target.value)}
+          data-kurzus-nyelv-szuro="1">
+          <option value="">Minden nyelv</option>
+          {Object.entries(CRS_NYELVEK).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
         <input className={U_input + ' flex-1 min-w-52'} value={q} onChange={e => setQ(e.target.value)}
           placeholder="Keresés kód vagy megnevezés szerint…" />
         <span className="text-[11px] font-black text-slate-400">
@@ -464,6 +498,9 @@ function CRS_Tab({ user }) {
                         <Lucide.Paperclip size={10} />{k.dokumentum}
                       </span>
                     )}
+                    {/* A NYELV MINDEN SORON LÁTSZIK: ebből tudja meg az iroda egy
+                        pillantásra, milyen nyelvű kérdőívet kap majd a hallgató. */}
+                    <UBadge tone={k.lang === 'en' ? 'blue' : 'slate'}>{CRS_NYELV_ROVID(k.lang)}</UBadge>
                     {k.vizsgakurzus && <UBadge tone="amber">vizsgakurzus</UBadge>}
                     {!k.van_orarendi_info && <UBadge tone="slate">nincs órarend</UBadge>}
                   </div>
@@ -492,6 +529,13 @@ function CRS_Tab({ user }) {
                     {det.name_en && <p className="text-xs text-slate-400 font-bold truncate">{det.name_en}</p>}
                     <p className="text-[11px] text-slate-400 font-bold mt-1">
                       {det.code} · {det.term} · {det.org_unit || 'nincs szervezeti egység'}
+                    </p>
+                    {/* A KÖVETKEZMÉNY, nem csak az adat: az iroda ezt keresi,
+                        amikor egy kampány előtt átnézi a kurzusokat. */}
+                    <p className="text-[11px] font-bold text-slate-500 mt-1 inline-flex items-center gap-1.5"
+                      data-kurzus-kerdoiv-nyelv="1">
+                      <Lucide.Languages size={12} className="text-slate-400" />
+                      {`Oktatás nyelve: ${CRS_NYELV_ROVID(det.lang)} · a kurzusértékelő kérdőív ${CRS_KERDOIV_NYELV(det.lang)} nyelven megy ki`}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-none">
@@ -939,7 +983,7 @@ function CRS_StudentView({ user }) {
                             <div className="text-[11px] font-bold text-slate-400 truncate mt-0.5">
                               {k.code}
                               {k.org_unit ? ' · ' + k.org_unit : ''}
-                              {k.lang && k.lang !== 'hu' ? ' · ' + k.lang : ''}
+                              {' · ' + CRS_NYELV_ROVID(k.lang)}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-none">

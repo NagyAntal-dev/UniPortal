@@ -186,6 +186,18 @@ function ECHO_lang() {
    angol sorrendbe tenni. Ezeknél a fejléc nyelvváltója szerint itt ágazunk el. */
 function ECHO_ui(hu, en) { return ECHO_lang() === 'en' ? en : hu; }
 
+/* A KURZUS NEVE A KÉRDŐÍV NYELVÉN. A név ADAT (echo.course.name_hu / name_en),
+   nem felületi felirat: gépi fordítás nem érintheti, de a megfelelő VÁLTOZATOT
+   meg kell mutatni. Angol nyelvű kurzusnál a magyar cím félrevezető — MÉRVE:
+   az angol kérdőív fölött „Angol nyelvű alapozó” állt. Ha nincs angol név,
+   marad a magyar: jobb a másik nyelvű név, mint az üres cím. */
+function ECHO_kurzusNev(course, lang) {
+  const c = course || {};
+  const hu = String(c.course_name || c.name || '').trim();
+  const en = String(c.course_name_en || c.name_en || '').trim();
+  return (lang === 'en' && en) ? en : (hu || en);
+}
+
 // hu/en mezőpár feloldása egy compiled-objektumon.
 function ECHO_txt(o, lang) {
   if (!o) return '';
@@ -271,6 +283,7 @@ const ECHO_Src = ({ children, className = '' }) => (
 // A szerver oldali hibakódok emberi szövege. Ami nincs a listán, azt
 // nyersen mutatjuk — jobb egy ismeretlen kód, mint egy hazug üzenet.
 const ECHO_ERR = {
+  ECHO_BAD_CONFIG: 'A kizárási beállítás hibás.',
   ECHO_NOT_AUTHENTICATED:  'Nincs bejelentkezve.',
   ECHO_NOT_APPROVED:       'A fiókod még nincs jóváhagyva.',
   ECHO_NOT_ELIGIBLE:       'Ez a kurzus nem véleményezhető ezzel a fiókkal.',
@@ -335,7 +348,7 @@ const ECHO_ERR_VERBOSE = ['ECHO_RESULTS_NOT_READY', 'ECHO_VALIDATION_FAILED', 'E
   'ECHO_OTHER_TEXT_REQUIRED', 'ECHO_INTRO_REQUIRED', 'ECHO_BAD_INTRO',
   // Az ECHO_FORBIDDEN a 19-es óta MEGMONDJA, mi hiányzik: a kötés, a grant, vagy
   // a kurzus a másé. Enélkül a felhasználó csak annyit látna, hogy "nem szabad".
-  'ECHO_FORBIDDEN', 'ECHO_PROFILE_TAKEN', 'ECHO_BAD_ROLE'];
+  'ECHO_FORBIDDEN', 'ECHO_PROFILE_TAKEN', 'ECHO_BAD_ROLE', 'ECHO_BAD_CONFIG'];
 
 function ECHO_msg(e) {
   const raw = (e && (e.message || e.error_description || e.hint)) || '';
@@ -354,6 +367,10 @@ function ECHO_msg(e) {
     if (/echo_results_raw|echo_campaign_filters/i.test(raw)) {
       return 'Az adminisztrátori nyers nézet még nincs telepítve. '
            + 'Futtatni kell a supabase/56_admin_results_control.sql migrációt.';
+    }
+    if (/echo_(exclusion_config|campaign_exclusions)/i.test(raw)) {
+      return 'A kampányonkénti kizárási beállítás még nincs telepítve '
+           + '(supabase/76_echo_exclusion_config.sql).';
     }
     if (/echo_teacher_(list|get|save|set_active|course_set|options|delete)/i.test(raw)) {
       return 'Az oktatói nyilvántartás még nincs telepítve '
@@ -483,6 +500,10 @@ const ECHO_api = {
   attrCount:      (rule)        => ECHO_rpc('attr_rule_count', { p_rule: rule }),
   rate:       (campaign)  => ECHO_rpc('echo_rate', { p_campaign: campaign }),
   rebuildEligibility: (campaign) => ECHO_rpc('echo_rebuild_eligibility', { p_campaign: campaign }),
+  // 76_echo_exclusion_config.sql — kampányonkénti kizárási szabályok
+  exclusionConfig:    (id)      => ECHO_rpc('echo_exclusion_config', { p_campaign: id }),
+  exclusionConfigSet: (id, cfg) => ECHO_rpc('echo_exclusion_config_set', { p_campaign: id, p_config: cfg }),
+  campaignExclusions: (id)      => ECHO_rpc('echo_campaign_exclusions', { p_campaign: id }),
 
   /* ---- 3. szelet: 18_echo_campaign.sql, betű szerinti szignatúrák ----
        public.echo_campaign_create(p_nev text, p_term text, p_template_version uuid,
@@ -1504,13 +1525,14 @@ function ECHO_GoalsView({ course, onBack, onSaved }) {
               {part1 ? <ECHO_Src>{ECHO_txt(part1, lang)}</ECHO_Src> : 'Célmeghatározás'}
             </h2>
             <p className="text-sm text-slate-400 font-medium mt-0.5">
-              <ECHO_Src>{course.course_code} · {course.course_name}</ECHO_Src>{(course.campaign_ref_no || course.campaign_code) ? <span className="ml-2 align-middle"><ECHO_KampanyId sorszam={course.campaign_ref_no} kod={course.campaign_code} kicsi /></span> : null}
+              <ECHO_Src>{course.course_code} · {ECHO_kurzusNev(course, lang)}</ECHO_Src>{(course.campaign_ref_no || course.campaign_code) ? <span className="ml-2 align-middle"><ECHO_KampanyId sorszam={course.campaign_ref_no} kod={course.campaign_code} kicsi /></span> : null}
             </p>
             {langFellBack && (
               <p className="mt-1.5 text-[11px] font-bold text-amber-700 inline-flex items-start gap-1.5">
                 <Lucide.Languages size={13} className="flex-none mt-px" />
-                A kurzus nyelvén ({ECHO_courseLang(courseMeta).toUpperCase()}) nincs jóváhagyott
-                fordítás, ezért a kérdőívet magyarul mutatjuk.
+                {/* EGY szövegcsomópont: a nyelvkód beszúrása három darabra törte a
+                    mondatot, és angol módban MÉRVE magyarul maradt. */}
+                {`A kurzus nyelvén (${ECHO_courseLang(courseMeta).toUpperCase()}) nincs jóváhagyott fordítás, ezért a kérdőívet magyarul mutatjuk.`}
               </p>
             )}
           </div>
@@ -2198,7 +2220,7 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
       {/* fejléc + lépésjelző */}
       <div className="bg-white rounded-3xl border border-slate-100 p-5 sm:p-6 mb-4">
         <p className="text-xs font-bold text-slate-400 mb-1">
-          <ECHO_Src>{course.course_code} · {course.course_name}</ECHO_Src>{(course.campaign_ref_no || course.campaign_code) ? <span className="ml-2 align-middle"><ECHO_KampanyId sorszam={course.campaign_ref_no} kod={course.campaign_code} kicsi /></span> : null}
+          <ECHO_Src>{course.course_code} · {ECHO_kurzusNev(course, lang)}</ECHO_Src>{(course.campaign_ref_no || course.campaign_code) ? <span className="ml-2 align-middle"><ECHO_KampanyId sorszam={course.campaign_ref_no} kod={course.campaign_code} kicsi /></span> : null}
         </p>
         <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
           {cur.kind === 'review' ? title : <ECHO_Src>{title}</ECHO_Src>}
@@ -2215,8 +2237,9 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
         {langFellBack && (
           <p className="mt-2 text-[11px] font-bold text-amber-700 inline-flex items-start gap-1.5">
             <Lucide.Languages size={13} className="flex-none mt-px" />
-            A kurzus nyelvén ({ECHO_courseLang(courseMeta).toUpperCase()}) nincs jóváhagyott
-            fordítás, ezért a kérdőívet magyarul mutatjuk.
+            {/* EGY szövegcsomópont: a nyelvkód beszúrása három darabra törte a
+                mondatot, és angol módban MÉRVE magyarul maradt. */}
+            {`A kurzus nyelvén (${ECHO_courseLang(courseMeta).toUpperCase()}) nincs jóváhagyott fordítás, ezért a kérdőívet magyarul mutatjuk.`}
           </p>
         )}
         {(cur.kind === 'goal' || cur.kind === 'teacher_exp') && (
@@ -2248,13 +2271,16 @@ function ECHO_Wizard({ course, onBack, onSubmitted }) {
                     : <Lucide.Cloud size={13} />}
           </span>
           <p className="text-[11px] font-medium text-slate-400 leading-relaxed">
+            {/* MONDATONKÉNT EGY CSOMÓPONT. Ez a bekezdés mondja meg a hallgatónak,
+                mit tudunk róla és meddig — angol módban MÉRVE magyarul maradt,
+                mert a kiemelések három darabra törték a mondatot, és a szótár
+                csak teljes szövegcsomópontra illeszkedik. */}
             {saving ? <b className="text-slate-500">Mentés…</b>
              : saveErr ? <b className="text-amber-600">A piszkozatot most nem sikerült menteni — a válaszaid a böngészőben megvannak.</b>
-             : savedAt ? <b className="text-slate-500">Piszkozat mentve {ECHO_dateTime(savedAt)}.</b>
+             : savedAt ? <b className="text-slate-500">{`Piszkozat mentve ${ECHO_dateTime(savedAt)}.`}</b>
              : <b className="text-slate-500">A kitöltésed automatikusan mentődik.</b>}
-            {' '}A piszkozat a beküldésig <b className="text-slate-500">visszakereshető hozzád</b>, de
-            a tartalmát rajtad kívül senki nem látja. A beküldés pillanatában ez a kapcsolat
-            elszakad, és a piszkozat törlődik.
+            {' '}<b className="text-slate-500">A piszkozat a beküldésig visszakereshető hozzád.</b>
+            {' '}A tartalmát rajtad kívül senki nem látja. A beküldés pillanatában ez a kapcsolat elszakad, és a piszkozat törlődik.
           </p>
         </div>
       </div>
@@ -2652,7 +2678,7 @@ function ECHO_StudentView({ user }) {
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
             <p className="text-[11px] font-black text-slate-400 tracking-wider flex flex-wrap items-center gap-x-2 gap-y-1"><ECHO_Src>{c.course_code}</ECHO_Src><ECHO_KampanyId sorszam={c.campaign_ref_no} kod={c.campaign_code} kicsi /></p>
-            <h3 className="font-black text-slate-900 leading-snug mt-0.5"><ECHO_Src>{c.course_name}</ECHO_Src></h3>
+            <h3 className="font-black text-slate-900 leading-snug mt-0.5"><ECHO_Src>{ECHO_kurzusNev(c, ECHO_courseLang(c))}</ECHO_Src></h3>
           </div>
           <ECHO_StateBadge allapot={allapot} />
         </div>
@@ -3522,6 +3548,413 @@ function ECHO_AudiencePicker({ campaignId, kind, cimke, ikon, sug, valasztott, o
 }
 
 
+/* ------------------------------------------------------------
+   8.b KIZÁRÁSI SZABÁLYOK (76_echo_exclusion_config.sql)
+   ------------------------------------------------------------
+   Eddig a kizárás globális volt: az echo.setting két küszöbe minden
+   kampányra egyformán érvényesült, és a szabályokat semmi nem tudta
+   kikapcsolni. A 76-os migráció a beállítást a KAMPÁNYRA teszi, három
+   módban: alapbeállítás / egyedi / "senkit nem zárunk ki".
+
+   AMI NEM KAPCSOLHATÓ KI: a NINCS_OKTATO. Az alkalmassági lista kurzus–
+   OKTATÓ párokból áll, tehát oktató nélküli kurzuson nincs kit értékelni.
+   A felület ezt kimondja, nem pedig elhallgatja.
+
+   ANONIMITÁS: a létszámküszöb lejjebb vitele vagy kikapcsolása azt jelenti,
+   hogy kis csoport is kap kérdőívet. Az EREDMÉNYT ettől is védik a
+   k-anonimitási küszöbök (echo.setting k_numeric / k_dist / k_text, alsó
+   korlátjuk CHECK constrainttel 5 / 10 / 10), tehát kevés válasznál ott
+   semmi nem jelenik meg. A kitöltő viszont TUDJA, hogy hárman vannak —
+   ezért a felület figyelmeztet, nem tiltja. */
+
+const ECHO_KIZ_KAPCSOLHATO = ['LETSZAM_ALATT', 'NINCS_ORARENDI_INFO', 'VIZSGAKURZUS', 'OKTATOI_ARANY_ALATT'];
+
+/* A napló detail mezőjéből olvasható emberi szöveg. */
+function ECHO_kizarasResz(code, detail) {
+  const d = detail || {};
+  if (code === 'LETSZAM_ALATT') return `${d.letszam ?? '?'} fő · küszöb: ${d.kuszob ?? '?'}`;
+  if (code === 'OKTATOI_ARANY_ALATT') return `${d.share_pct ?? '?'}% óraarány · küszöb: ${d.kuszob ?? '?'}%`;
+  return '';
+}
+
+/* Egy soros összegzés az érvényes beállításról. */
+function ECHO_kizarasOsszegzes(eff) {
+  if (!eff) return '';
+  if (eff.mod === 'nincs') return 'Nincs kizárás — minden kurzus véleményezhető (az oktató nélkülieket kivéve).';
+  const sz = eff.szabalyok || {};
+  const ki = ECHO_KIZ_KAPCSOLHATO.filter(c => sz[c] === false);
+  const kuszob = `létszám ≥ ${eff.min_headcount} · óraarány ≥ ${eff.min_share_pct}%`;
+  if (eff.mod === 'alap') return 'Alapbeállítás — minden szabály érvényes (' + kuszob + ').';
+  return 'Egyedi beállítás — ' + kuszob
+       + (ki.length ? ' · kikapcsolva: ' + ki.length + ' szabály' : ' · minden szabály érvényes');
+}
+
+/* Az ECHO_api.exclusionConfig() válaszából szerkeszthető állapot. */
+function ECHO_kizarasAllapot(d) {
+  const eff = (d && d.ervenyes) || {};
+  const sz = eff.szabalyok || {};
+  return {
+    mod: eff.mod || 'alap',
+    szabalyok: ECHO_KIZ_KAPCSOLHATO.reduce((o, c) => { o[c] = sz[c] !== false; return o; }, {}),
+    min_headcount: String(eff.min_headcount ?? ''),
+    min_share_pct: String(eff.min_share_pct ?? ''),
+  };
+}
+
+/* A szerverre küldött alak. 'alap' módban szándékosan NEM küldünk küszöböt:
+   ilyenkor a kampány a globális echo.setting értéket követi, akkor is, ha azt
+   később a MIR átállítja. */
+function ECHO_kizarasCsomag(a) {
+  if (!a || a.mod === 'alap') return { mod: 'alap' };
+  if (a.mod === 'nincs') return { mod: 'nincs' };
+  const o = { mod: 'egyedi', szabalyok: {} };
+  ECHO_KIZ_KAPCSOLHATO.forEach(c => { o.szabalyok[c] = !!a.szabalyok[c]; });
+  if (String(a.min_headcount).trim() !== '') o.min_headcount = Number(a.min_headcount);
+  if (String(a.min_share_pct).trim() !== '') o.min_share_pct = Number(a.min_share_pct);
+  return o;
+}
+
+function ECHO_KizSor({ be, ro, cimke, leiras, zar, onValt }) {
+  return (
+    <div className={'border rounded-2xl px-4 py-3 flex items-start gap-3 '
+                    + (be ? 'border-slate-100 bg-white' : 'border-slate-100 bg-slate-50')}>
+      <button type="button" disabled={ro || zar} onClick={() => onValt(!be)}
+        aria-pressed={be}
+        className={'mt-0.5 w-9 h-5 rounded-full flex-none transition-colors relative '
+                   + (be ? 'bg-primary' : 'bg-slate-200')
+                   + ((ro || zar) ? ' opacity-50 cursor-not-allowed' : '')}>
+        <span className={'absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all '
+                         + (be ? 'left-4' : 'left-0.5')} />
+      </button>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={'text-xs font-black ' + (be ? 'text-slate-700' : 'text-slate-400')}>{cimke}</span>
+          {zar && <UBadge tone="slate">mindig érvényes</UBadge>}
+          {!zar && !be && <UBadge tone="amber">kikapcsolva</UBadge>}
+        </div>
+        <p className="text-[11px] text-slate-400 font-medium leading-relaxed mt-1">{leiras}</p>
+      </div>
+    </div>
+  );
+}
+
+/* A szerkesztő kizárási blokkja. A kapott 'a' állapotot a szülő tartja, hogy
+   a mentés egyben történjen a többi mezővel. */
+function ECHO_KizarasBeallito({ a, setA, ro, ervenyes, szabalyok }) {
+  if (!a) return <SkeletonBar h={120} />;
+  const glob = (ervenyes && ervenyes.globalis) || {};
+  const kat = (Array.isArray(szabalyok) && szabalyok.length)
+    ? szabalyok
+    : ECHO_EXCLUSION_RULES.map(r => ({ code: r.code, name_hu: r.name, description_hu: r.why,
+        scope: r.scope === 'kurzus' ? 'course' : 'pair', kapcsolhato: r.code !== 'NINCS_OKTATO' }));
+
+  const modok = [
+    { id: 'alap',   cim: 'Alapbeállítás',        leiras: `Minden szabály érvényes az egyetemi küszöbökkel (létszám ≥ ${glob.min_headcount ?? '3'} fő, óraarány ≥ ${glob.min_share_pct ?? '25'}%). Ha a MIR később átállítja a küszöböt, ez a kampány követi.` },
+    { id: 'egyedi', cim: 'Egyedi',               leiras: 'Szabályonként kapcsolható, és a két küszöb erre a kampányra külön megadható.' },
+    { id: 'nincs',  cim: 'Senkit nem zárunk ki', leiras: 'Egyetlen szabály sem fut le. A hatókör minden kurzusa véleményezhető — oktató nélküli kurzus kivételével, ott nincs kit értékelni.' },
+  ];
+
+  const kicsi = a.mod === 'nincs'
+    || (a.mod === 'egyedi' && (!a.szabalyok.LETSZAM_ALATT
+        || (String(a.min_headcount).trim() !== ''
+            && Number(a.min_headcount) < Number(glob.min_headcount ?? 3))));
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-2 sm:grid-cols-3">
+        {modok.map(m => (
+          <button key={m.id} type="button" disabled={ro}
+            onClick={() => setA({ ...a, mod: m.id })}
+            className={'text-left rounded-2xl border px-4 py-3 transition-all '
+                       + (a.mod === m.id ? 'border-primary bg-primary/5' : 'border-slate-100 bg-white hover:border-slate-200')
+                       + (ro ? ' opacity-60 cursor-not-allowed' : '')}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={'w-3.5 h-3.5 rounded-full border-[4px] flex-none '
+                               + (a.mod === m.id ? 'border-primary' : 'border-slate-200')} />
+              <span className="text-xs font-black text-slate-700">{m.cim}</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium leading-relaxed">{m.leiras}</p>
+          </button>
+        ))}
+      </div>
+
+      {a.mod === 'egyedi' && (
+        <div className="space-y-2">
+          {kat.map(r => (
+            r.kapcsolhato === false ? (
+              <ECHO_KizSor key={r.code} be={true} ro={ro} zar={true}
+                cimke={r.name_hu} leiras={r.description_hu} onValt={() => {}} />
+            ) : (
+              <ECHO_KizSor key={r.code} be={!!a.szabalyok[r.code]} ro={ro} zar={false}
+                cimke={r.name_hu} leiras={r.description_hu}
+                onValt={(v) => setA({ ...a, szabalyok: { ...a.szabalyok, [r.code]: v } })} />
+            )
+          ))}
+
+          <div className="grid gap-3 sm:grid-cols-2 pt-1">
+            <UField label="Létszámküszöb (fő)"
+              hint={'Ez alatt a kurzus kimarad. Üresen hagyva az egyetemi érték ('
+                    + (glob.min_headcount ?? 3) + ') érvényes.'}>
+              <input type="number" min="1" max="500" className={U_input} disabled={ro || !a.szabalyok.LETSZAM_ALATT}
+                value={a.min_headcount} onChange={e => setA({ ...a, min_headcount: e.target.value })}
+                placeholder={String(glob.min_headcount ?? 3)} />
+            </UField>
+            <UField label="Oktatói óraarány küszöbe (%)"
+              hint={'Ez alatt az oktató–kurzus pár kimarad. Üresen: '
+                    + (glob.min_share_pct ?? 25) + '%.'}>
+              <input type="number" min="0" max="100" step="1" className={U_input}
+                disabled={ro || !a.szabalyok.OKTATOI_ARANY_ALATT}
+                value={a.min_share_pct} onChange={e => setA({ ...a, min_share_pct: e.target.value })}
+                placeholder={String(glob.min_share_pct ?? 25)} />
+            </UField>
+          </div>
+        </div>
+      )}
+
+      {kicsi && (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 flex gap-2.5">
+          <Lucide.ShieldAlert size={15} className="text-amber-500 flex-none mt-0.5" />
+          <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
+            Így <b>kis létszámú kurzus</b> is kap kérdőívet. Az EREDMÉNY ettől nem lesz
+            visszakövethető — a k-anonimitási küszöbök (5 / 10 / 10) az eredményoldalon
+            külön érvényesülnek, tehát kevés válasznál ott semmi nem jelenik meg. A
+            kitöltő viszont tudja, hogy hárman vannak a csoportban, és ezért lehet, hogy
+            óvatosabban ír. Ezt a döntést érdemes a kampány leírásában is vállalni.
+          </p>
+        </div>
+      )}
+
+      {ro && (
+        <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+          A kampány már elindult, ezért a kizárási szabályok nem módosíthatók: az
+          alkalmassági lista újraépítése a már kiadott jegyek egy részét
+          érvénytelenítené. A ténylegesen érvényes beállítás: {ECHO_kizarasOsszegzes(ervenyes)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* A kizártak SORONKÉNTI listája (echo_campaign_exclusions).
+   Csak kurzus- és oktatói adat van benne; hallgatóra semmi nem utal. */
+function ECHO_KizartakModal({ open, campaign, onClose, onSzerkeszt }) {
+  const [d, setD]     = useState(null);
+  const [err, setErr] = useState('');
+  const [ful, setFul] = useState('kurzusok');
+  const [q, setQ]     = useState('');
+
+  useEffect(() => {
+    if (!open || !campaign) { setD(null); setErr(''); setQ(''); setFul('kurzusok'); return; }
+    let el = true;
+    setD(null); setErr('');
+    ECHO_api.campaignExclusions(campaign.id)
+      .then(x => { if (el) setD(x); })
+      .catch(e => { if (el) setErr(ECHO_msg(e)); });
+    return () => { el = false; };
+  }, [open, campaign && campaign.id]);
+
+  const sz = (s) => (s || '').toLowerCase().indexOf(q.trim().toLowerCase()) >= 0;
+  const kurzusok = (d && Array.isArray(d.kurzusok) ? d.kurzusok : [])
+    .filter(k => !q.trim() || sz(k.code) || sz(k.name)
+                 || (k.oktatok || []).some(o => sz(o.name))
+                 || (k.szabalyok || []).some(r => sz(r.name)));
+  const parok = (d && Array.isArray(d.parok) ? d.parok : [])
+    .filter(p => !q.trim() || sz(p.name) || sz(p.course_code) || sz(p.course_name));
+  const oktatok = (d && Array.isArray(d.oktatok) ? d.oktatok : [])
+    .filter(o => !q.trim() || sz(o.name));
+
+  const fulek = [
+    { id: 'kurzusok', cim: 'Kizárt kurzusok',   n: d && d.kurzusok ? d.kurzusok.length : 0, ikon: <Lucide.BookOpen size={14} /> },
+    { id: 'parok',    cim: 'Kizárt oktatói párok', n: d && d.parok ? d.parok.length : 0,    ikon: <Lucide.UserMinus size={14} /> },
+    { id: 'oktatok',  cim: 'Értékelés nélkül',  n: d && d.oktatok ? d.oktatok.length : 0,   ikon: <Lucide.UserX size={14} /> },
+  ];
+
+  /* CSV: ugyanaz az adat, amit a képernyő mutat — bizottsági kérésre
+     csatolható. Kliensoldali összefűzés, nincs hozzá RPC. */
+  const csv = () => {
+    const q2 = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const sorok = [['tipus', 'kurzuskod', 'kurzus', 'oktato', 'szabaly', 'reszlet'].join(';')];
+    (d.kurzusok || []).forEach(k => (k.szabalyok || []).forEach(r => {
+      sorok.push(['kurzus', k.code, k.name, '', r.name, ECHO_kizarasResz(r.code, r.detail)].map(q2).join(';'));
+    }));
+    (d.parok || []).forEach(p => {
+      sorok.push(['oktatoi par', p.course_code, p.course_name, p.name, p.rule_name,
+                  ECHO_kizarasResz(p.rule_code, p.detail)].map(q2).join(';'));
+    });
+    (d.oktatok || []).forEach(o => {
+      sorok.push(['ertekeles nelkul', '', '', o.name, (o.okok || []).join(' + '),
+                  o.kurzus_db + ' kurzus'].map(q2).join(';'));
+    });
+    const blob = new Blob(['﻿' + sorok.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'kizarasok_' + (campaign.code || 'kampany') + '.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  return (
+    <UModal open={open} onClose={onClose} max="max-w-4xl"
+      icon={<Lucide.FileWarning size={20} />} title="Kizárt kurzusok és oktatók"
+      subtitle={campaign ? ((ECHO_kampanyAzon(campaign.ref_no, campaign.code) || campaign.code) + ' · ' + (campaign.name || '')) : ''}>
+
+      {err && (
+        <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-sm font-bold text-red-600 flex gap-2">
+          <Lucide.AlertCircle size={16} className="flex-none mt-0.5" /> {err}
+        </div>
+      )}
+
+      {!err && d === null && (
+        <div className="space-y-3"><SkeletonBar h={56} /><SkeletonBar /><SkeletonBar w="80%" /><SkeletonBar w="60%" /></div>
+      )}
+
+      {!err && d && (
+        <>
+          <div className="bg-slate-50 rounded-2xl px-4 py-3 mb-4">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Érvényes szabályok</p>
+            <p className="text-sm font-black text-slate-700">{ECHO_kizarasOsszegzes(d.ervenyes)}</p>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              {d.jogosult_kurzus} véleményezhető kurzus · {d.jogosult_par} oktatói pár
+              {d.utolso_epites ? ' · utolsó újraépítés: ' + ECHO_dateTime(d.utolso_epites) : ''}
+            </p>
+            {d.state === 'draft' && onSzerkeszt && (
+              <button type="button" onClick={onSzerkeszt}
+                className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-black text-primary hover:underline">
+                <Lucide.SlidersHorizontal size={12} /> Szabályok módosítása a szerkesztőben
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            {fulek.map(f => (
+              <button key={f.id} type="button" onClick={() => setFul(f.id)}
+                className={'inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all '
+                           + (ful === f.id ? 'bg-primary text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100')}>
+                {f.ikon} {f.cim} <span className={ful === f.id ? 'text-white/70' : 'text-slate-400'}>{f.n}</span>
+              </button>
+            ))}
+            <div className="flex-1" />
+            <button type="button" onClick={csv} className={U_btnGhost + ' py-2 px-3.5 text-xs'}>
+              <Lucide.Download size={14} /> CSV
+            </button>
+          </div>
+
+          <div className="relative mb-4">
+            <Lucide.Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" />
+            <input className={U_input + ' pl-10'} value={q} onChange={e => setQ(e.target.value)}
+              placeholder="Keresés kurzuskódra, kurzusnévre, oktatóra…" />
+          </div>
+
+          {ful === 'kurzusok' && (
+            kurzusok.length === 0 ? (
+              <UEmpty icon={<Lucide.CheckCircle2 size={28} />} title="Nincs kizárt kurzus"
+                subtitle={q.trim() ? 'A keresésre nincs találat.' : 'A hatókör minden kurzusa véleményezhető.'} />
+            ) : (
+              <div className="space-y-2">
+                {kurzusok.map(k => (
+                  <div key={k.course_id} className="border border-slate-100 rounded-2xl px-4 py-3">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-800">{k.name}</p>
+                        <p className="text-[11px] text-slate-400 font-bold">{k.code} · {k.term}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(k.szabalyok || []).map(r => (
+                          <UBadge key={r.code} tone="amber">{r.name}</UBadge>
+                        ))}
+                      </div>
+                    </div>
+                    {(k.szabalyok || []).some(r => ECHO_kizarasResz(r.code, r.detail)) && (
+                      <p className="text-[11px] text-slate-500 font-bold mt-1.5">
+                        {(k.szabalyok || []).map(r => ECHO_kizarasResz(r.code, r.detail)).filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                    <p className="text-[11px] text-slate-400 font-medium mt-1.5">
+                      {(k.oktatok || []).length === 0 ? 'Nincs rögzített oktató.' : (
+                        'Érintett oktató: ' + (k.oktatok || []).map(o =>
+                          (o.title ? o.title + ' ' : '') + o.name + ' (' + o.share_pct + '%)').join(', ')
+                      )}
+                    </p>
+                    <p className="text-[10px] text-slate-300 font-black tracking-wider mt-1">
+                      {(k.szabalyok || []).map(r => r.code + ' · ' + r.paragraph_ref).join(' | ')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {ful === 'parok' && (
+            parok.length === 0 ? (
+              <UEmpty icon={<Lucide.CheckCircle2 size={28} />} title="Nincs kizárt oktatói pár"
+                subtitle={q.trim() ? 'A keresésre nincs találat.'
+                  : 'A véleményezhető kurzusokon minden oktató eléri az óraarány-küszöböt.'} />
+            ) : (
+              <div className="space-y-2">
+                {parok.map((p, i) => (
+                  <div key={p.course_id + p.teacher_id + i} className="border border-slate-100 rounded-2xl px-4 py-3
+                              flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-slate-800">
+                        {(p.title ? p.title + ' ' : '') + p.name}
+                      </p>
+                      <p className="text-[11px] text-slate-400 font-bold">{p.course_code} · {p.course_name}</p>
+                      <p className="text-[10px] text-slate-300 font-black tracking-wider mt-1">
+                        {p.rule_code} · {p.paragraph_ref}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <UBadge tone="violet">{p.rule_name}</UBadge>
+                      <p className="text-[11px] text-slate-500 font-bold mt-1">
+                        {ECHO_kizarasResz(p.rule_code, p.detail)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {ful === 'oktatok' && (
+            <>
+              <p className="text-[11px] text-slate-400 font-medium leading-relaxed mb-3">
+                Ők azok az oktatók, akik ebben a kampányban <b>egyetlen</b> véleményezhető
+                kurzus–oktató párt sem kaptak. Ha valaki megkérdezi, miért nem jött róla
+                visszajelzés, ez a lista a válasz.
+              </p>
+              {oktatok.length === 0 ? (
+                <UEmpty icon={<Lucide.CheckCircle2 size={28} />} title="Minden érintett oktató kap értékelést"
+                  subtitle={q.trim() ? 'A keresésre nincs találat.' : ''} />
+              ) : (
+                <div className="space-y-2">
+                  {oktatok.map(o => (
+                    <div key={o.teacher_id} className="border border-slate-100 rounded-2xl px-4 py-3
+                                flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-800">
+                          {(o.title ? o.title + ' ' : '') + o.name}
+                        </p>
+                        <p className="text-[11px] text-slate-400 font-bold">
+                          {o.kurzus_db} kurzus a kampány hatókörében
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 justify-end">
+                        {(o.okok || []).map(c => <UBadge key={c} tone="slate">{c}</UBadge>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </UModal>
+  );
+}
+
+
 /* --- Kampányszerkesztő ---------------------------------------------------
    Egy helyen a metaadatok ÉS az, hogy ki kapja meg a kérdőívet. A szerver
    szabálya: 'draft' állapotban minden szerkeszthető, futó kampányon CSAK a
@@ -3545,6 +3978,10 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
   const [nevsorOpen, setNevsorOpen] = useState(false);
   const [busy, setBusy]   = useState(false);
   const [err, setErr]     = useState('');
+  // 76: kizarasi szabalyok. 'kiz' a szerkesztheto allapot, 'kizD' a betoltott
+  // szerverválasz (ebbol jon a szabalykatalogus es a globalis kuszob).
+  const [kiz, setKiz]   = useState(null);
+  const [kizD, setKizD] = useState(null);
 
   const draft = !!campaign && campaign.state === 'draft';
   const ro    = !draft;
@@ -3575,6 +4012,13 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
         setTpls(arr);
       })
       .catch(e => { setTpls([]); setErr(ECHO_msg(e)); });
+
+    setKiz(null); setKizD(null);
+    ECHO_api.exclusionConfig(campaign.id)
+      .then(d => { setKizD(d); setKiz(ECHO_kizarasAllapot(d)); })
+      // A 76-os migracio nelkul a szerkeszto tobbi resze mukodjon tovabb: a
+      // blokk helyen ilyenkor a hiba latszik, nem egy ures kapcsolosor.
+      .catch(e => { setKizD({ hiba: ECHO_msg(e) }); setKiz(null); });
 
     ECHO_api.audience(campaign.id)
       .then(d => {
@@ -3657,6 +4101,14 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
       });
       if (draft) {
         await ECHO_api.audienceSet(campaign.id, ECHO_audItems(tetel));
+        // A kizarasi beallitas mentese MAGA IS ujraepiti az alkalmassagot,
+        // ezert a celkozonseg utan megy: igy az utolso epites mar mindkettot
+        // figyelembe veszi. Csak akkor kuldjuk el, ha valtozott.
+        if (kiz && kizD && !kizD.hiba
+            && JSON.stringify(ECHO_kizarasCsomag(kiz))
+               !== JSON.stringify(ECHO_kizarasCsomag(ECHO_kizarasAllapot(kizD)))) {
+          await ECHO_api.exclusionConfigSet(campaign.id, ECHO_kizarasCsomag(kiz));
+        }
       }
       onDone();
     } catch (e) { setErr(ECHO_msg(e)); }
@@ -3881,6 +4333,35 @@ function ECHO_CampaignEditor({ open, campaign, campaigns, onClose, onDone }) {
         </div>
       </div>
 
+      {/* --- kizárási szabályok (76_echo_exclusion_config.sql) --- */}
+      <div className="mt-6 pt-6 border-t border-slate-100">
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+          <div>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kizárási szabályok</h4>
+            <p className="text-[11px] text-slate-400 leading-relaxed mt-1.5 max-w-xl">
+              Ez dönti el, mely kurzus és mely oktató kerül BE az alkalmassági listába.
+              A mentés után a rendszer azonnal újraépíti a listát, és a kizárások
+              okkal, §-hivatkozással naplóba kerülnek.
+            </p>
+          </div>
+          {kizD && !kizD.hiba && (
+            <span className="text-[11px] font-black text-slate-500 bg-slate-50 rounded-xl px-3 py-2">
+              most: {(kizD.kizart_kurzus ?? 0)} kizárt kurzus · {(kizD.kizart_par ?? 0)} kizárt pár
+            </span>
+          )}
+        </div>
+
+        {kizD && kizD.hiba ? (
+          <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 text-[11px]
+                          font-bold text-amber-700 flex gap-2">
+            <Lucide.AlertTriangle size={15} className="flex-none mt-0.5" /> {kizD.hiba}
+          </div>
+        ) : (
+          <ECHO_KizarasBeallito a={kiz} setA={setKiz} ro={ro}
+            ervenyes={kizD && kizD.ervenyes} szabalyok={kizD && kizD.szabalyok} />
+        )}
+      </div>
+
       <ECHO_StudentListModal open={nevsorOpen} onClose={() => setNevsorOpen(false)}
         cim="A célközönség hallgatói"
         alcim={'A MOSTANI, még nem mentett beállítás szerint · ' + campaign.code}
@@ -3912,6 +4393,8 @@ function ECHO_CampaignsPanel({ user }) {
   const [formOpen, setFormOpen] = useState(false);
   const [preview, setPreview] = useState(null); // { form } | { error }
   const [rebuild, setRebuild] = useState(null); // echo_rebuild_eligibility eredménye
+  const [kizOpen, setKizOpen] = useState(false);  // a kizártak listája (76)
+  const [kizCfg, setKizCfg]   = useState(null);   // echo_exclusion_config a kijelöltre
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
   const lang = ECHO_lang();
@@ -3960,6 +4443,22 @@ function ECHO_CampaignsPanel({ user }) {
     finally { setDetailBusy(false); }
   };
   useEffect(() => { loadDetail(sel && sel.id); }, [sel && sel.id]);
+
+  /* A kampány érvényes kizárási beállítása. Kicsi válasz, a kijelöléssel
+     együtt kérjük — enélkül a szabálykatalógus nem tudná megmondani, melyik
+     szabály fut ténylegesen ENNÉL a kampánynál. */
+  useEffect(() => {
+    // Az isAdminRole lentebb van deklaralva (ugyanez a scope), ezert itt a
+    // szerepkort kozvetlenul nezzuk — kulonben a dependency-tomb TDZ-be futna.
+    const admin = user && (user.role === 'SUPERADMIN' || user.role === 'ADMIN');
+    if (!sel || !admin) { setKizCfg(null); return; }
+    let el = true;
+    setKizCfg(null);
+    ECHO_api.exclusionConfig(sel.id)
+      .then(d => { if (el) setKizCfg(d); })
+      .catch(() => { if (el) setKizCfg(null); });
+    return () => { el = false; };
+  }, [sel && sel.id, user && user.role]);
 
   const doTransition = async (to, force) => {
     setTxBusy(true); setErr('');
@@ -4329,36 +4828,61 @@ function ECHO_CampaignsPanel({ user }) {
                   <p className="text-[10px] font-black text-amber-600/70 uppercase tracking-wider mt-0.5">kizárt kurzus</p>
                 </div>
                 <div className="bg-slate-50 rounded-2xl p-4">
-                  <p className="text-xl font-black text-slate-700">{rebuild ? rebuild.excluded_pairs : '—'}</p>
+                  <p className="text-xl font-black text-slate-700">
+                    {rebuild ? rebuild.excluded_pairs : (kizCfg ? (kizCfg.kizart_par ?? 0) : '—')}
+                  </p>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mt-0.5">kizárt oktatói pár</p>
                 </div>
               </div>
 
+              {/* A kampány ÉRVÉNYES beállítása (76). A katalógus önmagában
+                  félrevezetne: egy szabály szerepelhet benne úgy is, hogy ennél
+                  a kampánynál ki van kapcsolva. */}
+              {kizCfg && kizCfg.ervenyes && (
+                <div className={'rounded-2xl px-4 py-3 mb-5 '
+                                + (kizCfg.ervenyes.mod === 'alap' ? 'bg-slate-50' : 'bg-amber-50')}>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                    Ennél a kampánynál
+                  </p>
+                  <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
+                    {ECHO_kizarasOsszegzes(kizCfg.ervenyes)}
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2 mb-5">
-                {ECHO_EXCLUSION_RULES.map(r => (
-                  <div key={r.code} className="border border-slate-100 rounded-2xl px-4 py-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-black text-slate-700">{r.name}</span>
-                      <UBadge tone={r.scope === 'kurzus' ? 'slate' : 'violet'}>{r.scope}</UBadge>
+                {ECHO_EXCLUSION_RULES.map(r => {
+                  const be = !kizCfg || !kizCfg.ervenyes
+                    || (kizCfg.ervenyes.szabalyok || {})[r.code] !== false;
+                  return (
+                    <div key={r.code} className={'border rounded-2xl px-4 py-3 '
+                                    + (be ? 'border-slate-100' : 'border-slate-100 bg-slate-50 opacity-70')}>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-xs font-black text-slate-700">{r.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          {!be && <UBadge tone="amber">kikapcsolva</UBadge>}
+                          <UBadge tone={r.scope === 'kurzus' ? 'slate' : 'violet'}>{r.scope}</UBadge>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 font-medium mt-1 leading-relaxed">{r.why}</p>
+                      <p className="text-[10px] text-slate-300 font-black tracking-wider mt-1.5">
+                        {r.code} · 28/2023. § — pontosítandó
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-400 font-medium mt-1 leading-relaxed">{r.why}</p>
-                    <p className="text-[10px] text-slate-300 font-black tracking-wider mt-1.5">
-                      {r.code} · 28/2023. § — pontosítandó
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              {/* Kimondjuk, ami hiányzik: a soronkénti naplóhoz nincs RPC. */}
-              <div className="bg-slate-50 rounded-2xl px-4 py-3 flex gap-2.5 mb-4">
-                <Lucide.Info size={15} className="text-slate-400 flex-none mt-0.5" />
-                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                  A SORONKÉNTI napló (melyik kurzus, melyik szabály, milyen adattal)
-                  még nem jeleníthető meg: a 15_echo_core.sql nem tartalmaz hozzá
-                  public RPC-t, az echo sémára pedig a kliensnek nincs joga. Itt
-                  most a kampányszintű darabszámok és a szabálykatalógus látszik.
-                </p>
-              </div>
+              {/* A SORONKÉNTI napló (76_echo_exclusion_config.sql). */}
+              {isAdminRole && (
+                <button onClick={() => setKizOpen(true)} className={U_btnGhost + ' w-full mb-2'}>
+                  <Lucide.ListFilter size={16} /> Kizárt kurzusok és oktatók
+                </button>
+              )}
+              <p className="text-[11px] text-slate-400 font-medium leading-relaxed mb-4">
+                A lista kurzusonként és oktatónként megmondja, melyik szabály és milyen
+                adat miatt maradt ki — CSV-ben is kimenthető. Hallgatói adat nincs benne.
+              </p>
 
               {isAdminRole && (
                 <button onClick={doRebuild} disabled={busy} className={U_btnGhost + ' w-full'}>
@@ -4419,9 +4943,19 @@ function ECHO_CampaignsPanel({ user }) {
         betolt={(q) => ECHO_api.campaignStudents(sel.id, q)}
         betoltKurzus={(pid) => ECHO_api.studentCourses(sel.id, pid, null)} />
 
+      <ECHO_KizartakModal open={kizOpen} campaign={sel}
+        onClose={() => setKizOpen(false)}
+        onSzerkeszt={() => { setKizOpen(false); setEditOpen(true); }} />
+
       <ECHO_CampaignEditor open={editOpen} campaign={sel} campaigns={rows}
         onClose={() => setEditOpen(false)}
-        onDone={() => { setEditOpen(false); load(true); loadDetail(sel && sel.id); }} />
+        onDone={() => {
+          setEditOpen(false); load(true); loadDetail(sel && sel.id);
+          // A szerkesztő a kizárási beállítást is menthette (és újraépíthette
+          // az alkalmasságot), ezért a kártya számai is elavultak.
+          if (sel) ECHO_api.exclusionConfig(sel.id).then(setKizCfg).catch(() => {});
+          setRebuild(null);
+        }} />
       {sel && step && (
         <ECHO_TransitionConfirm
           step={step} campaign={sel} busy={txBusy}

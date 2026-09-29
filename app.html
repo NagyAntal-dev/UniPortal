@@ -25,6 +25,35 @@
       }
     }
   </script>
+  <!-- SÖTÉT MÓD. A stíluslap a ténylegesen használt Tailwind-osztályokból
+       generált leképezés; a kapcsoló három állású (rendszer / világos / sötét).
+       A választást RAJZOLÁS ELŐTT alkalmazzuk, különben minden betöltéskor
+       felvillanna a világos felület. -->
+  <link rel="stylesheet" href="theme-dark.css?v=1" />
+  <script>
+    (function () {
+      var KULCS = 'nje_tema';
+      function olvas() { try { return localStorage.getItem(KULCS) || 'rendszer'; } catch (e) { return 'rendszer'; } }
+      function rendszerSotet() {
+        try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
+      }
+      function alkalmaz(t) {
+        var sotet = (t === 'sotet') || (t !== 'vilagos' && rendszerSotet());
+        document.documentElement.classList.toggle('sotet', sotet);
+      }
+      // A felület kapcsolója ezt hívja; a tárolás is itt történik, egy helyen.
+      window.njeTema = function (t) {
+        try { if (t) localStorage.setItem(KULCS, t); } catch (e) {}
+        alkalmaz(t || olvas());
+      };
+      alkalmaz(olvas());
+      // „Rendszer szerint” állásban kövessük az operációs rendszer váltását is.
+      try {
+        window.matchMedia('(prefers-color-scheme: dark)')
+          .addEventListener('change', function () { if (olvas() === 'rendszer') alkalmaz('rendszer'); });
+      } catch (e) {}
+    })();
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
     body { font-family: 'Inter', sans-serif; }
@@ -36,6 +65,19 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+    /* ============================================================
+       A SZÉLES TÁBLÁZATOK FÖLÖTTI CSÚSZKA FOGANTYÚJA
+       ------------------------------------------------------------
+       Miért nem Tailwind osztály: a sötét mód generált leképezésében a
+       hover-árnyalat (slate-500) SÖTÉTEBB, mint az alapállapot, tehát a
+       fogantyú épp az egér alatt tűnne el. Itt mindkét témára kézzel
+       adjuk meg a párt. */
+    [data-gorgeto-fogantyu] { background-color: rgba(100, 116, 139, 0.55); }
+    [data-gorgeto-fogantyu]:hover { background-color: rgba(71, 85, 105, 0.85); }
+    html.sotet [data-gorgeto-fogantyu] { background-color: rgba(148, 163, 184, 0.55); }
+    html.sotet [data-gorgeto-fogantyu]:hover { background-color: rgba(203, 213, 225, 0.85); }
+
     /* ============================================================
        Reszponzív tartalom — érintési célpontok kis kijelzőn
        ------------------------------------------------------------
@@ -193,7 +235,7 @@
     // modul-gyorsitotarabol pedig tovabb — a REGI kodot futtatta, es a
     // felhasznalo joggal hitte, hogy a javitas nem keszult el. Mert(ve): az elo
     // csomagban mar benne volt a javitas, a bongeszo megis a regit mutatta.
-    const BUNDLE_V = '669a5e1bc21b';
+    const BUNDLE_V = 'dfd506cbc6e5';
     const BUNDLE_URL = './app.bundle.js?v=' + BUNDLE_V;
 
     async function hasPrebuilt() {
@@ -221,7 +263,7 @@
         let src = await (await fetch('app.jsx')).text();
         // New feature modules are concatenated into app.jsx's module (shared
         // scope) at the /*__FEATURES__*/ marker, just before the App component.
-        const FEATURE_FILES = ['features/data-layer.jsx', 'features/perm.jsx', 'features/countries.jsx', 'features/echo.jsx', 'features/knowledge-base.jsx', 'features/feed.jsx', 'features/programs.jsx', 'features/assistant.jsx', 'features/registrations.jsx', 'features/interview.jsx', 'features/interview-calendar.jsx', 'features/messages.jsx', 'features/student-calendar.jsx', 'features/recordings.jsx', 'features/dorm.jsx', 'features/dorm-views.jsx', 'features/agency.jsx', 'features/multiprogram.jsx', 'features/groups.jsx', 'features/roles.jsx', 'features/courses.jsx', 'features/teachers.jsx', 'features/students.jsx', 'features/legal.jsx', 'features/access.jsx', 'features/shop.jsx'];
+        const FEATURE_FILES = ['features/data-layer.jsx', 'features/perm.jsx', 'features/countries.jsx', 'features/echo.jsx', 'features/knowledge-base.jsx', 'features/feed.jsx', 'features/programs.jsx', 'features/assistant.jsx', 'features/registrations.jsx', 'features/interview.jsx', 'features/interview-calendar.jsx', 'features/messages.jsx', 'features/student-calendar.jsx', 'features/recordings.jsx', 'features/dorm.jsx', 'features/dorm-views.jsx', 'features/agency.jsx', 'features/multiprogram.jsx', 'features/groups.jsx', 'features/roles.jsx', 'features/courses.jsx', 'features/teachers.jsx', 'features/students.jsx', 'features/legal.jsx', 'features/access.jsx', 'features/shop.jsx', 'features/grants.jsx', 'features/grants-researchers.jsx', 'features/grants-teams.jsx'];
         try {
           const parts = await Promise.all(FEATURE_FILES.map(f => fetch(f).then(r => r.ok ? r.text() : '')));
           const featureCode = parts.join('\n\n');

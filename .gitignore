@@ -30,3 +30,6 @@ NJE kurzusfelvételek*.xlsx
 tools/__pycache__/
 
 proof
+
+# A Supabase CLI helyi állapota (projekt-ref, pooler-URL) — nem tartozik a repóba.
+supabase/.temp/

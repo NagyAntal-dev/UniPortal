@@ -20,6 +20,40 @@ const motion = new Proxy({}, {
 });
 const AnimatePresence = ({ children }) => React.createElement(React.Fragment, null, children);
 
+/* ============================================================
+   SÖTÉT MÓD KAPCSOLÓJA
+   ------------------------------------------------------------
+   Három állapot, mert a kettő kevés: aki rendszerszinten éjszakai módot
+   használ, az ne kényszerüljön külön beállításra — de aki egy adott gépen
+   mást akar, az felülírhassa. A választás a böngészőben marad (nje_tema),
+   nem a szerveren: gépenként más lehet, és nem személyes adat.
+
+   A tényleges osztályt az app.html fejlécében futó, RAJZOLÁS ELŐTTI szkript
+   teszi ki — így nincs világos villanás betöltéskor. Ez a komponens csak
+   átállítja és eltárolja; ugyanazt a segédfüggvényt hívja (window.njeTema).
+   ============================================================ */
+const TEMA_SORREND = ['rendszer', 'vilagos', 'sotet'];
+const TEMA_CIMKE = { rendszer: 'Rendszer szerint', vilagos: 'Világos', sotet: 'Sötét' };
+function TemaKapcsolo() {
+  const [tema, setTema] = useState(() => {
+    try { return localStorage.getItem('nje_tema') || 'rendszer'; } catch (e) { return 'rendszer'; }
+  });
+  const valt = () => {
+    const uj = TEMA_SORREND[(TEMA_SORREND.indexOf(tema) + 1) % TEMA_SORREND.length];
+    setTema(uj);
+    try { window.njeTema && window.njeTema(uj); } catch (e) {}
+  };
+  const I = tema === 'sotet' ? ICONS.Moon : tema === 'vilagos' ? ICONS.Sun : ICONS.MonitorSmartphone;
+  return (
+    <button onClick={valt} data-tema-kapcsolo={tema}
+      className="h-10 px-2.5 flex items-center gap-1.5 rounded-xl hover:bg-slate-50 transition-colors text-slate-500"
+      title={'Megjelenés: ' + (TEMA_CIMKE[tema] || tema)} aria-label={'Megjelenés: ' + (TEMA_CIMKE[tema] || tema)}>
+      <I size={19} />
+      <span className="hidden sm:inline text-[11px] font-black tracking-wide">{TEMA_CIMKE[tema]}</span>
+    </button>
+  );
+}
+
 /* ICONS: the constants module curated a subset of lucide-react; the full
    namespace is a superset, so it satisfies every component (incl. the ones
    that did `import * as ICONS from 'lucide-react'`). */
@@ -41,6 +75,12 @@ const AppView = {
   ENGAGEMENT_CRM: 'engagement_crm',
   FINANCE: 'finance',
   IMMIGRATION: 'immigration',
+  /* A „Felvételi Bírálat" nézet 2026-09-29 óta NINCS a menüben: a bírálat a
+     felvételi folyamat részleteinél zajlik (dokumentum-jóváhagyás, interjú,
+     döntés), ez a külön pontszámozó felület pedig nem kapcsolódott hozzá — a
+     felhasználónak nem volt értelme. Az azonosítót és az útvonalat
+     szándékosan MEGTARTJUK: a jogosultsági táblákban (39-es migráció) benne
+     van az 'evaluation' kulcs, és a nézet egy menüsorral visszahozható. */
   EVALUATION: 'evaluation',
   SYSTEM_ADMIN: 'system_admin',
   INTERVIEWS: 'interviews',
@@ -76,6 +116,14 @@ const AppView = {
   DORM_OPS: 'dorm_ops',
   DORM_MAINTENANCE: 'dorm_maintenance',
   DORM_STUDENT: 'dorm_student',
+  // Pályázati modul (77_grants_core.sql). A kulcs EGYBEN jogosultsági kulcs is:
+  // a menüszűrő az item.id-t keresi a szerepkör/csoport/egyéni jogok között.
+  // A kutatói nézet ('grants') és a vezetői riport ('grants_reports') kulcsa a
+  // 77-esben már létezik, de nézetet még nem kapott.
+  GRANTS_OFFICE: 'grants_office',
+  // A kolléga saját pályázati felkérései (88_grants_invite.sql). Nem irodai
+  // nézet: bármely törzstag látja a sajátját, és itt válaszol a felkérésre.
+  GRANTS_INVITES: 'grants_invites',
   // Jogi: hozzájárulási napló (59_legal_consents.sql) — csak SUPERADMIN/ADMIN.
   CONSENTS: 'consents',
 };
@@ -92,13 +140,14 @@ const MENU_ITEMS = [
   { id: AppView.ENGAGEMENT_CRM, label: 'Kommunikáció és CRM', icon: <Lucide.MessageSquare size={20} /> },
   { id: AppView.FINANCE, label: 'Pénzügyek', icon: <Lucide.Wallet size={20} /> },
   { id: AppView.IMMIGRATION, label: 'Vízum és Compliance', icon: <Lucide.ShieldCheck size={20} /> },
-  { id: AppView.EVALUATION, label: 'Felvételi Bírálat', icon: <Lucide.PieChart size={20} /> },
   { id: AppView.INTERVIEWS, label: 'Interjú Foglalás', icon: <Lucide.Calendar size={20} /> },
   { id: AppView.MARKETING_LEADS, label: 'Marketing és Lead kezelés', icon: <Lucide.Target size={20} /> },
   { id: AppView.STUDENT_PORTAL, label: 'Hallgatói Portál', icon: <Lucide.Users size={20} /> },
   { id: AppView.STUDENTS, label: 'Hallgatók', icon: <Lucide.Users size={20} /> },
   { id: AppView.SHOP, label: 'Webshop', icon: <Lucide.ShoppingBag size={20} /> },
   { id: AppView.SHOP_ADMIN, label: 'Webshop kezelése', icon: <Lucide.Store size={20} /> },
+  { id: AppView.GRANTS_OFFICE, label: 'Pályázatfigyelő', icon: <Lucide.Target size={20} /> },
+  { id: AppView.GRANTS_INVITES, label: 'Pályázati felkéréseim', icon: <Lucide.HeartHandshake size={20} /> },
   { id: AppView.REPORTS, label: 'Riportok', icon: <Lucide.BarChart2 size={20} /> },
   { id: AppView.INTELLIGENCE, label: 'Intelligence', icon: <Lucide.Zap size={20} /> },
   { id: AppView.SYSTEM_ADMIN, label: 'Rendszerkezelés', icon: <Lucide.Settings size={20} /> },
@@ -125,7 +174,10 @@ const MENU_ITEMS = [
 const MENU_GROUPS = [
   { key: 'altalanos', label: 'Általános',                 ids: [AppView.FEED, AppView.ASSISTANT, AppView.SHOP] },
   { key: 'kepzes',    label: 'Képzés és oktatás',         ids: [AppView.PROGRAMS, AppView.TRAININGS, AppView.COURSES, AppView.TEACHERS, AppView.STUDENTS] },
-  { key: 'felveteli', label: 'Felvételi',                 ids: [AppView.ADMISSIONS_CORE, AppView.EVALUATION, AppView.INTERVIEWS, AppView.IMMIGRATION, AppView.STUDENT_PORTAL] },
+  // Kutatás és pályázatok: külön csoport, mert más a közönség (kutatók és a
+  // pályázati iroda), más a jogosultság és más az életciklus, mint a képzésnél.
+  { key: 'kutatas',   label: 'Kutatás és pályázatok',   ids: [AppView.GRANTS_OFFICE, AppView.GRANTS_INVITES] },
+  { key: 'felveteli', label: 'Felvételi',                 ids: [AppView.ADMISSIONS_CORE, AppView.INTERVIEWS, AppView.IMMIGRATION, AppView.STUDENT_PORTAL] },
   { key: 'partner',   label: 'Partnerek és kommunikáció', ids: [AppView.AGENT_PORTAL, AppView.ENGAGEMENT_CRM, AppView.MARKETING_LEADS] },
   { key: 'penzugy',   label: 'Pénzügy és elemzés',        ids: [AppView.FINANCE, AppView.SHOP_ADMIN, AppView.REPORTS, AppView.INTELLIGENCE] },
   { key: 'echo',      label: 'Minőségbiztosítás (ECHO)',  ids: [AppView.ECHO_STUDENT, AppView.ECHO_ADMIN, AppView.ECHO_TEACHER] },
@@ -267,6 +319,20 @@ function canSeeView(currentUser, viewId) {
       if (currentUser.role === 'AGENT') return false;
       return matrixView() ?? true;
     }
+    // „Pályázati felkéréseim": a „Szállásom" mintájára mindenkinek jár az
+    // ügynök kivételével. Aki nincs a kutatói törzsben, annak a NÉZET mondja
+    // meg — nem a menüből tűnik el, mert akkor nem is tudná, hogy létezik.
+    if (viewId === AppView.GRANTS_INVITES) return currentUser.role !== 'AGENT';
+    // Pályázatfigyelő: a 'grants_office' kulcs NINCS a 72-es modul-mátrixban,
+    // így a lenti PERM_can élő mátrix mellett mindenkinek FALSE-t adna. A
+    // szerver grants.has_perm() szabályát követjük (77_grants_core.sql):
+    // admin, VAGY szerepkör- (39), csoport- vagy egyéni jog.
+    if (viewId === AppView.GRANTS_OFFICE) {
+      return ['SUPERADMIN', 'ADMIN'].includes(currentUser.role)
+          || (currentUser.rolePerms || []).includes(viewId)
+          || (currentUser.groupPerms || []).includes(viewId)
+          || (currentUser.userPerms || []).includes(viewId);
+    }
     // A SZUPERADMIN mindent lát, és ezt SEMMILYEN tábla nem írhatja felül.
     // Ha elvehető lenne, ki lehetne zárni magát abból a képernyőből is,
     // amivel visszaállítaná — és nem maradna út vissza.
@@ -299,7 +365,7 @@ function canSeeView(currentUser, viewId) {
     if (currentUser.role === 'ADMIN') return true;
     if (currentUser.role === 'AGENT') return [AppView.FEED, AppView.PROGRAMS, AppView.ASSISTANT, AppView.AGENT_PORTAL, AppView.INTERVIEWS].includes(viewId);
     if (currentUser.role === 'FINANCE') return [AppView.FEED, AppView.ASSISTANT, AppView.FINANCE, AppView.AGENT_PORTAL, AppView.INTERVIEWS, AppView.REPORTS].includes(viewId);
-    if (currentUser.role === 'ADMISSIONS') return [AppView.FEED, AppView.ASSISTANT, AppView.ADMISSIONS_CORE, AppView.EVALUATION, AppView.ENGAGEMENT_CRM, AppView.IMMIGRATION, AppView.INTERVIEWS, AppView.MARKETING_LEADS, AppView.REPORTS, AppView.INTELLIGENCE].includes(viewId);
+    if (currentUser.role === 'ADMISSIONS') return [AppView.FEED, AppView.ASSISTANT, AppView.ADMISSIONS_CORE, AppView.ENGAGEMENT_CRM, AppView.IMMIGRATION, AppView.INTERVIEWS, AppView.MARKETING_LEADS, AppView.REPORTS, AppView.INTELLIGENCE].includes(viewId);
     if (currentUser.role === 'STUDENT') return [AppView.FEED, AppView.PROGRAMS, AppView.ASSISTANT, AppView.STUDENT_PORTAL].includes(viewId);
     // CSOPORT-JOGOSULTSÁG — közvetlenül a fail-closed ág ELŐTT.
     // Ez a sorrend a lényeg: a szerepkör-ágak már lefutottak, tehát a csoport
@@ -1210,335 +1276,13 @@ function useApi(apiMethod) {
 }
 
 
-/* ===== VideoInterviewSystem ===== */
-const VideoInterviewSystem = (() => {
-interface VideoInterviewSystemProps {
-  onComplete: (videos: VideoInterview[]) => void;
-}
-
-const VideoInterviewSystem: React.FC<VideoInterviewSystemProps> = ({ onComplete }) => {
-  const [currentStep, setCurrentStep] = useState<'intro' | 'recording' | 'review' | 'completed'>('intro');
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordedVideos, setRecordedVideos] = useState<VideoInterview[]>([]);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const questions = mockDatabase.videoInterviewQuestions;
-  const currentQuestion = questions[currentQuestionIndex];
-
-  useEffect(() => {
-    if (currentStep === 'recording' || currentStep === 'intro') {
-      startCamera();
-    } else {
-      stopCamera();
-    }
-    return () => stopCamera();
-  }, [currentStep]);
-
-  const startCamera = async () => {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: 1280, height: 720 }, 
-        audio: true 
-      });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
-    } catch (err) {
-      console.error("Error accessing camera:", err);
-      alert("Kérjük, engedélyezze a kamera és mikrofon hozzáférést a folytatáshoz.");
-    }
-  };
-
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
-    }
-  };
-
-  const startRecording = () => {
-    if (!stream) return;
-
-    chunksRef.current = [];
-    const mediaRecorder = new MediaRecorder(stream);
-    mediaRecorderRef.current = mediaRecorder;
-
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) {
-        chunksRef.current.push(e.data);
-      }
-    };
-
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-      setRecordedBlob(blob);
-      setPreviewUrl(URL.createObjectURL(blob));
-      setCurrentStep('review');
-    };
-
-    mediaRecorder.start();
-    setIsRecording(true);
-    setTimeLeft(currentQuestion.durationLimit);
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          stopRecording();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-  };
-
-  const handleSaveAndNext = () => {
-    if (recordedBlob) {
-      const newVideo: VideoInterview = {
-        id: `V-${Date.now()}`,
-        question: currentQuestion.text,
-        videoUrl: previewUrl || '',
-        duration: `${currentQuestion.durationLimit - timeLeft}s`
-      };
-
-      const updatedVideos = [...recordedVideos, newVideo];
-      setRecordedVideos(updatedVideos);
-
-      if (currentQuestionIndex < questions.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setCurrentStep('recording');
-        setRecordedBlob(null);
-        setPreviewUrl(null);
-      } else {
-        setCurrentStep('completed');
-        onComplete(updatedVideos);
-      }
-    }
-  };
-
-  const handleRetake = () => {
-    setRecordedBlob(null);
-    setPreviewUrl(null);
-    setCurrentStep('recording');
-  };
-
-  const renderIntro = () => (
-    <div className="flex flex-col items-center justify-center text-center space-y-6 p-8">
-      <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
-        <ICONS.Video size={40} />
-      </div>
-      <div>
-        <h3 className="text-2xl font-bold text-slate-900">AI interjú-gyakorlás</h3>
-        <p className="text-slate-500 mt-2 max-w-md">
-          Felkészülési gyakorlat: 4 tipikus felvételi kérdésre válaszolhatsz videón.
-          Kérjük, győződj meg róla, hogy jól megvilágított helyen vagy és a mikrofonod megfelelően működik.
-        </p>
-      </div>
-      <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex items-start gap-3 text-left max-w-md">
-        <ICONS.AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
-        <p className="text-xs text-amber-800">
-          <span className="font-bold">Ez gyakorlás, nem a valódi felvételi interjú.</span> A felvétel nálad marad,
-          nem küldjük be a felvételi bizottságnak, és nem számít bele a bírálatba. A valódi interjúra az
-          Interjúk fülön tudsz időpontot foglalni. Minden kérdésre meghatározott idő áll rendelkezésre — a
-          felvétel automatikusan leáll, ha az idő lejár.
-        </p>
-      </div>
-      <button 
-        onClick={() => setCurrentStep('recording')}
-        className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center gap-2"
-      >
-        Gyakorlás megkezdése <ICONS.ArrowRight size={18} />
-      </button>
-    </div>
-  );
-
-  const renderRecording = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">
-            {currentQuestionIndex + 1} / {questions.length} Kérdés
-          </span>
-          <h3 className="text-xl font-bold text-slate-900">{currentQuestion.text}</h3>
-        </div>
-        {isRecording && (
-          <div className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-full font-mono font-bold animate-pulse">
-            <div className="w-2 h-2 bg-red-600 rounded-full" />
-            00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
-          </div>
-        )}
-      </div>
-
-      <div className="relative aspect-video bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border-4 border-white">
-        <video 
-          ref={videoRef} 
-          autoPlay 
-          muted 
-          playsInline 
-          className="w-full h-full object-cover mirror"
-        />
-        
-        {!isRecording && (
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center">
-            <button 
-              onClick={startRecording}
-              className="w-20 h-20 bg-white text-indigo-600 rounded-full flex items-center justify-center hover:scale-110 transition-all shadow-xl"
-            >
-              <ICONS.Play size={32} fill="currentColor" />
-            </button>
-          </div>
-        )}
-
-        {isRecording && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
-            <button 
-              onClick={stopRecording}
-              className="bg-white text-red-600 px-6 py-3 rounded-full font-bold flex items-center gap-2 shadow-xl hover:bg-red-50 transition-all"
-            >
-              <div className="w-3 h-3 bg-red-600 rounded-sm" /> Felvétel leállítása
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderReview = () => (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h3 className="text-xl font-bold text-slate-900">Ellenőrizze a választ</h3>
-        <p className="text-sm text-slate-500">Visszanézheti a felvételt, mielőtt továbblépne a következő kérdésre.</p>
-      </div>
-
-      <div className="relative aspect-video bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border-4 border-white">
-        <video 
-          src={previewUrl || ''} 
-          controls 
-          className="w-full h-full object-cover"
-        />
-      </div>
-
-      <div className="flex items-center justify-between gap-4">
-        <button 
-          onClick={handleRetake}
-          className="flex-1 border-2 border-slate-200 text-slate-600 py-4 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-        >
-          <ICONS.RotateCcw size={18} /> Új felvétel
-        </button>
-        <button 
-          onClick={handleSaveAndNext}
-          className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
-        >
-          {currentQuestionIndex < questions.length - 1 ? 'Következő kérdés' : 'Gyakorlás befejezése'} <ICONS.ArrowRight size={18} />
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderCompleted = () => (
-    <div className="flex flex-col items-center justify-center text-center space-y-6 p-8">
-      <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
-        <ICONS.CheckCircle size={40} />
-      </div>
-      <div>
-        <h3 className="text-2xl font-bold text-slate-900">Készen vagy a gyakorlással!</h3>
-        <p className="text-slate-500 mt-2 max-w-md">
-          Végigmentél mind a 4 gyakorlókérdésen. A felvételeidet nem küldtük el senkinek — a gyakorlás
-          eredménye nem számít bele a felvételi bírálatba.
-        </p>
-        <p className="text-sm font-bold text-slate-700 mt-3 max-w-md">
-          A következő lépés: foglalj időpontot a valódi felvételi interjúra az Interjúk fülön.
-        </p>
-      </div>
-      <div className="grid grid-cols-2 gap-4 w-full max-w-md">
-        {recordedVideos.map((video, idx) => (
-          <div key={video.id} className="bg-white p-3 rounded-xl border border-slate-100 flex items-center gap-3">
-            <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-bold text-slate-500">
-              {idx + 1}
-            </div>
-            <div className="text-left">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Kérdés</p>
-              <p className="text-xs font-bold text-slate-700 truncate w-32">{video.question}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="max-w-3xl mx-auto bg-white rounded-[40px] shadow-xl border border-slate-100 overflow-hidden">
-      {/* Végig látható szalag: a felhasználó egy pillanatra se hihesse, hogy ez
-          a valódi felvételi interjú. */}
-      <div className="bg-slate-900 text-white px-8 py-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest">
-        <ICONS.Sparkles size={14} /> Gyakorlási mód — nem a valódi felvételi interjú
-      </div>
-      <div className="p-8 md:p-12">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-          >
-            {currentStep === 'intro' && renderIntro()}
-            {currentStep === 'recording' && renderRecording()}
-            {currentStep === 'review' && renderReview()}
-            {currentStep === 'completed' && renderCompleted()}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-      
-      {currentStep !== 'completed' && (
-        <div className="bg-slate-50 px-8 py-4 flex items-center justify-between border-t border-slate-100">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${stream ? 'bg-emerald-500' : 'bg-red-500'}`} />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Kamera: {stream ? 'Aktív' : 'Nincs kapcsolat'}
-            </span>
-          </div>
-          <div className="flex gap-1">
-            {questions.map((_, idx) => (
-              <div 
-                key={idx} 
-                className={`h-1 w-8 rounded-full transition-all ${
-                  idx < currentQuestionIndex ? 'bg-indigo-600' : 
-                  idx === currentQuestionIndex ? 'bg-indigo-400' : 'bg-slate-200'
-                }`} 
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        .mirror {
-          transform: scaleX(-1);
-        }
-      `}</style>
-    </div>
-  );
-};
-return VideoInterviewSystem;
-})();
+/* ===== Előre felvett (videós) interjú — ELTÁVOLÍTVA 2026-09-24 =====
+   A külügyi iroda észrevétele: „Az előre felvett interjú nem szükséges.
+   Mindenki élőben fog interjúzni.” Itt korábban egy VideoInterviewSystem
+   komponens állt (kamerás felvétel 4 kérdésre, gyakorlási módban). A
+   jelentkező interjúja mostantól kizárólag az élő, Teams-es időpontfoglalás
+   (features/interview-calendar.jsx) — egy út van, nincs mellette egy
+   második, amit magyarázni kell. */
 
 /* ===== Reszponzív keret — az oldalsáv állapota =====
    Három üzemmód, matchMedia-val figyelve (NEM resize-eseménnyel: az minden
@@ -1740,6 +1484,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex justify-center">
             <span
               className="w-11 h-11 rounded-xl bg-white text-primary font-black text-sm flex items-center justify-center tracking-tight"
+              data-sidebar-jel="1"
               title="UniPortal Pro — Neumann János Egyetem"
             >UP</span>
           </div>
@@ -1747,7 +1492,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2.5">
               <span className="font-black text-2xl text-white tracking-tight leading-none">UniPortal</span>
-              <span className="text-[10px] font-black tracking-[0.15em] text-primary bg-white px-1.5 py-1 rounded">PRO</span>
+              <span data-sidebar-jel="1" className="text-[10px] font-black tracking-[0.15em] text-primary bg-white px-1.5 py-1 rounded">PRO</span>
             </div>
             <div>
               <p className="text-[10px] text-white/80 font-black uppercase tracking-widest">Neumann János Egyetem</p>
@@ -2193,7 +1938,11 @@ const AgentPortal: React.FC<AgentPortalProps> = ({ user }) => {
                 <th className="px-6 py-4">Képzés</th>
                 <th className="px-6 py-4">Ügynökség</th>
                 <th className="px-6 py-4">Státusz</th>
-                <th className="px-6 py-4 text-right">Részletek</th>
+                {/* A Részletek oszlop a táblázat jobb szélén áll, és keskeny
+                    képernyőn kigörgött a képből — az ügyintéző csak kereséssel
+                    tudta megnyitni a jelentkezést (külügyi iroda, 2026-09-24).
+                    Most ODARAGAD a jobb szélhez, tehát mindig látszik. */}
+                <th className="px-6 py-4 text-right sticky right-0 z-20 bg-slate-50 shadow-[-8px_0_12px_-8px_rgba(15,23,42,0.18)]">Részletek</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -3122,8 +2871,20 @@ function ADM_DokLista({ dok }) {
   );
   return (
     <div className="space-y-2" data-dok-lista="1">
-      <p className="text-[12px] font-semibold text-slate-500">{`${dok.feltoltve}/${dok.osszes} kötelező dokumentum feltöltve · ${dok.hitelesitve} jóváhagyva`}</p>
-      {dok.items.length === 0 && <p className="text-sm text-slate-400">A megjelölt képzések nem kérnek dokumentumot.</p>}
+      {/* NULLA ELŐÍRÁS ≠ MINDEN RENDBEN. A „0/0 kötelező dokumentum feltöltve”
+          sor félreérthető volt: úgy olvasódott, mintha készen lenne, holott
+          egyszerűen nincs mit megnyitni (külügyi iroda, 2026-09-24). */}
+      <p className="text-[12px] font-semibold text-slate-500">{dok.osszes === 0
+        ? 'Ehhez a jelentkezéshez nincs kötelező dokumentum megadva.'
+        : `${dok.feltoltve}/${dok.osszes} kötelező dokumentum feltöltve · ${dok.hitelesitve} jóváhagyva`}</p>
+      {dok.items.length === 0 && dok.extra.length === 0 && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] font-semibold text-amber-800" data-dok-ures="1">
+          <Lucide.AlertTriangle size={14} className="flex-none mt-0.5" />
+          <span>Nincs mit megnyitni: a jelentkezés képzéseinél nincs beállítva kötelező dokumentum, és a jelentkező sem töltött fel semmit.
+            A kötelező dokumentumokat a <b>Képzések</b> menüpontban, a képzés szerkesztőjében lehet megadni.</span>
+        </div>
+      )}
+      {dok.items.length === 0 && dok.extra.length > 0 && <p className="text-sm text-slate-400">A megjelölt képzések nem kérnek dokumentumot.</p>}
       {dok.items.map(sor)}
       {dok.extra.length > 0 && <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-2">Egyéb feltöltött fájl (nem kötelező)</div>}
       {dok.extra.map(sor)}
@@ -3404,6 +3165,94 @@ function ADM_rendez(lista, rend, kulcsok) {
     return c ? c * irany : a.i - b.i;
   }).map(o => o.x);
 }
+/* VÍZSZINTES GÖRGETŐ A TÁBLÁZAT FÖLÉ IS.
+   A felvételi lista szélesebb, mint a képernyő, a böngésző görgetősávja
+   viszont a tartalom ALJÁN ül: egy 40 soros listánál az ügyintézőnek végig
+   kellett görgetnie a listát ahhoz, hogy jobbra tudjon lépni. Ez a burkoló a
+   táblázat FÖLÉ tesz egy húzható csúszkát, ami a táblázattal együtt mozog.
+
+   MIÉRT SAJÁT CSÚSZKA, ÉS NEM EGY MÁSODIK GÖRGETŐSÁV: a kézenfekvő megoldás
+   egy `overflow-x: auto` csík a táblázat fölött — de MÉRVE (2026-09-29) az
+   így kapott sáv ÜRES marad: macOS-en (és a Chromium alapbeállításában) a
+   görgetősáv átfedő, és csak görgetés közben villan fel. Épp azt nem hívja
+   meg, amiért odatettük. A kirajzolt fogantyú viszont mindig látszik, és
+   egérrel húzható; a billentyűzetes görgetés a táblázaton változatlan.
+
+   A csúszka a képernyőolvasó elől rejtett (aria-hidden): ugyanazt a
+   táblázatot mozgatja, nem új tartalom. Ha a tartalom kifér, meg sem jelenik. */
+function ADM_VizszintesGorgeto({ children, className }) {
+  const also = React.useRef(null);
+  const palya = React.useRef(null);
+  const fogas = React.useRef(null);      // { x, poz } — a húzás kezdete
+  const [m, setM] = React.useState({ tartalom: 0, keret: 0, poz: 0 });
+
+  React.useEffect(() => {
+    const el = also.current;
+    if (!el) return;
+    const meres = () => setM({ tartalom: el.scrollWidth, keret: el.clientWidth, poz: el.scrollLeft });
+    meres();
+    /* A táblázatot IS figyeljük, ne csak a keretet: szűréskor és rendezéskor a
+       tartalom mérete is változhat. */
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(meres) : null;
+    if (ro) { ro.observe(el); if (el.firstElementChild) ro.observe(el.firstElementChild); }
+    el.addEventListener('scroll', meres, { passive: true });
+    window.addEventListener('resize', meres);
+    return () => {
+      if (ro) ro.disconnect();
+      el.removeEventListener('scroll', meres);
+      window.removeEventListener('resize', meres);
+    };
+  }, []);
+
+  const kell = m.tartalom > m.keret + 2;
+  const maxPoz = Math.max(1, m.tartalom - m.keret);
+  // A fogantyú akkora a pályán, amekkora rész látszik — de legalább 44 px,
+  // hogy egérrel is meg lehessen fogni egy nagyon széles táblázatnál.
+  const fogSzeles = kell ? Math.max(44, Math.round(m.keret * (m.keret / m.tartalom))) : 0;
+  const fogBal = kell ? Math.round((m.poz / maxPoz) * Math.max(0, m.keret - fogSzeles)) : 0;
+
+  const alloit = (kliensX, kezdet) => {
+    const p = palya.current, el = also.current;
+    if (!p || !el) return;
+    const doboz = p.getBoundingClientRect();
+    const futas = Math.max(1, doboz.width - fogSzeles);
+    const cel = kezdet
+      ? (kezdet.poz + ((kliensX - kezdet.x) / futas) * maxPoz)     // húzás
+      : (((kliensX - doboz.left - fogSzeles / 2) / futas) * maxPoz); // pályára kattintás
+    el.scrollLeft = Math.max(0, Math.min(maxPoz, cel));
+  };
+
+  const le = (e) => {
+    if (!kell) return;
+    const fogantyun = e.target && e.target.getAttribute && e.target.getAttribute('data-gorgeto-fogantyu') === '1';
+    if (fogantyun) fogas.current = { x: e.clientX, poz: (also.current || {}).scrollLeft || 0 };
+    else { fogas.current = null; alloit(e.clientX, null); }
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) {}
+    e.preventDefault();
+  };
+  const mozog = (e) => { if (fogas.current) alloit(e.clientX, fogas.current); };
+  const fel = (e) => { fogas.current = null; try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (x) {} };
+
+  return (
+    <>
+      {kell && (
+        <div ref={palya} aria-hidden="true" data-tabla-felso-gorgeto="1"
+             onPointerDown={le} onPointerMove={mozog} onPointerUp={fel} onPointerCancel={fel}
+             className="relative h-3 bg-slate-100 border-b border-slate-100 cursor-pointer select-none touch-none">
+          {/* A fogantyú színe NYERS CSS-ből jön (app.html), nem Tailwind
+              osztályból: a sötét mód generált leképezése a hover-állapotot épp
+              sötétebbre vinné, mint az alapállapot — a fogantyú hover közben
+              tűnne el a sötét sávban. */}
+          <div data-gorgeto-fogantyu="1"
+               style={{ width: fogSzeles, transform: 'translateX(' + fogBal + 'px)' }}
+               className="absolute top-0.5 left-0 h-2 rounded-full transition-colors" />
+        </div>
+      )}
+      <div ref={also} className={className}>{children}</div>
+    </>
+  );
+}
+
 function ADM_Fej({ cim, oszlop, rend, setRend, className }) {
   const aktiv = rend.col === oszlop;
   return (
@@ -3659,7 +3508,10 @@ const AdmissionsCore = ({ user }) => {
       const orszag = ADM_orszag(p) || ((students.find(st => email && String(st.email || '').toLowerCase() === String(email).toLowerCase()) || {}).country || '');
       const felev = d.term || '';
       const elozmeny = ADM_elozmenyek(p, journeyProcs, students);
-      return { p, fa, nev, email, azon, orszag, felev, elozmeny, dontes: dontesAdat, progs, missing, pct, stLabel, lepesSzoveg, allapot, allapotRend, cancelled, hallgatonal,
+      // Hány kötelező dokumentumot ír elő a képzés? 0 esetén a „Minden feltöltve"
+      // félrevezető lenne — az oszlop ilyenkor semleges állapotot mutat.
+      const dokOsszes = fa ? fa.dok.osszes : kell.length;
+      return { p, fa, nev, email, azon, orszag, felev, elozmeny, dontes: dontesAdat, progs, missing, dokOsszes, pct, stLabel, lepesSzoveg, allapot, allapotRend, cancelled, hallgatonal,
         frissitve: p.updatedAt || p.createdAt || '',
         kereso: ADM_norm([nev, email, p.id, azon, FIZ_kozlemeny(p.refNo), FIZ_kozlemeny(p.refNo).replace(/-/g, ''), orszag, felev, (felev && typeof PROG_termLabel === 'function') ? PROG_termLabel(felev) : '', stLabel, ...progs.map(x => x.name + ' ' + x.code)].join(' ')) };
     };
@@ -3918,6 +3770,25 @@ const AdmissionsCore = ({ user }) => {
             </div>
             <span data-fejlec-allapot="1" className={'text-xs font-bold px-3 py-1.5 rounded-full ' + ((faD.kod === 'accepted' || faD.kod === 'admitted') ? 'bg-emerald-50 text-emerald-600' : (faD.kod === 'rejected' || faD.kod === 'cancelled') ? 'bg-red-50 text-red-600' : faD.kod === 'student' ? 'bg-amber-50 text-amber-700' : 'bg-primary/10 text-primary')}>{faD.cimke}</span>
           </div>
+          {/* A JELENTKEZŐ VISSZALÉPETT. A fejléc jelvénye könnyen elsiklik, pedig
+              ez a legfontosabb tudnivaló a folyamatról: ne dolgozzon rajta tovább
+              az ügyintéző, és ne várjon hiányzó dokumentumra. A sort szándékosan
+              NEM töröljük — a feltöltött dokumentumok, a díj és az üzenetváltás
+              megmarad. */}
+          {p.data && p.data._cancelled && (
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4" data-megszakitva="1">
+              <ICONS.XCircle size={20} className="text-red-600 flex-none" />
+              <div className="min-w-0">
+                <div className="text-sm font-black text-red-700">
+                  {p.data._cancelledBy === 'iroda' ? 'A felvételi iroda zárta le ezt a folyamatot' : 'A jelentkező megszakította ezt a folyamatot'}
+                </div>
+                <div className="text-[12px] font-semibold text-red-700/80">
+                  {(p.data._cancelledAt ? ADM_datum(p.data._cancelledAt) + ' · ' : '')}
+                  <span>A jelentkezés nem folytatódik. A feltöltött dokumentumok és az üzenetváltás megmaradt.</span>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
               <ADM_FiokElozmeny items={ADM_fiokElozmenyek(p, journeyProcs, students, progKat)} />
@@ -3927,7 +3798,16 @@ const AdmissionsCore = ({ user }) => {
               </div>
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
                 <div className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Dokumentumok</div>
-                <p className="text-[12px] font-semibold text-slate-500 mb-4">{`${faD.dok.feltoltve}/${faD.dok.osszes} kötelező dokumentum feltöltve · ${faD.dok.hitelesitve} jóváhagyva`}</p>
+                <p className="text-[12px] font-semibold text-slate-500 mb-4">{faD.dok.osszes === 0
+                  ? 'Ehhez a jelentkezéshez nincs kötelező dokumentum megadva.'
+                  : `${faD.dok.feltoltve}/${faD.dok.osszes} kötelező dokumentum feltöltve · ${faD.dok.hitelesitve} jóváhagyva`}</p>
+                {faD.dok.osszes === 0 && faD.dok.extra.length === 0 && (
+                  <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] font-semibold text-amber-800" data-dok-ures="1">
+                    <Lucide.AlertTriangle size={14} className="flex-none mt-0.5" />
+                    <span>Nincs mit megnyitni: a jelentkezés képzéseinél nincs beállítva kötelező dokumentum, és a jelentkező sem töltött fel semmit.
+                      A kötelező dokumentumokat a <b>Képzések</b> menüpontban, a képzés szerkesztőjében lehet megadni.</span>
+                  </div>
+                )}
                 <div className="space-y-2" data-dok-lista="1">
                   {[...faD.dok.items, ...faD.dok.extra].map(d0 => { const d = { ...d0, Icon: d0.Icon || Lucide.FileText }; const up = docs[d.id] && (docs[d.id].fileName || docs[d.id].path); const dv = up && docs[d.id].verified; const attached = (msgDraft.attachments || []).some(a => a.id === d.id); return (
                     <div key={d.id} className="rounded-xl border border-slate-100 overflow-hidden"><div className="flex items-center gap-3 p-3 flex-wrap">
@@ -4095,6 +3975,7 @@ const AdmissionsCore = ({ user }) => {
                             {mezo('name', 'Név')}
                             <div className="grid grid-cols-2 gap-3">{mezo('passport', 'Útlevélszám')}{mezo('country', 'Ország')}</div>
                             <div className="grid grid-cols-2 gap-3">{mezo('startTerm', 'Kezdés')}{mezo('deadline', 'Befizetési határidő')}</div>
+                            <p className="text-[11px] font-semibold text-slate-400 -mt-1">A befizetési határidő alapértelmezés szerint a levél keltétől számított két hét. Csak indokolt esetben írd át.</p>
                             <div className="grid grid-cols-2 gap-3">{mezo('tuition', 'Tandíj / félév (EUR)', 'number')}{mezo('applicationFee', 'Jelentkezési díj (EUR)', 'number')}</div>
                             <div className="grid grid-cols-2 gap-3">{mezo('dormitoryFee', 'Kollégiumi díj / félév (EUR)', 'number')}{mezo('dormitoryDeposit', 'Kollégiumi kaució (EUR)', 'number')}</div>
                             <div><label className={lbl}>Kiegészítő bekezdés (nem kötelező)</label><textarea rows={3} className={inCls + ' resize-y'} value={szerk.note || ''} onChange={e => setMezo('note', e.target.value)} /></div>
@@ -4170,19 +4051,28 @@ const AdmissionsCore = ({ user }) => {
               )}
             </div>
           </div>
-          {previewDoc && (
+          {/* ELŐNÉZET = OLDALRÓL NYÍLÓ OLVASÓ, ha van csatolt fájl. Csatolmány
+              nélkül marad a régi kis ablak (ott csak a kinyert adat van). */}
+          {previewDoc && (() => {
+            const e = (previewDoc.p.data && previewDoc.p.data.docs && previewDoc.p.data.docs[previewDoc.d.id]) || {};
+            if (e.path || e.dataUrl) return (
+              <DocReader entry={e} fileName={previewDoc.fileName} label={previewDoc.d.label}
+                Icon={previewDoc.d.Icon} onClose={() => setPreviewDoc(null)} />
+            );
+            return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setPreviewDoc(null)}>
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e2 => e2.stopPropagation()}>
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between"><div className="font-bold text-slate-800 text-sm flex items-center gap-2"><previewDoc.d.Icon size={16} className="text-primary" /> {previewDoc.d.label}</div><button onClick={() => setPreviewDoc(null)} className="text-slate-400 hover:text-slate-700"><Lucide.X size={18} /></button></div>
                 <div className="p-4 bg-slate-50">
-                  {(() => { const e = (previewDoc.p.data && previewDoc.p.data.docs && previewDoc.p.data.docs[previewDoc.d.id]) || {}; return (e.path || e.dataUrl) ? <DocViewer entry={e} fileName={previewDoc.fileName} /> : (
+                  {(
                     <div className="bg-white border border-slate-200 rounded-xl mx-auto max-h-[55vh] aspect-[3/4] w-full max-w-xs flex flex-col items-center justify-center text-center p-6"><previewDoc.d.Icon size={48} className="text-slate-300 mb-4" /><div className="font-mono text-xs text-slate-400">{previewDoc.fileName}</div><div className="font-bold text-slate-700 mt-2">{previewDoc.d.label}</div>{previewDoc.d.id === 'passport' && previewDoc.p.data && previewDoc.p.data.extracted && (<div className="mt-4 text-xs text-slate-500 space-y-0.5"><div>{previewDoc.p.data.extracted.name}</div><div>{previewDoc.p.data.extracted.passportNumber}</div><div>{previewDoc.p.data.extracted.country}</div><div>{genderLabel(previewDoc.p.data.extracted.gender)}</div></div>)}<div className="mt-4 text-[10px] text-slate-300">Nincs csatolt fájl</div></div>
-                  ); })()}
+                  )}
                 </div>
                 <div className="p-4 border-t border-slate-100 flex justify-end"><button onClick={() => downloadDoc(previewDoc.d, previewDoc.fileName, previewDoc.p)} className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5"><Lucide.Download size={14} /> Letöltés</button></div>
               </div>
             </div>
-          )}
+            );
+          })()}
           {aiReport && (() => {
             const d = aiReport.d, ap = aiReport.p; const R = aiReport.result || {};
             const auth = R.authenticity || 'review'; const ok = auth === 'authentic'; const sus = auth === 'suspicious';
@@ -4289,7 +4179,7 @@ const AdmissionsCore = ({ user }) => {
               : <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold">{szurtE ? `${procLista.length}/${procAll.length} folyamat` : `${procAll.length} folyamat`}</span>}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <ADM_VizszintesGorgeto className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
               <tr>
@@ -4315,16 +4205,25 @@ const AdmissionsCore = ({ user }) => {
                 const felirat = { red: 'text-red-500', emerald: 'text-emerald-600', amber: 'text-amber-600', primary: 'text-primary' }[szin];
                 const csik = { red: 'bg-red-300', emerald: 'bg-emerald-500', amber: 'bg-amber-400', primary: 'bg-primary' }[szin];
                 return (
-                  <tr key={p.id || idx} className={'hover:bg-slate-50 transition-colors align-top' + (cancelled ? ' opacity-70' : '')}>
+                  <tr key={p.id || idx} className={'group hover:bg-slate-50 [&>td.sticky]:group-hover:bg-slate-50 transition-colors align-top' + (cancelled ? ' opacity-70' : '')}>
                     <td className="px-6 py-4 whitespace-nowrap"><span className="font-mono text-[11px] font-bold text-slate-500 tabular-nums" title={p.id}>{x.azon}</span></td>
                     <td className="px-6 py-4"><div className="flex items-center gap-3"><Face p={p} size={36} /><div className="min-w-0"><p className="font-semibold text-slate-800 truncate">{x.nev}</p><p className="text-xs text-slate-400 truncate">{x.email}</p>{msgTerkep[p.id] && msgTerkep[p.id].unread > 0 && <span className="mt-1 mr-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold" data-msg-sor={p.id}><Lucide.MessageSquare size={11} /> {`${msgTerkep[p.id].unread} új üzenet`}</span>}{x.elozmeny.length > 0 && <span className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-600 text-[10px] font-bold" data-elozmeny="1" title={x.elozmeny.map(h => h.azon + (h.leiras ? ' · ' + h.leiras : '')).join('\n')}><ICONS.AlertTriangle size={11} /> Korábban elutasítva</span>}</div></div></td>
                     <td className="px-6 py-4 text-[12px] font-semibold text-slate-600 whitespace-nowrap">{x.orszag || <span className="text-slate-300">—</span>}</td>
                     <td className="px-6 py-4"><div className="flex flex-wrap gap-1">{x.progs.length ? x.progs.map((pr, i) => { const felvett = !!(x.dontes && x.dontes.outcome === 'admitted' && x.dontes.programId === pr.id); return <span key={i} title={pr.name} className={'px-2 py-0.5 rounded text-[10px] font-bold ' + (felvett ? 'bg-emerald-500 text-white' : 'bg-primary/10 text-primary')}>{(x.progs.length > 1 && Array.isArray(p.data && p.data.program_ids) ? (i + 1) + '. ' : '') + pr.code}</span>; }) : <span className="text-[10px] text-slate-400">—</span>}</div>{x.felev && <div className="text-[10px] font-bold text-violet-600 mt-1 whitespace-nowrap">{typeof PROG_termLabel === 'function' ? PROG_termLabel(x.felev, true) : x.felev}</div>}</td>
                     <td className="px-6 py-4"><div className="w-32"><div className="flex items-center justify-between text-[10px] font-bold mb-1"><span className={felirat}>{cancelled ? 'Megszakítva' : x.stLabel}</span><span className="text-slate-400">{x.lepesSzoveg}</span></div><div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={csik + ' h-full rounded-full'} style={{ width: x.pct + '%' }}></div></div></div></td>
-                    <td className="px-6 py-4">{x.missing.length ? <div className="flex flex-wrap gap-1 max-w-xs">{x.missing.map(d => <span key={d.id} className="px-2 py-0.5 bg-red-50 text-red-600 rounded text-[10px] font-bold inline-flex items-center gap-1"><ICONS.AlertCircle size={11} /> {d.label}</span>)}</div> : <span className="text-[10px] font-bold text-emerald-600 inline-flex items-center gap-1"><ICONS.CheckCircle size={12} /> Minden feltöltve</span>}</td>
+                    {/* A „Minden feltöltve" korábban akkor is kiírt, ha a képzéshez
+                        EGYETLEN kötelező dokumentum sincs megadva — így a 0/0 is
+                        késznek látszott, a Részletek alatt viszont nem volt mit
+                        megnyitni (külügyi iroda észrevétele, 2026-09-24). A nulla
+                        előírás most külön, semleges állapot. */}
+                    <td className="px-6 py-4">{x.missing.length
+                      ? <div className="flex flex-wrap gap-1 max-w-xs">{x.missing.map(d => <span key={d.id} className="px-2 py-0.5 bg-red-50 text-red-600 rounded text-[10px] font-bold inline-flex items-center gap-1"><ICONS.AlertCircle size={11} /> {d.label}</span>)}</div>
+                      : (x.dokOsszes || 0) === 0
+                        ? <span className="text-[10px] font-bold text-slate-400 inline-flex items-center gap-1" data-dok-nincs-eloirva="1" title="Ehhez a jelentkezéshez nincs kötelező dokumentum megadva a képzésnél."><ICONS.Minus size={12} /> Nincs előírt dokumentum</span>
+                        : <span className="text-[10px] font-bold text-emerald-600 inline-flex items-center gap-1"><ICONS.CheckCircle size={12} /> Minden feltöltve</span>}</td>
                     <td className="px-6 py-4"><span className={`text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${(cancelled || x.allapot === 'rejected') ? 'bg-red-50 text-red-600' : (x.allapot === 'accepted' || x.allapot === 'admitted') ? 'bg-emerald-50 text-emerald-600' : x.allapot === 'withdrawn' ? 'bg-slate-100 text-slate-500' : x.hallgatonal ? 'bg-amber-50 text-amber-700' : 'bg-primary/10 text-primary'}`}>{cancelled ? <><ICONS.XCircle size={11} /> Megszakítva</> : x.stLabel}</span></td>
                     <td className="px-6 py-4 text-[12px] font-semibold text-slate-500 whitespace-nowrap tabular-nums">{ADM_datum(x.frissitve)}</td>
-                    <td className="px-6 py-4 text-right"><button onClick={() => { setDetailProc(p); setMsgDraft({ subject: '', body: '' }); setMsgSent(false); }} className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-slate-800 inline-flex items-center gap-1.5"><ICONS.Eye size={13} /> Részletek</button></td>
+                    <td className="px-6 py-4 text-right sticky right-0 z-10 bg-white shadow-[-8px_0_12px_-8px_rgba(15,23,42,0.18)]"><button onClick={() => { setDetailProc(p); setMsgDraft({ subject: '', body: '' }); setMsgSent(false); }} className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-slate-800 inline-flex items-center gap-1.5" data-reszletek={p.id}><ICONS.Eye size={13} /> Részletek</button></td>
                   </tr>
                 );
               })}
@@ -4334,7 +4233,7 @@ const AdmissionsCore = ({ user }) => {
               {journeyProcs.length === 0 && <tr><td colSpan={9} className="px-6 py-8 text-center text-slate-400 text-sm">Nincs aktív felvételi folyamat.</td></tr>}
             </tbody>
           </table>
-        </div>
+        </ADM_VizszintesGorgeto>
       </div>
 
       {detailProc && (() => {
@@ -4416,7 +4315,7 @@ const AdmissionsCore = ({ user }) => {
             <ICONS.AlertCircle size={15} className="shrink-0 mt-0.5" /><span>{statusError}</span>
           </div>
         )}
-        <div className="overflow-x-auto">
+        <ADM_VizszintesGorgeto className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
               <tr>
@@ -4522,7 +4421,7 @@ const AdmissionsCore = ({ user }) => {
               )}
             </tbody>
           </table>
-        </div>
+        </ADM_VizszintesGorgeto>
       </div>
     </div>
   );
@@ -6947,7 +6846,8 @@ return ImmigrationCompliance;
 
 /* ===== Evaluation ===== */
 const Evaluation = (() => {
-type EvaluationSubView = 'scorecard' | 'committee' | 'video' | 'recommendations';
+// A 'video' szándékosan hiányzik: az aszinkron interjú kikerült (09.23-i észrevétel).
+type EvaluationSubView = 'scorecard' | 'committee' | 'recommendations';
 
 const mockCriteria: Criterion[] = [
   { id: '1', label: 'Szakmai Motiváció', maxScore: 5, currentScore: 4 },
@@ -7189,8 +7089,8 @@ const Evaluation: React.FC<{ user?: any }> = ({ user }) => {
           </div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">Nincs rögzített interjú</h3>
           <p className="text-slate-500 max-w-md text-center">
-            Ehhez a jelentkezőhöz még nem tartozik rögzített felvételi interjú. A jelentkezői portál
-            AI interjú-gyakorlása szándékosan nem jelenik meg itt: az felkészülés, nem bírálati anyag.
+            Ehhez a jelentkezőhöz még nem tartozik rögzített felvételi interjú. Az interjú élőben,
+            a lefoglalt időponton zajlik — a felvétel onnan kerül ide, ha készült.
           </p>
         </div>
       );
@@ -7371,12 +7271,11 @@ const Evaluation: React.FC<{ user?: any }> = ({ user }) => {
         >
           Bizottsági Nézet
         </button>
-        <button 
-          onClick={() => setActiveSubView('video')}
-          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeSubView === 'video' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
-        >
-          Videóinterjú (Aszinkron)
-        </button>
+        {/* „Videóinterjú (Aszinkron)" fül ELTÁVOLÍTVA 2026-09-28 — a külügyi
+            iroda 09.23-i észrevétele: „Az előre felvett interjú nem szükséges.
+            Mindenki élőben fog interjúzni." A jelentkezői oldalról már korábban
+            kikerült; itt, a bírálói nézetben maradt bent egy minta-felvételes
+            panel, ami azt sugallta, hogy mégis van aszinkron interjú. */}
         <button 
           onClick={() => setActiveSubView('recommendations')}
           className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeSubView === 'recommendations' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
@@ -7389,7 +7288,6 @@ const Evaluation: React.FC<{ user?: any }> = ({ user }) => {
       <div className="mt-8">
         {activeSubView === 'scorecard' && renderScorecard()}
         {activeSubView === 'committee' && renderCommitteeView()}
-        {activeSubView === 'video' && renderVideoInterview()}
         {activeSubView === 'recommendations' && renderRecommendations()}
       </div>
     </div>
@@ -8286,6 +8184,480 @@ function DocViewer({ entry, fileName }) {
     : <img src={src} alt={fileName || ''} className="max-h-[60vh] mx-auto rounded-xl border border-slate-200" />;
 }
 
+/* ============ DOKUMENTUM-OLVASÓ — oldalról nyíló ablak ============
+   AZ ÜGYINTÉZŐ EDDIG NEM TUDTA ELOLVASNI, AMIT ELLENŐRIZNIE KELL. Az előnézet
+   egy max-w-lg (512 px) ablakban jelent meg, fix 1,4-es nagyítással, legfeljebb
+   10 oldalt rajzolva, keresés és nagyítás nélkül: egy A4-es bizonyítvány vagy
+   egy útlevél adatoldala ebben olvashatatlan volt, a döntéshez pedig a
+   dokumentum apró betűs része kell.
+
+   Ez a nézet oldalról nyílik be, a képernyő majdnem teljes magasságában, és
+   azt adja, amit egy PDF-olvasótól elvárunk:
+     · nagyítás 50–400% között, és „szélességre igazítva" (alapérték),
+     · Ctrl+görgő nagyítás, kéz-eszközzel (vagy középső egérgombbal) pan,
+     · szövegkeresés a TELJES dokumentumban, találatok kiemelve, találatonként
+       léptetve — nem csak az első 10 oldalon,
+     · oldalozás és oldalszámláló, 90°-os forgatás (a beszkennelt lapok fele
+       fekve érkezik),
+     · a szöveg kijelölhető és másolható (valódi szövegréteg), így az
+       útlevélszám nem kézzel átírva kerül a rendszerbe.
+
+   MIÉRT NEM iframe/`<embed>` A BÖNGÉSZŐ PDF-NÉZŐJÉVEL: a fájl aláírt, lejáró
+   hivatkozáson érhető el, és a beágyazott néző viselkedése böngészőnként más
+   (a Safari letöltést kínál helyette). A pdf.js viszont mindenhol ugyanaz, és
+   a rajzoláshoz nem kell a fájlt új lapon megnyitni.
+
+   OLDALAK IGÉNY SZERINT RAJZOLÓDNAK (IntersectionObserver): egy 40 oldalas
+   mellékletnél 400%-on minden oldal egyszerre rajzolva megfogná a böngészőt. */
+const DOC_OLV_CSS = `
+.dokolv-lap { position: relative; }
+/* A szövegréteg a pdf.js saját elhelyezését használja, ezért kell a
+   --scale-factor változó; a betűk átlátszók, csak a kijelölés és a kiemelés
+   látszik a rajzolt lap fölött. */
+.dokolv-szoveg { position: absolute; inset: 0; overflow: hidden; line-height: 1;
+  text-align: initial; transform-origin: 0 0; --scale-factor: 1; }
+.dokolv-szoveg span, .dokolv-szoveg br { position: absolute; white-space: pre;
+  transform-origin: 0 0; color: transparent; cursor: text; }
+.dokolv-szoveg mark { background: rgba(250, 204, 21, .5); color: transparent; border-radius: 2px; }
+.dokolv-szoveg mark.aktiv { background: rgba(234, 88, 12, .65); }
+.dokolv-szoveg ::selection { background: rgba(37, 99, 235, .3); }
+.dokolv-kez, .dokolv-kez * { cursor: grab !important; user-select: none !important; }
+.dokolv-kez.fog, .dokolv-kez.fog * { cursor: grabbing !important; }
+`;
+const DOC_OLV_FOKOK = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+const DOC_OLV_esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/* A SZÖVEGRÉTEGET EGYMÁS UTÁN KELL RAJZOLNI. MÉRVE 2026-09-29: három oldalt
+   párhuzamosan rajzolva csak az UTOLSÓ lap szövegrétege lett kész (a pdf.js
+   TextLayer közös, statikus mérőállapotot használ), így az első két oldalon
+   nem lehetett kijelölni és keresni. Egy soros várólista megoldja. */
+let DOC_SZOVEG_SOR = Promise.resolve();
+function DOC_szovegSorban(f) {
+  const kov = DOC_SZOVEG_SOR.then(f, f);
+  DOC_SZOVEG_SOR = kov.catch(() => {});
+  return kov;
+}
+
+let DOC_PDFJS = null;
+async function DOC_pdfjs() {
+  if (DOC_PDFJS) return DOC_PDFJS;
+  const m = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs');
+  m.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs';
+  DOC_PDFJS = m;
+  return m;
+}
+
+/* Egy lap: a vászon és a szövegréteg. Csak akkor rajzol, ha a görgetősávban
+   közel van a látható területhez. */
+function DocReaderLap({ pdf, n, skala, forgatas, keres, aktivSorszam }) {
+  const kulsoRef = React.useRef(null);
+  const vaszonRef = React.useRef(null);
+  const szovegRef = React.useRef(null);
+  const munkaRef = React.useRef(null);     // a futó pdf.js rajzolás
+  const [latszik, setLatszik] = React.useState(n <= 2);
+  const [meret, setMeret] = React.useState(null);
+
+  // Méret előre (rajzolás nélkül is), hogy a görgetősáv hossza helyes legyen.
+  React.useEffect(() => {
+    let dead = false;
+    (async () => {
+      try {
+        const page = await pdf.getPage(n);
+        const vp = page.getViewport({ scale: skala, rotation: forgatas });
+        if (!dead) setMeret({ w: Math.floor(vp.width), h: Math.floor(vp.height) });
+      } catch (e) {}
+    })();
+    return () => { dead = true; };
+  }, [pdf, n, skala, forgatas]);
+
+  React.useEffect(() => {
+    if (latszik || !kulsoRef.current || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((be) => {
+      if (be.some(x => x.isIntersecting)) { setLatszik(true); io.disconnect(); }
+    }, { root: null, rootMargin: '800px 0px' });
+    io.observe(kulsoRef.current);
+    return () => io.disconnect();
+  }, [latszik]);
+
+  /* Rajzolás — nagyításkor és forgatáskor újra.
+
+     A FOLYAMATBAN LÉVŐ RAJZOLÁST MEG KELL SZAKÍTANI. MÉRVE 2026-09-29: amikor
+     a „szélességre igazítás" mérése átállította a nagyítást, az új rajzolás
+     ugyanarra a vászonra indult, amin az előző még futott — a pdf.js ilyenkor
+     kivételt dob („Cannot use the same canvas during multiple render
+     operations"), és a függvény a SZÖVEGRÉTEG rajzolása ELŐTT szakadt meg. Az
+     első két oldalon így nem lehetett kijelölni és keresni, csak az utolsón
+     (ami később, már stabil nagyításon rajzolódott). */
+  React.useEffect(() => {
+    if (!latszik) return;
+    let dead = false;
+    (async () => {
+      try {
+        const pdfjs = await DOC_pdfjs();
+        const page = await pdf.getPage(n);
+        const vp = page.getViewport({ scale: skala, rotation: forgatas });
+        const vaszon = vaszonRef.current;
+        if (dead || !vaszon) return;
+        // A kijelzőnél sűrűbb rajzolás: 400%-on se legyen pixeles a betű.
+        const suru = Math.min(window.devicePixelRatio || 1, 2);
+        const vpr = page.getViewport({ scale: skala * suru, rotation: forgatas });
+        vaszon.width = Math.floor(vpr.width); vaszon.height = Math.floor(vpr.height);
+        vaszon.style.width = Math.floor(vp.width) + 'px';
+        vaszon.style.height = Math.floor(vp.height) + 'px';
+        const munka = page.render({ canvasContext: vaszon.getContext('2d'), viewport: vpr });
+        munkaRef.current = munka;
+        try { await munka.promise; } catch (e) { return; }   // megszakítva: az új rajzolás veszi át
+        if (munkaRef.current === munka) munkaRef.current = null;
+        if (dead) return;
+        const sz = szovegRef.current;
+        if (sz) {
+          sz.innerHTML = '';
+          sz.style.width = Math.floor(vp.width) + 'px';
+          sz.style.height = Math.floor(vp.height) + 'px';
+          sz.style.setProperty('--scale-factor', String(skala));
+          const tcs = await page.getTextContent();
+          if (dead) return;
+          /* A 4.x-es pdf.js a TextLayer osztályt adja; a régebbi kiadás a
+             renderTextLayer függvényt. Ha egyik sincs, a lap akkor is
+             olvasható — csak kijelölni és kiemelni nem lehet benne. */
+          if (typeof pdfjs.TextLayer === 'function') {
+            await DOC_szovegSorban(() => new pdfjs.TextLayer({ textContentSource: tcs, container: sz, viewport: vp }).render());
+          } else if (typeof pdfjs.renderTextLayer === 'function') {
+            await DOC_szovegSorban(() => pdfjs.renderTextLayer({ textContentSource: tcs, container: sz, viewport: vp }).promise);
+          }
+        }
+      } catch (e) {}
+    })();
+    return () => {
+      dead = true;
+      if (munkaRef.current) { try { munkaRef.current.cancel(); } catch (e) {} munkaRef.current = null; }
+    };
+  }, [pdf, n, skala, forgatas, latszik]);
+
+  // Kiemelés: a rajzolás után és minden keresésre.
+  React.useEffect(() => {
+    const el = szovegRef.current;
+    if (!el) return;
+    const t = setTimeout(() => {
+      el.querySelectorAll('mark').forEach(m => { m.replaceWith(document.createTextNode(m.textContent || '')); });
+      el.querySelectorAll('span').forEach(s => { try { s.normalize(); } catch (e) {} });
+      const k = String(keres || '').toLowerCase();
+      if (!k) return;
+      let sorszam = 0;
+      el.querySelectorAll('span').forEach(s => {
+        const szoveg = s.textContent || '';
+        const kis = szoveg.toLowerCase();
+        const helyek = [];
+        let i = kis.indexOf(k);
+        while (i >= 0) { helyek.push(i); i = kis.indexOf(k, i + k.length); }
+        if (!helyek.length) return;
+        let html = '', utolso = 0;
+        helyek.forEach(p => {
+          html += DOC_OLV_esc(szoveg.slice(utolso, p))
+            + '<mark data-tal="' + (sorszam++) + '">' + DOC_OLV_esc(szoveg.substr(p, k.length)) + '</mark>';
+          utolso = p + k.length;
+        });
+        html += DOC_OLV_esc(szoveg.slice(utolso));
+        s.innerHTML = html;
+      });
+      if (aktivSorszam >= 0) {
+        const m = el.querySelector('mark[data-tal="' + aktivSorszam + '"]');
+        if (m) { m.classList.add('aktiv'); try { m.scrollIntoView({ block: 'center' }); } catch (e) {} }
+      }
+    }, 60);
+    return () => clearTimeout(t);
+  }, [keres, aktivSorszam, latszik, skala, forgatas]);
+
+  return (
+    <div ref={kulsoRef} data-olv-lap={n} className="mx-auto mb-4 last:mb-0" style={meret ? { width: meret.w } : undefined}>
+      <div className="dokolv-lap bg-white shadow-md rounded-sm ring-1 ring-slate-300/60 overflow-hidden"
+           style={meret ? { width: meret.w, height: meret.h } : { minHeight: 200 }}>
+        <canvas ref={vaszonRef} className="block" />
+        <div ref={szovegRef} className="dokolv-szoveg" />
+        {!latszik && <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-slate-300">{n}. oldal</div>}
+      </div>
+      <div className="text-center text-[10px] font-bold text-slate-400 mt-1">{n}</div>
+    </div>
+  );
+}
+
+/* Az oldalról benyíló olvasó. PDF-nél pdf.js, képnél ugyanaz a nagyítás-pan
+   kezelés (az útlevélmásolatok fele fénykép). */
+function DocReader({ entry, fileName, label, Icon, onClose }) {
+  const src = useDocSrc(entry);
+  const pdfE = /pdf/i.test((entry && entry.type) || '') || /\.pdf$/i.test(String(fileName || ''));
+  const [allapot, setAllapot] = React.useState('betolt');   // betolt | kesz | hiba
+  const [pdf, setPdf] = React.useState(null);
+  const [nagyitas, setNagyitas] = React.useState(0);        // 0 = szélességre igazítva
+  const [forgatas, setForgatas] = React.useState(0);
+  const [kez, setKez] = React.useState(false);
+  const [q, setQ] = React.useState('');
+  const [keres, setKeres] = React.useState('');
+  const [talalatok, setTalalatok] = React.useState([]);     // [{oldal, sorszam}]
+  const [tIdx, setTIdx] = React.useState(0);
+  const [aktOldal, setAktOldal] = React.useState(1);
+  const [illeszt, setIlleszt] = React.useState(1);          // szélességre igazító skála
+  const [illeszKesz, setIlleszKesz] = React.useState(false); // megvan-e már a mérés
+  const gorgetoRef = React.useRef(null);
+  const fogRef = React.useRef(null);
+
+  // Betöltés
+  React.useEffect(() => {
+    if (!src) return;
+    let dead = false;
+    setAllapot('betolt');
+    (async () => {
+      if (!pdfE) { if (!dead) setAllapot('kesz'); return; }
+      try {
+        const pdfjs = await DOC_pdfjs();
+        const bytes = await DOC_bytes(src);
+        if (dead || !bytes) return;
+        const doc = await pdfjs.getDocument({ data: bytes }).promise;
+        if (dead) return;
+        setPdf(doc); setAllapot('kesz');
+      } catch (e) { if (!dead) setAllapot('hiba'); }
+    })();
+    return () => { dead = true; };
+  }, [src, pdfE]);
+
+  // Szélességre igazítás: a görgető szélességéből és az első lap méretéből.
+  React.useEffect(() => {
+    if (!pdf || !gorgetoRef.current) return;
+    let dead = false;
+    const szamol = async () => {
+      try {
+        const page = await pdf.getPage(1);
+        const vp = page.getViewport({ scale: 1, rotation: forgatas });
+        const w = (gorgetoRef.current ? gorgetoRef.current.clientWidth : 800) - 48;
+        if (!dead) { setIlleszt(Math.max(0.2, Math.min(4, w / vp.width))); setIlleszKesz(true); }
+      } catch (e) {}
+    };
+    szamol();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(szamol) : null;
+    if (ro && gorgetoRef.current) ro.observe(gorgetoRef.current);
+    return () => { dead = true; if (ro) ro.disconnect(); };
+  }, [pdf, forgatas]);
+
+  const skala = nagyitas || illeszt;
+
+  // Keresés a TELJES dokumentumban. A találatok lapon belüli sorszáma
+  // ugyanabból a darabolásból jön, amit a szövegréteg is használ.
+  React.useEffect(() => {
+    if (!pdf) return;
+    let dead = false;
+    const k = String(keres || '').toLowerCase();
+    if (!k) { setTalalatok([]); setTIdx(0); return; }
+    (async () => {
+      const ki = [];
+      for (let n = 1; n <= pdf.numPages; n++) {
+        try {
+          const page = await pdf.getPage(n);
+          const tc = await page.getTextContent();
+          if (dead) return;
+          let sorszam = 0;
+          tc.items.forEach(it => {
+            const t = String(it.str || '').toLowerCase();
+            let i = t.indexOf(k);
+            while (i >= 0) { ki.push({ oldal: n, sorszam: sorszam++ }); i = t.indexOf(k, i + k.length); }
+          });
+        } catch (e) {}
+      }
+      if (!dead) { setTalalatok(ki); setTIdx(0); if (ki.length) ugrasOldalra(ki[0].oldal); }
+    })();
+    return () => { dead = true; };
+  }, [pdf, keres]);
+
+  /* Ugrás után rövid ideig nem a görgetés dönti az oldalszámot: a találatra
+     állás még mozgatja a nézetet (a kiemelés középre kerül), és a számláló
+     ilyenkor a FÖLÖTTE lévő lapra ugrott vissza. MÉRVE 2026-09-29: a 3. oldali
+     találatnál „2 / 3" látszott. */
+  const ugrasRef = React.useRef(0);
+  const ugrasOldalra = (n) => {
+    const g = gorgetoRef.current;
+    if (!g) return;
+    const el = g.querySelector('[data-olv-lap="' + n + '"]');
+    if (el) g.scrollTo({ top: el.offsetTop - 12, behavior: 'smooth' });
+    ugrasRef.current = Date.now() + 1500;
+    setAktOldal(n);
+  };
+  const talalatra = (i) => {
+    if (!talalatok.length) return;
+    const uj = (i + talalatok.length) % talalatok.length;
+    setTIdx(uj); ugrasOldalra(talalatok[uj].oldal);
+  };
+
+  // Oldalszámláló: amelyik lapból a LEGTÖBB látszik.
+  const gorgetes = () => {
+    const g = gorgetoRef.current;
+    if (!g || Date.now() < ugrasRef.current) return;
+    const teto = g.scrollTop, alj = teto + g.clientHeight;
+    let jo = 1, legtobb = -1;
+    g.querySelectorAll('[data-olv-lap]').forEach(el => {
+      const a = el.offsetTop, b = a + el.offsetHeight;
+      const latszik = Math.min(b, alj) - Math.max(a, teto);
+      if (latszik > legtobb) { legtobb = latszik; jo = Number(el.getAttribute('data-olv-lap')); }
+    });
+    setAktOldal(jo);
+  };
+
+  const zoom = (fel) => {
+    const most = skala;
+    const sor = fel ? DOC_OLV_FOKOK : [...DOC_OLV_FOKOK].reverse();
+    const kov = sor.find(x => fel ? x > most + 0.01 : x < most - 0.01);
+    setNagyitas(kov || (fel ? DOC_OLV_FOKOK[DOC_OLV_FOKOK.length - 1] : DOC_OLV_FOKOK[0]));
+  };
+
+  // Ctrl+görgő nagyítás.
+  React.useEffect(() => {
+    const g = gorgetoRef.current;
+    if (!g) return;
+    const ker = (e) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoom(e.deltaY < 0); };
+    g.addEventListener('wheel', ker, { passive: false });
+    return () => g.removeEventListener('wheel', ker);
+  }, [skala]);
+
+  // Esc = bezárás; +/- = nagyítás; Enter a keresőben lép a következő találatra.
+  React.useEffect(() => {
+    const lenyom = (e) => {
+      if (e.key === 'Escape') { onClose && onClose(); return; }
+      if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); zoom(true); }
+      if (e.key === '-') { e.preventDefault(); zoom(false); }
+    };
+    window.addEventListener('keydown', lenyom);
+    return () => window.removeEventListener('keydown', lenyom);
+  }, [skala, onClose]);
+
+  /* PAN. Kéz-eszközzel bal gombbal, egyébként középső gombbal — így a
+     szövegkijelölés megmarad, de aki csak nézni akar, egy kattintással
+     kézre vált. */
+  const panLe = (e) => {
+    const g = gorgetoRef.current;
+    if (!g) return;
+    if (!(kez && e.button === 0) && e.button !== 1) return;
+    e.preventDefault();
+    fogRef.current = { x: e.clientX, y: e.clientY, l: g.scrollLeft, t: g.scrollTop };
+    g.classList.add('fog');
+  };
+  const panMozog = (e) => {
+    const g = gorgetoRef.current, f = fogRef.current;
+    if (!g || !f) return;
+    g.scrollLeft = f.l - (e.clientX - f.x);
+    g.scrollTop = f.t - (e.clientY - f.y);
+  };
+  const panFel = () => { fogRef.current = null; const g = gorgetoRef.current; if (g) g.classList.remove('fog'); };
+
+  const IkonG = 'w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-transparent';
+  const szazalek = Math.round(skala * 100);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label={label || 'Dokumentum'} data-dok-olvaso="1">
+      <style dangerouslySetInnerHTML={{ __html: DOC_OLV_CSS }} />
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white h-full w-full sm:w-[92vw] lg:w-[78vw] xl:w-[68vw] max-w-[1200px] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        {/* fejléc */}
+        <div className="flex items-start justify-between gap-3 px-4 sm:px-5 py-3 border-b border-slate-100 flex-none">
+          <div className="min-w-0">
+            <div className="font-black text-slate-800 text-sm flex items-center gap-2">
+              {Icon ? <Icon size={16} className="text-primary flex-none" /> : <Lucide.FileText size={16} className="text-primary flex-none" />}
+              <span className="truncate">{label || 'Dokumentum'}</span>
+            </div>
+            <div className="text-[11px] text-slate-400 font-semibold truncate">
+              {fileName}{entry && entry.size ? ' · ' + DOC_fmtSize(entry.size) : ''}{pdf ? ' · ' + pdf.numPages + ' oldal' : ''}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-none">
+            <DocDownloadLink entry={entry} fileName={fileName} className="bg-primary text-white px-3 py-1.5 rounded-lg text-[13px] font-bold inline-flex items-center gap-1.5">
+              <Lucide.Download size={14} /> Letöltés
+            </DocDownloadLink>
+            <button onClick={onClose} aria-label="Bezárás" title="Bezárás (Esc)" className={IkonG}><Lucide.X size={18} /></button>
+          </div>
+        </div>
+
+        {/* eszköztár */}
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 px-3 sm:px-4 py-2 border-b border-slate-100 bg-slate-50/70 flex-none">
+          {pdfE && (
+            <div className="flex items-center gap-1 mr-2">
+              <button className={IkonG} title="Előző oldal" disabled={aktOldal <= 1} onClick={() => ugrasOldalra(Math.max(1, aktOldal - 1))}><Lucide.ChevronUp size={16} /></button>
+              <span className="text-[12px] font-bold text-slate-500 tabular-nums px-1" data-olv-oldalszam="1">{aktOldal} / {pdf ? pdf.numPages : '–'}</span>
+              <button className={IkonG} title="Következő oldal" disabled={!pdf || aktOldal >= pdf.numPages} onClick={() => ugrasOldalra(Math.min(pdf.numPages, aktOldal + 1))}><Lucide.ChevronDown size={16} /></button>
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <button className={IkonG} title="Kicsinyítés (−)" onClick={() => zoom(false)}><Lucide.ZoomOut size={16} /></button>
+            <span className="text-[12px] font-bold text-slate-500 tabular-nums w-12 text-center" data-olv-nagyitas="1">{szazalek}%</span>
+            <button className={IkonG} title="Nagyítás (+)" onClick={() => zoom(true)}><Lucide.ZoomIn size={16} /></button>
+            <button onClick={() => setNagyitas(0)} title="Szélességre igazítva"
+              className={'px-2 h-8 rounded-lg text-[12px] font-bold ' + (nagyitas === 0 ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:bg-slate-100')}>Szélesség</button>
+            <button onClick={() => setNagyitas(1)} title="Eredeti méret (100%)"
+              className={'px-2 h-8 rounded-lg text-[12px] font-bold ' + (nagyitas === 1 ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:bg-slate-100')}>100%</button>
+          </div>
+          <button onClick={() => setKez(v => !v)} title="Kéz — húzással mozgatás (középső egérgombbal mindig működik)"
+            className={'w-8 h-8 rounded-lg flex items-center justify-center ' + (kez ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:bg-slate-100')} data-olv-kez={kez ? '1' : '0'}>
+            <Lucide.Hand size={16} />
+          </button>
+          <button onClick={() => setForgatas(f => (f + 90) % 360)} title="Forgatás 90°-kal" className={IkonG}><Lucide.RotateCw size={16} /></button>
+
+          {pdfE && (
+            <div className="flex items-center gap-1 ml-auto">
+              <div className="relative">
+                <Lucide.Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={q} onChange={e => setQ(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); if (keres === q) talalatra(tIdx + 1); else setKeres(q); }
+                    if (e.key === 'Escape') { e.stopPropagation(); setQ(''); setKeres(''); }
+                  }}
+                  placeholder="Keresés a dokumentumban…" data-olv-kereso="1"
+                  className="w-44 sm:w-56 bg-white border border-slate-200 rounded-lg pl-8 pr-2 py-1.5 text-[13px] font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+              <button onClick={() => setKeres(q)} className="px-2 h-8 rounded-lg text-[12px] font-bold text-slate-500 hover:bg-slate-100">Keres</button>
+              {keres && (
+                <>
+                  <span className="text-[12px] font-bold text-slate-500 tabular-nums" data-olv-talalat="1">
+                    {talalatok.length ? (tIdx + 1) + ' / ' + talalatok.length : 'nincs találat'}
+                  </span>
+                  <button className={IkonG} title="Előző találat" disabled={!talalatok.length} onClick={() => talalatra(tIdx - 1)}><Lucide.ArrowUp size={15} /></button>
+                  <button className={IkonG} title="Következő találat" disabled={!talalatok.length} onClick={() => talalatra(tIdx + 1)}><Lucide.ArrowDown size={15} /></button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* tartalom */}
+        <div ref={gorgetoRef} onScroll={gorgetes}
+          onMouseDown={panLe} onMouseMove={panMozog} onMouseUp={panFel} onMouseLeave={panFel}
+          className={'flex-1 overflow-auto bg-slate-200 px-4 py-4 ' + (kez ? 'dokolv-kez' : '')}>
+          {!src && <div className="text-center text-slate-400 text-sm py-16 font-bold">Dokumentum betöltése…</div>}
+          {src && allapot === 'betolt' && <div className="text-center text-slate-400 text-sm py-16 font-bold">PDF betöltése…</div>}
+          {src && allapot === 'hiba' && (
+            <div className="text-center text-sm py-16 font-bold text-red-500">
+              A PDF nem jeleníthető meg.{' '}
+              <a href={src} download={fileName} target="_blank" rel="noreferrer" className="text-primary underline">Letöltés</a>
+            </div>
+          )}
+          {src && allapot === 'kesz' && pdfE && pdf && !illeszKesz && <div className="text-center text-slate-400 text-sm py-16 font-bold">Oldalak rajzolása…</div>}
+          {src && allapot === 'kesz' && pdfE && pdf && illeszKesz && Array.from({ length: pdf.numPages }, (_, i) => i + 1).map(n => (
+            <DocReaderLap key={n} pdf={pdf} n={n} skala={skala} forgatas={forgatas} keres={keres}
+              aktivSorszam={talalatok.length && talalatok[tIdx] && talalatok[tIdx].oldal === n ? talalatok[tIdx].sorszam : -1} />
+          ))}
+          {src && allapot === 'kesz' && !pdfE && (
+            <div className="flex items-start justify-center">
+              <img src={src} alt={fileName || ''} draggable={false}
+                style={{ width: (nagyitas ? nagyitas * 100 : 100) + '%', maxWidth: nagyitas ? 'none' : '100%', transform: 'rotate(' + forgatas + 'deg)' }}
+                className="bg-white shadow-md rounded-sm ring-1 ring-slate-300/60" />
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 py-2 border-t border-slate-100 text-[11px] text-slate-400 font-semibold flex-none">
+          Ctrl + görgő: nagyítás · középső egérgomb vagy a kéz eszköz: mozgatás · Esc: bezárás
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DocDownloadLink({ entry, fileName, className, children }) {
   const src = useDocSrc(entry);
   if (!src) return null;
@@ -8410,7 +8782,21 @@ const AdmissionsHub = (() => {
      Ami nincs felülírva, az a jelentkezés adataiból és a díjtáblából jön — így
      egy régi, mezők nélküli levél ugyanúgy jelenik meg, mint eddig. */
   // Az alapértékek a hivatalos Word-minta (CONDITIONAL ACCEPTANCE LETTER.docx) szerint; levelenként szerkeszthetők.
-  const LETTER_DEFAULTS = { startTerm: 'September, 2026', deadline: '15th July 2026', signerName: 'Dr. József Kárpáti PhD', signerTitle: 'Dean · Faculty of Economics and Business · John von Neumann University' };
+  const LETTER_DEFAULTS = { startTerm: 'September, 2026', signerName: 'Dr. József Kárpáti PhD', signerTitle: 'Dean · Faculty of Economics and Business · John von Neumann University' };
+  /* BEFIZETÉSI HATÁRIDŐ: A LEVÉL KELTÉTŐL SZÁMÍTVA 2 HÉT.
+     Korábban fix dátum állt itt („15th July 2026”), ami minden levélen ugyanaz
+     volt, és a nyár után értelmét vesztette. A külügyi iroda szabálya
+     (2026-09-24): mindig az adott naptól számított két hét — vis maior esetén
+     a mezőben felülírható, ezért csak ALAPÉRTÉK. */
+  const LEVEL_FIZETESI_NAP = 14;
+  const LEVEL_hataridoNap = (keltezes) => {
+    const alap = keltezes ? new Date(keltezes) : new Date();
+    const d = isNaN(alap.getTime()) ? new Date() : alap;
+    const ki = new Date(d.getTime());
+    ki.setDate(ki.getDate() + LEVEL_FIZETESI_NAP);
+    const p2 = (n) => String(n).padStart(2, '0');
+    return ki.getFullYear() + '-' + p2(ki.getMonth() + 1) + '-' + p2(ki.getDate());
+  };
   // Dátum a minta alakjában: „16th June 2026”. Nem dátum formájú szöveget változatlanul hagy.
   const LEVEL_datum = (s) => {
     if (!s) return '';
@@ -8449,7 +8835,8 @@ const AdmissionsHub = (() => {
       passport: L.passport || ex.passportNumber || '—',
       country: L.country || ex.country || acc.country || (data.personal && data.personal.country) || '—',
       startTerm: L.startTerm || LETTER_DEFAULTS.startTerm,
-      deadline: L.deadline || LETTER_DEFAULTS.deadline,
+      // A kelt + 2 hét; ha az ügyintéző felülírta, az övé az elsőbbség.
+      deadline: LEVEL_datum(L.deadline) || LEVEL_datum(LEVEL_hataridoNap(L.issuedAt)),
       signerName: L.signerName || LETTER_DEFAULTS.signerName,
       signerTitle: L.signerTitle || LETTER_DEFAULTS.signerTitle,
       note: L.note || '',
@@ -8483,7 +8870,12 @@ const AdmissionsHub = (() => {
     const dontottId = data.decision && data.decision.outcome === 'admitted' ? data.decision.programId : '';
     const first = (data.programs || []).map(pid => PROGRAMS.find(x => x.id === pid)).find(Boolean);
     const katalogusId = Array.isArray(data.program_ids) && data.program_ids.length ? data.program_ids[0] : (proc && proc.programId) || '';
-    return { fileNumber: makeFileNumber('CAL'), issuedAt: todayStr(), programId: dontottId || (first ? first.id : '') || katalogusId, status: 'draft', createdAt: new Date().toISOString() };
+    /* A BEFIZETÉSI HATÁRIDŐT A TERVEZET IS RÖGZÍTI: a levél keltétől számított
+       két hét. Így az látszik a szerkesztőben is, és vis maior esetén egyetlen
+       mezőben átírható — a szabály viszont nem a fejekben él. */
+    const kelt = todayStr();
+    return { fileNumber: makeFileNumber('CAL'), issuedAt: kelt, deadline: LEVEL_hataridoNap(kelt),
+             programId: dontottId || (first ? first.id : '') || katalogusId, status: 'draft', createdAt: new Date().toISOString() };
   };
   /* A FELTÉTELES FELVÉTELI LEVÉL — a hivatalos Word-minta (CONDITIONAL ACCEPTANCE
      LETTER.docx) szerkezete és szövege: fejlécben az NJE logó, Source Sans Pro,
@@ -9091,21 +9483,20 @@ const AdmissionsHub = (() => {
             </div>
           );
         })()}
-        {previewDoc && (
+        {/* ELŐNÉZET = OLDALRÓL NYÍLÓ OLVASÓ (nagyítás, mozgatás, keresés). */}
+        {previewDoc && (previewDoc.entry && (previewDoc.entry.path || previewDoc.entry.dataUrl) ? (
+          <DocReader entry={previewDoc.entry} fileName={previewDoc.fileName} label={previewDoc.d.label}
+            Icon={previewDoc.d.Icon} onClose={() => setPreviewDoc(null)} />
+        ) : (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setPreviewDoc(null)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="p-4 border-b border-slate-100 flex items-center justify-between"><div className="font-bold text-slate-800 text-sm flex items-center gap-2"><previewDoc.d.Icon size={16} className="text-primary" /> {previewDoc.d.label}</div><button onClick={() => setPreviewDoc(null)} className="text-slate-400 hover:text-slate-700"><Lucide.X size={18} /></button></div>
               <div className="p-4 bg-slate-50">
-                {previewDoc.entry && (previewDoc.entry.path || previewDoc.entry.dataUrl) ? (
-                  <DocViewer entry={previewDoc.entry} fileName={previewDoc.fileName} />
-                ) : (
-                  <div className="bg-white border border-slate-200 rounded-xl mx-auto max-h-[55vh] aspect-[3/4] w-full max-w-xs flex flex-col items-center justify-center text-center p-6"><previewDoc.d.Icon size={48} className="text-slate-300 mb-4" /><div className="font-mono text-xs text-slate-400">{previewDoc.fileName}</div><div className="font-bold text-slate-700 mt-2">{previewDoc.d.label}</div><div className="mt-4 text-[10px] text-slate-300">Nincs csatolt fájl</div></div>
-                )}
-                {previewDoc.entry && (previewDoc.entry.path || previewDoc.entry.dataUrl) && <div className="mt-3 text-right"><DocDownloadLink entry={previewDoc.entry} fileName={previewDoc.fileName} className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5"><Lucide.Download size={14} /> Letöltés</DocDownloadLink></div>}
+                <div className="bg-white border border-slate-200 rounded-xl mx-auto max-h-[55vh] aspect-[3/4] w-full max-w-xs flex flex-col items-center justify-center text-center p-6"><previewDoc.d.Icon size={48} className="text-slate-300 mb-4" /><div className="font-mono text-xs text-slate-400">{previewDoc.fileName}</div><div className="font-bold text-slate-700 mt-2">{previewDoc.d.label}</div><div className="mt-4 text-[10px] text-slate-300">Nincs csatolt fájl</div></div>
               </div>
             </div>
           </div>
-        )}
+        ))}
       </div>
     );
   };
@@ -9350,7 +9741,6 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
     return () => window.removeEventListener('nje:level', f);
   }, []);
   const [isLoading, setIsLoading] = useState(true);
-  const [showVideoInterview, setShowVideoInterview] = useState(false);
   // Az interjú-foglalás visszajelzései. A szerver kapuja (27_interview_gate.sql)
   // beszédes magyar hibát ad — azt MUTATJUK, nem nyeljük el a konzolba.
   const [bookError, setBookError] = useState('');
@@ -9363,8 +9753,6 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
   // A Clipboard API nem mindenhol elérhető (nem HTTPS, régi böngésző), ezért
   // van egy rejtett textarea-s tartalék ág is.
   const [copiedAppId, setCopiedAppId] = useState(false);
-  // Az AI interjú-gyakorlás legutóbbi menetének metaadatai (lásd lentebb).
-  const [practiceLog, setPracticeLog] = useState(null);
   const copyAppId = async (value) => {
     const text = String(value || '');
     if (!text) return;
@@ -9383,17 +9771,6 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
       console.error('Nem sikerült vágólapra másolni:', e);
     }
   };
-
-  // A korábbi gyakorló menet visszatöltése (csak metaadat, csak helyben).
-  useEffect(() => {
-    const key = 'nje_ai_practice_' + ((student && student.id) || (user && user.email) || 'guest');
-    try {
-      const raw = localStorage.getItem(key);
-      setPracticeLog(raw ? JSON.parse(raw) : null);
-    } catch (e) {
-      setPracticeLog(null);
-    }
-  }, [student, user]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -9507,18 +9884,6 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
   // nem írjuk a student.evaluation mezőbe, ezért a bírálatba sem számít bele.
   // Csak a saját visszanézéshez tartunk nyilván egy metaadat-naplót (kérdés,
   // hossz, dátum) a böngészőben — videó nem hagyja el a gépet.
-  const handleVideoInterviewComplete = (videos: VideoInterview[]) => {
-    const log = {
-      at: new Date().toISOString(),
-      answers: (videos || []).map(v => ({ question: v.question, duration: v.duration })),
-    };
-    setPracticeLog(log);
-    try {
-      localStorage.setItem('nje_ai_practice_' + ((student && student.id) || (user && user.email) || 'guest'), JSON.stringify(log));
-    } catch (e) {
-      // A böngésző letilthatja a tárolást — a gyakorlás enélkül is működik.
-    }
-  };
 
   if (isLoading) {
     return (
@@ -10149,20 +10514,12 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
   const gateReason = interviewBookingBlockReason(student);
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {showVideoInterview ? (
-        <div className="space-y-6">
-          <button 
-            onClick={() => setShowVideoInterview(false)}
-            className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold text-sm transition-all"
-          >
-            <ICONS.ArrowLeft size={18} /> Vissza az interjúkhoz
-          </button>
-          <VideoInterviewSystem onComplete={handleVideoInterviewComplete} />
-        </div>
-      ) : (
+      {(
         <>
-          {/* A VALÓDI felvételi interjú áll elöl: ez az egyetlen, ami beleszámít
-              a bírálatba. Az AI-gyakorlás csak utána, másodlagos hangsúllyal. */}
+          {/* EGY interjú van: az élő, időpontfoglalásos felvételi beszélgetés.
+              Az előre felvett (videós) gyakorlóinterjú 2026-09-24-én kikerült —
+              a külügyi iroda szerint mindenki élőben interjúzik, és két út
+              mellett csak magyarázni kell, melyik számít. */}
           <div className="bg-white p-5 sm:p-8 rounded-3xl border-2 border-primary/20 shadow-sm">
             <div className="flex items-start gap-4 mb-2">
               <span className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -10238,43 +10595,6 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ user }) => {
             </div>
           </div>
 
-          {/* AI interjú — GYAKORLÁSI mód. Visszaélési kockázat miatt nem
-              helyettesíti a valódi interjút: a felvétel nálad marad, nem
-              küldjük be, és a bírálatba sem számít bele. */}
-          <div className="bg-slate-50 p-5 sm:p-8 rounded-3xl border border-slate-200">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="space-y-3 max-w-xl">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                    <ICONS.Sparkles size={20} />
-                  </span>
-                  <h3 className="text-xl font-bold text-slate-800">AI interjú-gyakorlás</h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 uppercase tracking-wide">Gyakorlás · nem értékeljük</span>
-                </div>
-                <p className="text-sm text-slate-500 leading-relaxed">
-                  Felkészülési eszköz: 4 tipikus felvételi kérdésre válaszolhatsz videón, hogy magabiztosabb legyél.
-                  <span className="font-bold text-slate-700"> Ez NEM váltja ki a valódi felvételi interjút</span> — a felvétel nálad marad,
-                  nem küldjük be a felvételi bizottságnak, és nem számít bele a bírálatba.
-                </p>
-                <div className="flex items-center gap-4 text-xs font-bold text-slate-500">
-                  <div className="flex items-center gap-1.5"><ICONS.Clock size={14} /> ~10 perc</div>
-                  <div className="flex items-center gap-1.5"><ICONS.CheckCircle size={14} /> 4 kérdés</div>
-                  <div className="flex items-center gap-1.5"><ICONS.Lock size={14} /> Csak neked látható</div>
-                </div>
-                {practiceLog && practiceLog.answers && practiceLog.answers.length > 0 && (
-                  <p className="text-[11px] text-slate-400">
-                    Legutóbbi gyakorlás: {new Date(practiceLog.at).toLocaleString('hu-HU')} · {practiceLog.answers.length} válasz
-                  </p>
-                )}
-              </div>
-              <button 
-                onClick={() => setShowVideoInterview(true)}
-                className="bg-white text-indigo-600 border-2 border-indigo-200 px-8 py-4 rounded-2xl font-bold hover:bg-indigo-50 transition-all whitespace-nowrap"
-              >
-                Gyakorlás indítása
-              </button>
-            </div>
-          </div>
         </>
       )}
     </div>
@@ -12914,6 +13234,11 @@ const App: React.FC = () => {
       case AppView.ECHO_TEACHER: return <ECHO_TeacherView user={currentUser} />;
       case AppView.SHOP: return <SHOP_StudentView user={currentUser} />;
       case AppView.SHOP_ADMIN: return <SHOP_AdminView user={currentUser} />;
+      // A jogosultságot a canSeeView dönti el (a szerverrel azonos szabály);
+      // a szerver minden RPC-ben újra ellenőrzi, a nézet maga is kiírja, ha nincs meg.
+      case AppView.GRANTS_OFFICE: return <GRT_OfficeView user={currentUser} />;
+      // A saját felkérések: a kolléga csak a sajátját látja (a szerver dönt).
+      case AppView.GRANTS_INVITES: return <GRTT_SajatFelkeresek user={currentUser} />;
       // --- Kollégiumi modul (26_dorm.sql) ---
       // A grant-alapú feltételek a canSeeView-ban vannak, egy helyen.
       case AppView.DORM_OPS: return <DORM_OpsView user={currentUser} />;
@@ -12979,6 +13304,7 @@ const App: React.FC = () => {
               <ICONS.Globe size={19} />
               <span className="text-[11px] font-black tracking-wide">{(typeof localStorage !== 'undefined' && localStorage.getItem('nje_lang') === 'en') ? 'EN' : 'HU'}</span>
             </button>
+            <TemaKapcsolo />
             {/* Üzenet-értesítő (features/messages.jsx): olvasatlan szám, felugró jelzés; kattintásra az üzenetekhez visz. */}
             <MSG_Csengo user={currentUser} onOpen={() => {
               const cel = currentUser.role === 'STUDENT' ? AppView.STUDENT_PORTAL
@@ -13075,9 +13401,188 @@ Object.assign(HU_EN, {
   'A törlés nem igazolható.': 'Deletion could not be confirmed.',
 });
 
+/* ------------------------------------------------------------------
+   88+89+90 — bevonási dashboard, illesztés arculatokra, csapatajánlás.
+   A HU_EN a FORDÍTÓ szótára: az alkalmazás magyar forrásszövegű, az angol
+   nézet ebből készül. Ami itt nincs benne, az angol nézetben magyarul marad.
+   Az interpolált (értékkel összefűzött) mondatok egyetlen szövegcsomópontként
+   készülnek a felületen, de a fordító csak a TELJES egyezést találja meg —
+   ezért a számot tartalmazó sorok a PHRASES-be kerülnek, nem ide.
+   ------------------------------------------------------------------ */
+Object.assign(HU_EN, {
+  // menü és fülek
+  'Pályázati felkéréseim': 'My grant invitations',
+  'Bevonás': 'Involvement',
+  'Csapatajánló': 'Team builder',
+  // fejszámok
+  'Bevont kolléga': 'Colleagues involved',
+  'Érintett kar': 'Faculties involved',
+  'Első pályázatuk': 'First-time applicants',
+  'Átlagos felkérés / bevont fő': 'Average invitations per person',
+  'a túlterhelés korai jelzője': 'the early sign of overload',
+  'ebben az évben kérték fel először': 'invited for the first time this year',
+  'Bevonás kar szerint': 'Involvement by faculty',
+  'Az alacsony arány nem a kar hibája: azt jelenti, hogy onnan rendszeresen kimaradnak a kollégák.':
+    'A low share is not the faculty\u2019s fault: it means colleagues there are regularly left out.',
+  // „még soha nem kértük fel"
+  'Még soha nem kértük fel': 'Never invited yet',
+  'Aki még egyetlen pályázatban sem szerepelt. A bevonási pontszám nála a legmagasabb.':
+    'Colleagues who have never been part of a proposal. Their involvement score is the highest.',
+  'Név vagy intézet…': 'Name or institute…',
+  'Minden kar': 'All faculties',
+  'Minden állapot': 'All states',
+  'Mihez illik': 'What fits',
+  'Nincs publikációs adat — a kézi kompetencia viszi tovább.':
+    'No publication data — manual competences carry it instead.',
+  'Ebben a körben minden kollégát felkértünk már legalább egyszer.':
+    'In this selection every colleague has been invited at least once.',
+  // felkérések
+  'Felkérések': 'Invitations',
+  'Minden állapotváltás naplózva: ki léptette és mikor. A rendszer senkit nem kér fel automatikusan.':
+    'Every state change is logged: who moved it and when. The system never invites anyone automatically.',
+  'Lejáratás': 'Expire overdue',
+  'Ebben a szűrésben nincs felkérés.': 'No invitation in this selection.',
+  'Bekerült a javaslatok közé.': 'Added to the proposals.',
+  // állapotok
+  'Javasolt': 'Proposed', 'Felkérve': 'Invited', 'Elfogadta': 'Accepted',
+  'Visszalépett': 'Withdrew', 'Lejárt': 'Expired', 'Beadva': 'Submitted',
+  'Nyert': 'Won', 'Nem nyert': 'Not won', 'Visszavonva': 'Revoked',
+  'vezető': 'lead', 'már felkérve': 'already invited',
+  // illesztés
+  'Illeszkedő felhívások': 'Matching calls',
+  'Melyik nyitott felhívás melyik arculatához illeszkedik':
+    'Which facet of which open call it fits',
+  'Javaslatba': 'To proposals',
+  'Adatlefedettség': 'Data coverage',
+  'Profil és gráf újraépítése': 'Rebuild profile and graph',
+  'Nyitott felhívás keresése címre…': 'Search open calls by title…',
+  'Nincs találat.': 'No result.',
+  'Arculatok': 'Facets',
+  'A felhívás elvárásai, egy sor egy elvárás': 'The call\u2019s expectations, one per line',
+  'csak akik jelezték': 'only those who opted in',
+  'Illesztés': 'Match',
+  'Csapatjavaslat': 'Suggest teams',
+  'Miért ő': 'Why them',
+  'Kevesebb': 'Less',
+  'Mire alapozzuk': 'What this is based on',
+  'Nincs megnevezhető mű.': 'No work to name.',
+  'szóegyezés': 'word overlap',
+  'nincs angol kimenet': 'no English output',
+  'még nem jelezte, hogy kérhető': 'has not opted in yet',
+  'Erre az elvárásra házon belül nincs jelölt — ide külső partner kell.':
+    'No in-house candidate for this expectation — an external partner is needed here.',
+  // komponensek
+  'tartalom': 'content', 'frissesség': 'recency', 'súlypont': 'centrality',
+  'tekintély': 'standing', 'kapacitás': 'capacity', 'nyitottság': 'openness',
+  'bevonás': 'involvement',
+  // csapatváltozatok
+  'Széles lefedés': 'Broad coverage', 'Erős vezető': 'Strong lead', 'Két kar': 'Two faculties',
+  'Felkérés a javaslatból': 'Invite from proposal',
+  'Külső partner kell': 'External partner needed',
+  'első pályázata': 'first proposal',
+  'felkérve': 'invited',
+  // saját felkérések
+  'Itt látod, mely pályázatokba hívtak, milyen szerepre, és mit válaszoltál. A pályázati iroda ugyanezt látja.':
+    'Here you see which proposals you were invited to, in what role, and what you answered. The grants office sees the same.',
+  'Idei felkérés': 'Invitations this year',
+  'Futó részvétel': 'Running participations',
+  'Elfogadott': 'Accepted',
+  'Összes felkérés': 'All invitations',
+  'Elfogadom': 'I accept',
+  'Nem vállalom': 'I decline',
+  'A felhívás oldala': 'The call\u2019s page',
+  // 99 — beadandó dokumentumok és elvárt eredmények
+  'Beadandó dokumentumok és elvárt eredmények': 'Documents to submit and expected outcomes',
+  'Elvárt eredmények — ezen mérnek minket': 'Expected outcomes — this is what we are measured on',
+  'Hatókör': 'Scope',
+  // 106 — konzorciumkeresés
+  'Konzorcium': 'Consortium',
+  'Konzorciumkeresés': 'Consortium search',
+  'csak ahol hiányzik valaki': 'only where someone is missing',
+  'Partnerkeresés a kiírónál': 'Partner search at the funder',
+  'Amit mi hozunk': 'What we bring',
+  'Minden elvárásra van házon belüli jelöltünk — partner nem feltétlenül kell.':
+    'We have an in-house candidate for every expectation — a partner may not be needed.',
+  'tegnap járt le': 'expired yesterday',
+  'Felkérés vezetőnek': 'Invite as lead',
+  'Küldés…': 'Sending…',
+  // 105 — javasolt projektvezető a kártyán
+  'Nincs mérhető előzménye — a javaslat kizárólag a téma illeszkedésén alapul.':
+    'No measurable track record — the proposal rests on topical fit alone.',
+  'lejártak is': 'include expired',
+  'Frissítés a kiíró oldaláról': 'Refresh from the funder\u2019s site',
+  'Frissítés…': 'Refreshing…',
+  'A kiíró oldaláról': 'From the funder\u2019s site',
+  'A kiíró oldaláról most nem sikerült letölteni. Próbáld újra kicsit később.':
+    'Could not fetch from the funder\u2019s site right now. Try again shortly.',
+  // 100 — a pontozás hangolása
+  'Pontozás és csapatösszeállítás': 'Scoring and team assembly',
+  'Ezek a számok döntik el, kit ajánl a rendszer egy felhívásra. A hangolás irodai döntés — a mentés után a találatok a következő gépi körben újraszámolnak.':
+    'These numbers decide who the system proposes for a call. Tuning is an office decision — after saving, matches are recomputed in the next automated round.',
+  'Mi dönt valójában': 'What actually decides',
+  'pont · egy szórásnyi témakülönbség': 'points · one standard deviation of topical difference',
+  'pont · a bevonás teljes kilengése': 'points · the full swing of the fairness component',
+  'A méltányosság jelenleg többet mozdít, mint a szakmai illeszkedés — a kevesebbet szerepelt kolléga megelőzi a témában erősebbet. Ha ezt nem akarod, csökkentsd a bevonás súlyát.':
+    'Fairness currently moves more than topical fit — a less-involved colleague outranks a stronger match. Lower the fairness weight if that is not what you want.',
+  'A téma dönt, a méltányosság döntetlennél billent. Ez a szándékolt arány.':
+    'Topic decides, fairness tips a tie. This is the intended balance.',
+  'Pontszám-súlyok': 'Score weights',
+  'A hét komponens aránya az összesített pontszámban.': 'The share of the seven components in the total score.',
+  'Küszöbök': 'Thresholds',
+  'Ki kerül listára, és mikor tekintünk egy elvárást lefedettnek.':
+    'Who makes the list, and when an expectation counts as covered.',
+  'Csapatösszeállítás': 'Team assembly',
+  'Méret, döntetlen-sáv, kapacitás alsó határa.': 'Size, tie band, capacity floor.',
+  'Bevonási méltányosság': 'Involvement fairness',
+  'Mennyivel hozza előre a kevesebbet szerepelt kollégát.':
+    'How far it moves a less-involved colleague up the list.',
+  'Elvetés': 'Discard',
+  'Formai korlát': 'Format limit',
+  'Értékelés és küszöbök': 'Evaluation and thresholds',
+  'Még nem töltöttük le a kiíró oldaláról — a gépi kör hamarosan sorra veszi.':
+    'Not yet fetched from the funder\u2019s site — the automated round will get to it.',
+  'A kiíró oldalán ehhez a felhíváshoz nem szerepel dokumentumlista és elvárt eredmény.':
+    'The funder\u2019s page lists no documents or expected outcomes for this call.',
+  // 96 — nevek a listakártyán
+  'Nyitott felhívások és a javasolt csapat': 'Open calls and the proposed team',
+  'A javaslatok gépi körben készülnek, minden felhívásra — a kártyán látod a neveket, kattintásra a részleteket.':
+    'Proposals are generated automatically for every call — the names are on the card, details on click.',
+  'Keresés a felhívás címére…': 'Search calls by title…',
+  'Még nincs csapatjavaslat — megnyitva egy kattintással elkészül.':
+    'No team proposal yet — one click once opened.',
+  'Még nincs arculatokra bontva: a gépi kör hamarosan sorra veszi.':
+    'Not split into facets yet: the automated round will get to it.',
+  'Egyetlen kolléga sem emelkedik ki a mezőnyből — ezt a csapatot kívülről kell építeni.':
+    'No colleague stands out from the field — this team has to be built externally.',
+  'Erre a felhívásra egyetlen kolléga sem emelkedik ki a mezőnyből — a csapatot kívülről kell építeni.':
+    'For this call no colleague stands out from the field — the team has to be built externally.',
+});
+
 const HU_EN_PHRASES = [
-  [/Aktív jelentkezések/g,'Active applications'],[/Akív jelentkezések/g,'Active applications'],[/Új jelentkező/g,'New applicant'],[/\bMód\b/g,'Mode'],[/Felvételi folyamat ·/g,'Admission process ·'],[/(\d+)\s*\/\s*(\d+)\s*lépés/g,'$1/$2 steps'],[/(\d+)\s*lépés/g,'$1 steps'],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)%\s*biztos/g,'$1% confidence'],[/(\d+)\s*lehetséges egyezés/g,'$1 possible match(es)'],[/TESZT — helyes válasz:/g,'TEST — correct answer:'],[/Helyes:/g,'Correct:'],[/(\d+)\s*\/\s*(\d+)\s*helyes/g,'$1 / $2 correct'],[/(\d+)\s*\/\s*(\d+)\s*kötelező hitelesítve/g,'$1 / $2 required verified'],[/(\d+)\s*hiányzik/g,'$1 missing'],[/(\d+)\s*új\b/g,'$1 new'],[/EUR \/ szemeszter/g,'EUR / semester'],[/szemeszter/g,'semester'],[/szem\./g,'sem.'],[/Egyszerűsítsd, majd értékeld ki, ha/g,'Simplify, then evaluate if'],[/Mennyi/g,'What is'],[/Értékeld ki a következő kifejezést!/g,'Evaluate the following expression!'],[/Érték =/g,'Value ='],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)\s*\/\s*(\d+)\s*kötelező/g,'$1 / $2 required'],
+  [/Aktív jelentkezések/g,'Active applications'],[/Akív jelentkezések/g,'Active applications'],[/Új jelentkező/g,'New applicant'],[/\bMód\b/g,'Mode'],[/Felvételi folyamat ·/g,'Admission process ·'],[/(\d+)\s*\/\s*(\d+)\s*lépés/g,'$1/$2 steps'],[/(\d+)\s*lépés/g,'$1 steps'],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)%\s*biztos/g,'$1% confidence'],[/(\d+)\s*lehetséges egyezés/g,'$1 possible match(es)'],[/TESZT — helyes válasz:/g,'TEST — correct answer:'],[/Helyes:/g,'Correct:'],[/(\d+)\s*\/\s*(\d+)\s*helyes/g,'$1 / $2 correct'],[/(\d+)\s*\/\s*(\d+)\s*kötelező hitelesítve/g,'$1 / $2 required verified'],[/(\d+)\s*hiányzik/g,'$1 missing'],[/(\d+)\s*új\b/g,'$1 new'],[/EUR \/ szemeszter/g,'EUR / semester'],[/szemeszter/g,'semester'],[/szem\./g,'sem.'],[/Egyszerűsítsd, majd értékeld ki, ha/g,'Simplify, then evaluate if'],[/Mennyi/g,'What is'],[/Értékeld ki a következő kifejezést!/g,'Evaluate the following expression!'],[/Érték =/g,'Value ='],[/(\d+)\s*folyamat\b/g,'$1 process(es)'],[/(\d+)\s*\/\s*(\d+)\s*kötelező/g,'$1 / $2 required'],[/(\d+)\s*napja lejárt/g,'expired $1 days ago'],[/Javasolt projektvezető:/g,'Proposed project lead:'],[/Erre alapozva:/g,'Based on:'],[/(\d+)\s*utolsó szerzős publikáció/g,'$1 last-author publication(s)'],[/(\d+)\s*pályázati előzmény/g,'$1 previous grant(s)'],[/(\d+)\s*pályázatot vezetett már/g,'has led $1 proposal(s)'],[/szabad kapacitás/g,'free capacity'],[/szűk kapacitás/g,'limited capacity'],[/vezetői előzmény nélkül/g,'no leadership track record'],[/már felkérve/g,'already invited'],[/(\d+)\s*oldal\b/g,'$1 page(s)'],
 ];
+/* A dokumentum-olvasó feliratai (2026-09-29). A címkék (title) és az
+   aria-label is fordul — a setupI18n mindhármat a HU_EN-ből veszi. */
+Object.assign(HU_EN, {
+  'Jelentkezés visszavonása':'Withdraw application',
+  'A jelentkező megszakította ezt a folyamatot':'The applicant cancelled this process',
+  'A felvételi iroda zárta le ezt a folyamatot':'The admissions office closed this process',
+  'A jelentkezés nem folytatódik. A feltöltött dokumentumok és az üzenetváltás megmaradt.':'The application will not continue. The uploaded documents and the message thread have been kept.',
+  'Szélesség':'Fit width','Keres':'Find','nincs találat':'no match',
+  'Keresés a dokumentumban…':'Search in the document…',
+  'Oldalak rajzolása…':'Rendering pages…','PDF betöltése…':'Loading PDF…',
+  'Dokumentum betöltése…':'Loading document…',
+  'A PDF nem jeleníthető meg.':'This PDF cannot be displayed.',
+  'Előző oldal':'Previous page','Következő oldal':'Next page',
+  'Kicsinyítés (−)':'Zoom out (−)','Nagyítás (+)':'Zoom in (+)',
+  'Szélességre igazítva':'Fit to width','Eredeti méret (100%)':'Actual size (100%)',
+  'Forgatás 90°-kal':'Rotate by 90°',
+  'Előző találat':'Previous match','Következő találat':'Next match',
+  'Kéz — húzással mozgatás (középső egérgombbal mindig működik)':'Hand tool — drag to pan (the middle mouse button always works)',
+  'Bezárás (Esc)':'Close (Esc)','Dokumentum':'Document',
+  'Ctrl + görgő: nagyítás · középső egérgomb vagy a kéz eszköz: mozgatás · Esc: bezárás':'Ctrl + wheel: zoom · middle mouse button or the hand tool: pan · Esc: close',
+});
+
 // ------------------------------------------------------------------
 // A1/A3/A4/H1/I1 csomag új magyar szövegei. Külön Object.assign hívásban,
 // hogy a nagy HU_EN literált ne kelljen módosítani (kisebb ütközési felület
@@ -13098,13 +13603,11 @@ Object.assign(HU_EN, {
   'Valódi felvételi interjú — időpontfoglalás':'Real admission interview — book a slot',
   'Ez számít a bírálatba':'This counts toward the decision',
   'Válassz egy számodra megfelelő időpontot a felvételi beszélgetéshez (Teams/Zoom). A felvételi döntés kizárólag ezen az interjún alapul.':'Pick a slot that suits you for the admission interview (Teams/Zoom). The admission decision is based on this interview alone.',
-  'AI interjú-gyakorlás':'AI interview practice',
   'Gyakorlás · nem értékeljük':'Practice · not evaluated',
   'Felkészülési eszköz: 4 tipikus felvételi kérdésre válaszolhatsz videón, hogy magabiztosabb legyél.':'A preparation tool: answer 4 typical admission questions on video to build confidence.',
   'Ez NEM váltja ki a valódi felvételi interjút':'This does NOT replace the real admission interview',
   '— a felvétel nálad marad, nem küldjük be a felvételi bizottságnak, és nem számít bele a bírálatba.':'— the recording stays with you, it is not submitted to the admissions committee and does not count toward the decision.',
   'Csak neked látható':'Visible only to you',
-  'Gyakorlás indítása':'Start practice',
   'Gyakorlási mód — nem a valódi felvételi interjú':'Practice mode — not the real admission interview',
   'Felkészülési gyakorlat: 4 tipikus felvételi kérdésre válaszolhatsz videón. Kérjük, győződj meg róla, hogy jól megvilágított helyen vagy és a mikrofonod megfelelően működik.':'A preparation exercise: answer 4 typical admission questions on video. Please make sure you are in a well-lit place and your microphone works properly.',
   'Ez gyakorlás, nem a valódi felvételi interjú.':'This is practice, not the real admission interview.',
@@ -13114,11 +13617,76 @@ Object.assign(HU_EN, {
   'Készen vagy a gyakorlással!':'Practice complete',
   'Végigmentél mind a 4 gyakorlókérdésen. A felvételeidet nem küldtük el senkinek — a gyakorlás eredménye nem számít bele a felvételi bírálatba.':'You went through all 4 practice questions. Your recordings were not sent to anyone — the practice result does not count toward the admission decision.',
   'A következő lépés: foglalj időpontot a valódi felvételi interjúra az Interjúk fülön.':'Next step: book a slot for the real admission interview on the Interviews tab.',
-  'Ehhez a jelentkezőhöz még nem tartozik rögzített felvételi interjú. A jelentkezői portál AI interjú-gyakorlása szándékosan nem jelenik meg itt: az felkészülés, nem bírálati anyag.':'There is no recorded admission interview for this applicant yet. The AI interview practice in the applicant portal deliberately does not appear here: it is preparation, not assessment material.',
+  'Ehhez a jelentkezőhöz még nem tartozik rögzített felvételi interjú. Az interjú élőben, a lefoglalt időponton zajlik — a felvétel onnan kerül ide, ha készült.':'There is no recorded admission interview for this applicant yet. The interview takes place live at the booked slot — the recording appears here if one was made.',
   'Vissza az interjúkhoz':'Back to interviews',
 });
 // A gyakorlás-napló sora számot tartalmaz, ezért kifejezés-mintával fordítjuk.
 HU_EN_PHRASES.push(
+  // 79-80 — kutatók
+  [/(\d+) \/ (\d+) kutató/g, '$1 / $2 researchers'],
+  /* ECHO: számot tartalmazó keretfeliratok */
+  [/^Oktatás nyelve: (.+) · a kurzusértékelő kérdőív (.+) nyelven megy ki$/g,
+    'Language of instruction: $1 — the course evaluation questionnaire is sent in $2'],
+  [/^A kurzus nyelvén \((\w+)\) nincs jóváhagyott fordítás, ezért a kérdőívet magyarul mutatjuk\.$/g,
+    'There is no approved translation in the course language ($1), so the questionnaire is shown in Hungarian.'],
+  [/^(\d+)\. lépés \/ (\d+)$/g, 'Step $1 / $2'],
+  [/^Piszkozat mentve (.+)\.$/g, 'Draft saved $1.'],
+  /* Külügyi iroda (2026-09-24) — számot tartalmazó feliratok */
+  [/^(\d+)\/(\d+) beküldés felhasználva — még (\d+) próbálkozásod van\.$/g,
+    '$1/$2 submissions used — you have $3 attempt(s) left.'],
+  [/^Elhasználtad mind a (\d+) beküldési lehetőséget — új feladatsor már nem generálható\. Az eredményt a felvételi iroda értékeli\.$/g,
+    'You have used all $1 submissions — no new problem set can be generated. The Admissions Office will assess the result.'],
+  [/^A beadás után következik: (.+)\. Ezeket a beadott jelentkezésednél tudod elvégezni\.$/g,
+    'After submitting: $1. You can complete these in your submitted application.'],
+  [/^Ezekre a programokra a már felvett hallgatók jelentkezhetnek\. Böngészd nyugodtan — amint megszületik a felvételi döntésed, a jelentkezés is megnyílik\.$/g,
+    'These programmes are open to students who have already been admitted. Feel free to browse — once your admission decision is made, applying opens up too.'],
+  [/^(\d+) összekötve; (\d+) névjavaslat maradt egyenkénti döntésre\.$/g,
+    '$1 linked; $2 name suggestions left for one-by-one decisions.'],
+  /* 82 — a rendezhető kutatói lista számot tartalmazó feliratai */
+  [/^(\d+) validált$/g, '$1 validated'],
+  [/^(\d+) ORCID-del$/g, '$1 with ORCID'],
+  [/^(\d+) mű összesen$/g, '$1 works in total'],
+  [/^(\d+) témaprofil$/g, '$1 topic profiles'],
+  [/(\d+) döntésre váró javaslat/g, '$1 suggestion(s) awaiting a decision'],
+  [/(\d+) hiányosság/g, '$1 gap(s)'],
+  [/(\d+) javaslat\b/g, '$1 suggestion(s)'],
+  [/(\d+) idézet\b/g, '$1 citation(s)'],
+  [/(\d+) kutató, (\d+) mű — még (\d+) kutató hátra/g,
+    '$1 researchers, $2 works — $3 researchers to go'],
+  [/^Metaadatok letöltve: (\d+) kutató, (\d+) mű\.$/g,
+    'Metadata downloaded: $1 researchers, $2 works.'],
+  [/^(\d+) összekötve ORCID alapján, (\d+) javaslat névegyezésre\.$/g,
+    '$1 linked by ORCID, $2 suggestions by name match.'],
+  [/ — szűkíts, ha a többit is látni akarod$/g, ' — narrow the filters to see the rest'],
+  [/(\d+) \/ (\d+) szerző/g, '$1 / $2 authors'],
+  [/(\d+) hiányosság/g, '$1 gaps'],
+  [/(\d+) javaslat/g, '$1 suggestions'],
+  [/(\d+) mű\b/g, '$1 works'],
+  [/(\d+) téma\b/g, '$1 topics'],
+  [/(\d+) idézet/g, '$1 citations'],
+  [/(\d+) ORCID-del a forrásban/g, '$1 with ORCID in the source'],
+  [/(\d+) tételnél van javaslat/g, '$1 items have a suggestion'],
+  // 78 — határidőnaptár
+  [/(\d+) határidő ebben a hónapban/g, '$1 deadlines this month'],
+  [/(\d+) határidő$/gm, '$1 deadlines'],
+  [/Legsűrűbb hónapok:/g, 'Busiest months:'],
+  [/(\d+)\. forduló \/ (\d+)/g, 'round $1 of $2'],
+  [/\+(\d+) további/g, '+$1 more'],
+  [/\((\d+) megjelenítve\)/g, '($1 shown)'],
+  // 77 — pályázatfigyelő dinamikus részletei
+  [/(\d+)\s*nap$/gm, '$1 days'],
+  [/(\d+) \/ (\d+) felhívás/g, '$1 / $2 calls'],
+  [/(\d+) felhívás · utolsó sikeres betöltés:/g, '$1 calls · last successful load:'],
+  [/(\d+) forrás elavult:/g, '$1 sources are stale:'],
+  [/(\d+) további találat — szűkíts a szűrőkkel\./g, '$1 more results — narrow the filters.'],
+  [/még nem futott/g, 'has not run yet'],
+  // 76 — kizárási lista dinamikus részletei
+  [/(\d+)\s*fő · küszöb: (\d+)/g, '$1 students · threshold: $2'],
+  [/([\d.,]+)% óraarány · küszöb: (\d+)%/g, '$1% share · threshold: $2%'],
+  [/(\d+)\s*kizárt kurzus/g, '$1 excluded courses'],
+  [/(\d+)\s*kizárt pár/g, '$1 excluded pairs'],
+  [/(\d+)\s*kurzus a kampány hatókörében/g, '$1 courses in the campaign scope'],
+  [/(\d+) véleményezhető kurzus · (\d+) oktatói pár/g, '$1 evaluable courses · $2 teacher pairs'],
   [/Legutóbbi gyakorlás:/g, 'Last practice:'],
   [/(\d+)\s*válasz\b/g, '$1 answer(s)'],
   [/(\d+)\s*kérdés\b/g, '$1 questions'],
@@ -13883,6 +14451,260 @@ Object.entries({
   'Nem lett kitöltve — legalább egy célt adj meg (e nélkül a félév végén nincs mit értékelni).': 'Not filled in — add at least one goal (otherwise there is nothing to evaluate at the end of the term).',
   'A hiányzó válaszokat pirossal jelöltük a kérdéseknél.': 'Missing answers are marked in red at the questions.',
   'Célmeghatározás/Értékelés': 'Goal setting/Evaluation',
+  /* Megjelenés (sötét mód) */
+  'Rendszer szerint': 'System',
+  'Világos': 'Light',
+  'Sötét': 'Dark',
+  'Megjelenés: Rendszer szerint': 'Appearance: System',
+  'Megjelenés: Világos': 'Appearance: Light',
+  'Megjelenés: Sötét': 'Appearance: Dark',
+  /* Kurzusok — az oktatás nyelve és ami ebből következik */
+  'Minden nyelv': 'Any language',
+  'magyar': 'Hungarian', 'angol': 'English', 'német': 'German', 'egyéb': 'other',
+  'Ez dönti el, milyen nyelven kapja a hallgató a kurzusértékelő kérdőívet. Német vagy egyéb nyelvnél magyarul kérdezünk.':
+    'This decides the language of the course evaluation questionnaire the student receives. For German or other languages we ask in Hungarian.',
+  'Angol nyelvű kurzus angol megnevezés nélkül: a kérdőív fölött a magyar cím fog állni.':
+    'English-taught course without an English name: the Hungarian title will appear above the questionnaire.',
+  'A kérdőívnek csak magyar és angol változata van, ezért ezen a kurzuson magyarul kérdezünk.':
+    'The questionnaire exists only in Hungarian and English, so on this course we ask in Hungarian.',
+  /* ECHO — a félév eleji célmeghatározó képernyő feliratai */
+  'A félév elején kitűzött célok csak a Tiéd — az oktató nem látja őket, és a félév végi értékelésbe sem kerülnek át. Egyedül azt visszük tovább, hogy a céljaid mennyiben teljesültek.':
+    'The goals you set at the start of term are yours alone — the teacher does not see them, and they are not carried into the end-of-term evaluation. The only thing carried over is how far your goals were met.',
+  'Céljaim ezen a kurzuson': 'My goals for this course',
+  'Legalább 1, legfeljebb 3 cél. Konkrét, félév végén eldönthető megfogalmazás segít a legtöbbet.':
+    'At least 1 and at most 3 goals. A concrete wording you can judge at the end of term helps most.',
+  'Elvárásaim az oktatótól': 'What I expect from the teacher',
+  'Legfeljebb 3 elvárás — ez a rész nem kötelező.': 'At most 3 expectations — this part is optional.',
+  'Célok mentése': 'Save goals',
+  'Pl. magabiztosan írjak SQL lekérdezést': 'e.g. write SQL queries with confidence',
+  'Pl. kapjak érdemi visszajelzést a beadandóra': 'e.g. get meaningful feedback on my assignment',
+  'Nem lett kitöltve — legalább egy célt adj meg (e nélkül a félév végén nincs mit értékelni).':
+    'Not filled in — add at least one goal (otherwise there is nothing to evaluate at the end of term).',
+  /* ECHO kérdőív — a KERET feliratai (a kérdőív TARTALMÁT az ECHO_Src védi).
+     Ezek a szövegek 2026-09-24-én MÉRVE angol módban is magyarul maradtak. */
+  'Kilépés — a válaszaid piszkozatként megmaradnak': 'Exit — your answers are kept as a draft',
+  'A kitöltésed automatikusan mentődik.': 'Your answers are saved automatically.',
+  'A piszkozat a beküldésig visszakereshető hozzád.': 'Until you submit, the draft can be traced back to you.',
+  'A tartalmát rajtad kívül senki nem látja. A beküldés pillanatában ez a kapcsolat elszakad, és a piszkozat törlődik.':
+    'Nobody but you can see its contents. The moment you submit, that link is severed and the draft is deleted.',
+  'A piszkozatot most nem sikerült menteni — a válaszaid a böngészőben megvannak.':
+    'The draft could not be saved just now — your answers are kept in your browser.',
+  /* Kurzusállapotok a kurzusértékelés listáján */
+  'Nem kezdett': 'Not started',
+  'Félbehagyott': 'In progress',
+  'Célkitűzés': 'Goal setting',
+  'A kitöltési ablak nyitva.': 'The response window is open.',
+  'Van mentett piszkozatod — a kitöltés folytatható.': 'You have a saved draft — you can continue.',
+  'A félév eleji célok adhatók meg.': 'The start-of-term goals can be set.',
+  'A kitöltési ablak bezárt.': 'The response window is closed.',
+  'A kampány még nem indult.': 'The campaign has not started yet.',
+  /* Külügyi iroda észrevételei (2026-09-24) — jelentkezési folyamat */
+  'A céglátogatásokra, tanulmányi kirándulásokra és továbbképzésekre a már felvett hallgatók jelentkezhetnek. A te felvételi eljárásod még folyamatban van — amint megszületik a döntés, ez a jelentkezés is megnyílik.':
+    'Company visits, study excursions and trainings are open to students who have already been admitted. Your admission procedure is still in progress — once the decision is made, this application opens up as well.',
+  'Addig a Képzések menüpontban tudsz jelentkezni a féléves képzésekre és az előkészítőre.':
+    'Until then you can apply for the semester programmes and the preparatory course under Programmes.',
+  'Nincs mit megnyitni: a jelentkezés képzéseinél nincs beállítva kötelező dokumentum, és a jelentkező sem töltött fel semmit. A kötelező dokumentumokat a Képzések menüpontban, a képzés szerkesztőjében lehet megadni.':
+    'There is nothing to open: no required documents are set for the programmes of this application, and the applicant has not uploaded anything either. Required documents can be set in the programme editor, under Programmes.',
+  'Ehhez a jelentkezéshez nincs kötelező dokumentum megadva a képzésnél.':
+    'No required document has been set for this application at the programme.',
+  'Beadás': 'Submit',
+  'Útlevélszám': 'Passport number',
+  'Kötelező — pontosan úgy, ahogy az útleveled adatoldalán szerepel.':
+    'Required — exactly as it appears on the data page of your passport.',
+  'Az útlevélszám 5–20 betű vagy szám, szóköz nélkül.':
+    'The passport number is 5–20 letters or digits, without spaces.',
+  'Előbb töltsd ki az előtte lévő lépéseket.': 'Fill in the preceding steps first.',
+  'Felvétel után': 'After admission',
+  'Ezek még hátravannak': 'Still to come',
+  'Új feladatsor': 'New problem set',
+  'Nincs előírt dokumentum': 'No documents required',
+  'Ehhez a jelentkezéshez nincs kötelező dokumentum megadva.':
+    'No required documents have been set for this application.',
+  'Ez a program a felvett hallgatóké': 'This programme is for admitted students',
+  'Értem': 'Got it',
+  'A befizetési határidő alapértelmezés szerint a levél keltétől számított két hét. Csak indokolt esetben írd át.':
+    'By default the payment deadline is two weeks from the date of issue. Change it only with good reason.',
+  'Nincs rögzített interjú': 'No recorded interview',
+  /* 84 — sorrendfüggetlen névegyeztetés */
+  'Névjavaslatok elfogadása': 'Accept name suggestions',
+  /* 83 — a validált lista importja */
+  'validált listából': 'from the validated list',
+  'kurzus a listából': 'courses from the list',
+  'óraarány': 'teaching load share',
+  /* 82 — rendezhető kutatói lista, forrás-metrikák */
+  'Csak validált (oktatói nyilvántartásból)': 'Validated only (from the teacher registry)',
+  'Nincs betöltött mű': 'No works loaded',
+  'Nincs forrás-metrika': 'No source figures',
+  'Minden kar': 'Any faculty',
+  'Párosítás a felderítéssel': 'Match against discovery',
+  'Metaadatok letöltése': 'Download metadata',
+  'CSV-export': 'CSV export',
+  'megállítás a köteg után': 'stop after this batch',
+  'Van publikációs adata': 'Has publication data',
+  'Van forrás-metrikája': 'Has source figures',
+  'Szinkronra vár': 'Awaiting sync',
+  'Nincs kutató a listában': 'No researcher in the list',
+  'Töltsd fel az oktatói nyilvántartásból, vagy engedd fel a szűrőket.':
+    'Fill it from the teacher registry, or loosen the filters.',
+  'Név': 'Name',
+  'Kurzus': 'Courses',
+  'Mű': 'Works',
+  'Idézet': 'Citations',
+  'h-index': 'h-index',
+  'Forrás: mű': 'Source: works',
+  'Forrás: idézet': 'Source: citations',
+  'Forrás: h': 'Source: h',
+  'Szinkron': 'Sync',
+  'Kurzusok az oktatói nyilvántartásból': 'Courses from the teacher registry',
+  'Nálunk tárolt művek száma': 'Number of works stored here',
+  'A nálunk tárolt művek idézetei összesen': 'Total citations of the works stored here',
+  'A nálunk tárolt művekből számolva': 'Computed from the works stored here',
+  'A forrás szerinti TELJES pályamű': 'The source\u2019s count for the WHOLE career',
+  'A forrás saját idézetszáma': 'The source\u2019s own citation count',
+  'A forrás saját h-indexe': 'The source\u2019s own h-index',
+  'Rendezés:': 'Sorted by:',
+  'nincs': 'none',
+  'hiányosság': 'gap',
+  'szinkronhiba': 'sync error',
+  'Publikációs adat': 'Publication data',
+  'OpenAlex szerint': 'According to OpenAlex',
+  'MTMT szerint': 'According to MTMT',
+  'Ezek a NÁLUNK tárolt művekből számolnak. A forrás saját összesítői lent, külön.':
+    'These are computed from the works stored HERE. The source\u2019s own figures are below, separately.',
+  /* 79-80 — kutatók és felderítés */
+  'Kutatók': 'Researchers',
+  'Törzs': 'Roster',
+  'Felderítés': 'Discovery',
+  'Feltöltés az oktatói nyilvántartásból': 'Fill from the teacher registry',
+  'Kutató a törzsben': 'Researchers on the roster',
+  'Azonosítóval összekötve': 'Linked to an identifier',
+  'Döntésre váró javaslat': 'Suggestions awaiting a decision',
+  'Betöltött publikáció': 'Publications loaded',
+  'Keresés névre, ORCID-re, e-mailre…': 'Search by name, ORCID or e-mail…',
+  'Keresés névre, ORCID-re…': 'Search by name or ORCID…',
+  'Minden típus': 'Any type',
+  'Nincs összekötött azonosító': 'No linked identifier',
+  'Gépi építés kikapcsolva': 'Automated building switched off',
+  'Nincs kutató a törzsben': 'No researcher on the roster',
+  'Összekötve': 'Linked',
+  'Kihagyva': 'Ignored',
+  'Összekötés': 'Link',
+  'Új kutató': 'New researcher',
+  'Kihagyás': 'Ignore',
+  'Ez ő': 'This is them',
+  'Nem ő': 'Not them',
+  'jelenlegi affiliáció': 'current affiliation',
+  'korábbi affiliáció': 'former affiliation',
+  'Azonosítók': 'Identifiers',
+  'Publikációs adat': 'Publication data',
+  'Ami hiányzik a profilból': 'What the profile is missing',
+  'Összekötési javaslatok — döntés kell': 'Linking suggestions — a decision is needed',
+  'Témaprofil (a művekből számolva)': 'Topic profile (computed from the works)',
+  'Kompetenciák — ezt publikációból nem lehet kiolvasni':
+    'Competences — these cannot be read out of publications',
+  'gépi profilépítés (a kutató kikapcsolhatja)': 'automated profile building (the researcher can switch it off)',
+  'szerepeljen a belső csapatkeresésben': 'include in internal team search',
+  'legalább': 'at least',
+  'mű, jelenlegi affiliációval': 'works, with a current affiliation',
+  'Kötegelt felvétel:': 'Bulk intake:',
+  'Felvétel': 'Add',
+  'Hozzáadás': 'Add',
+  'nincs szinkron': 'not synced',
+  'még nem futott': 'has not run yet',
+  /* 78 — határidőnaptár */
+  'Határidőnaptár': 'Deadline calendar',
+  'Ma': 'Today',
+  'Bezárás': 'Close',
+  'Ebben a hónapban nincs határidő': 'No deadline this month',
+  'Lépj másik hónapra, vagy engedd fel a szűrőket.': 'Move to another month, or relax the filters.',
+  'Kattints egy napra a határidők listájához. A kétszakaszos felhívásoknál a fordulók száma is látszik (például 2/3).':
+    'Click a day for the list of deadlines. For two-stage calls the round number is shown too (for example 2/3).',
+  'betöltés…': 'loading…',
+  'Előző hónap': 'Previous month',
+  'Következő hónap': 'Next month',
+  /* 77 — pályázatfigyelő */
+  'Kutatás és pályázatok': 'Research and grants',
+  'Pályázatfigyelő': 'Grant radar',
+  'Hazai és nemzetközi felhívások egy helyen · a teljes szöveg mindig a kiíró oldalán':
+    'Hungarian and international calls in one place · the full text always on the funder\u2019s site',
+  'Felhívás rögzítése': 'Add a call',
+  'Felhívás rögzítése kézzel': 'Add a call manually',
+  'Amit hírlevélben, NCP-levélben vagy partneri megkeresésben kapunk':
+    'What arrives by newsletter, NCP e-mail or a partner request',
+  'Felhívások': 'Calls',
+  'Adatforrások': 'Data sources',
+  'Betöltés most': 'Load now',
+  'Betöltési napló': 'Load log',
+  'Nyitott': 'Open',
+  'Hamarosan': 'Upcoming',
+  'Zárt': 'Closed',
+  'Hamarosan nyílik': 'Opening soon',
+  'Minden állapot': 'Any status',
+  'Minden program': 'Any programme',
+  '30 napon belül lejár': 'Closes within 30 days',
+  'nincs határidő': 'no deadline',
+  'ma jár le': 'closes today',
+  'mindegy': 'any',
+  '7 napon belül': 'within 7 days',
+  '30 napon belül': 'within 30 days',
+  '90 napon belül': 'within 90 days',
+  'Keresés címre, azonosítóra, címkére…': 'Search by title, identifier or tag…',
+  'Nincs találat': 'No result',
+  'Próbáld szűkebb szűrőkkel.': 'Try narrower filters.',
+  'A katalógus még üres. Indíts betöltést az Adatforrások fülön, vagy rögzíts felhívást kézzel.':
+    'The catalogue is still empty. Start a load on the Data sources tab, or add a call manually.',
+  'partnerkeresés': 'partner search',
+  'partnerkeresés engedett': 'partner search allowed',
+  'módosult': 'changed',
+  'gépi gyűjtés': 'automated collection',
+  'gépi gyűjtés engedélyezve': 'automated collection allowed',
+  'csak kézi': 'manual only',
+  'elavult': 'stale',
+  'kikapcsolva': 'switched off',
+  'gépi végpont': 'machine endpoint',
+  'HTML-értelmező': 'HTML parser',
+  'kézi rögzítés': 'manual entry',
+  'hírcsatorna': 'news feed',
+  'Beállítás': 'Settings',
+  'Modellszolgáltató': 'Model provider',
+  'Szolgáltató': 'Provider',
+  'Claude (Anthropic)': 'Claude (Anthropic)',
+  'Nincs — csak számított pontszám': 'None — computed score only',
+  'Napi költségplafon (USD)': 'Daily cost cap (USD)',
+  'Határidő-figyelmeztetés': 'Deadline warning',
+  'Határidők': 'Deadlines',
+  'Változásnapló': 'Change log',
+  'Kivonat': 'Summary',
+  'Archiválás': 'Archive',
+  'A felhívás teljes szövege a kiíró oldalán': 'The full call text on the funder\u2019s site',
+  'Ehhez pályázati irodai jogosultság kell': 'This needs grant-office permission',
+  'Nincs megadott határidő.': 'No deadline given.',
+  'Még nem futott betöltés.': 'No load has run yet.',
+  'Kézi felvitel — szerkeszthető.': 'Manual entry — editable.',
+  'Gépi forrásból: a betöltés frissíti.': 'From an automated source: the load keeps it current.',
+  /* 76 — kizárási szabályok kampányonként */
+  'Kizárási szabályok': 'Exclusion rules',
+  'Kizárt kurzusok és oktatók': 'Excluded courses and teachers',
+  'Kizárt kurzusok': 'Excluded courses',
+  'Kizárt oktatói párok': 'Excluded teacher pairs',
+  'Értékelés nélkül': 'Without evaluation',
+  'Alapbeállítás': 'Default setting',
+  'Egyedi': 'Custom',
+  'Senkit nem zárunk ki': 'Exclude nobody',
+  'Ennél a kampánynál': 'For this campaign',
+  'Érvényes szabályok': 'Rules in force',
+  'kikapcsolva': 'disabled',
+  'mindig érvényes': 'always in force',
+  'Létszámküszöb (fő)': 'Headcount threshold (persons)',
+  'Oktatói óraarány küszöbe (%)': 'Teacher share threshold (%)',
+  'Szabályok módosítása a szerkesztőben': 'Change the rules in the editor',
+  'Keresés kurzuskódra, kurzusnévre, oktatóra…': 'Search by course code, course name or teacher…',
+  'Nincs kizárt kurzus': 'No excluded course',
+  'Nincs kizárt oktatói pár': 'No excluded teacher pair',
+  'Minden érintett oktató kap értékelést': 'Every teacher involved receives an evaluation',
+  'A hatókör minden kurzusa véleményezhető.': 'Every course in scope can be evaluated.',
+  'A keresésre nincs találat.': 'No result for this search.',
+  'Nincs rögzített oktató.': 'No teacher recorded.',
   'Webshop': 'Webshop',
   'Webshop kezelése': 'Webshop management',
   'Egyetemi bolt': 'University shop',

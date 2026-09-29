@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const source = fs.readFileSync(new URL('../features/programs.jsx', import.meta.url),'utf8');
-const nextSource = source.match(/const goNext = (async[^\n]+);\r?\n/)[1];
+const nextSource = source.match(/const goNext = (async \(\) => \{[\s\S]*?\r?\n  \});\r?\n/)[1];
 const submitStart = source.indexOf('onSubmit={async () => {') + 'onSubmit={'.length;
 const submitEnd = source.indexOf('} /> : <PROG_IrodaiLepes',submitStart);
 assert.ok(submitStart > 0 && submitEnd > submitStart);
@@ -11,6 +11,7 @@ for (const saved of [null, { id: 'app' }]) {
   const indexes = [], submitted = [], errors = [], updates = [];
   const context = {
     persist: async () => saved, lepes: 1, steps: ['first','second','third'],
+    rail: ['first','second','third'], lepesNyithato: () => true,
     setIdx: n => indexes.push(n),
     window: { sb: { rpc: async (...args) => { submitted.push(args); return { error: null }; } } },
     cur: { id: 'app', status: 'draft' }, setCur: fn => updates.push(fn({ status:'draft' })),

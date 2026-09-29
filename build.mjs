@@ -89,6 +89,15 @@ const FEATURE_FILES = [
   // Webshop (74_webshop.sql). A feed UTAN: onnan veszi a FEED_img-et es a
   // celkozonseg-valasztot (FEED_CelkozonsegValaszto, FEED_celNormal).
   'features/shop.jsx',
+  // Pályázatfigyelő (77_grants_core.sql). A data-layer UTÁN: onnan veszi a
+  // UModal / UBadge / UField / U_input atomokat. A kutatói nézet külön fájl lesz.
+  'features/grants.jsx',
+  // Kutatói profil és felderítés (79 + 80). A grants.jsx UTÁN: annak GRT_rpc /
+  // GRT_msg / GRT_dt elemeire épül.
+  'features/grants-researchers.jsx',
+  // Bevonási dashboard, arculatokra bontott illesztés, csapatajánlás (88+89+90).
+  // A grants.jsx UTÁN: onnan veszi a GRT_msg-et és a közös U_* atomokat.
+  'features/grants-teams.jsx',
 ];
 
 // `motion` is only referenced by the shim at the top of app.jsx, which renders
