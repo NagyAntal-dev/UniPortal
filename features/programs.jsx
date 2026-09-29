@@ -668,15 +668,54 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
   const msgTerkep = MSG_useInboxTerkep();
   const msgOlvasatlan = (msgTerkep[cur.id] && msgTerkep[cur.id].unread) || 0;
 
-  const persist = async (extra = {}) => {
+  /* Mi van MÁR MENTVE. Ehhez mérjük, hogy kilépéskor kell-e írni. */
+  const mentettRef = useRef(JSON.stringify(app.data || {}));
+  const dataRef = useRef(cur.data || {});
+  useEffect(() => { dataRef.current = cur.data || {}; }, [cur]);
+
+  const persist = async (extra = {}, ujData = null) => {
     setSaving(true);
-    const ids = PROG_appIds({ data: cur.data || {} });
-    const patch = { student_step: Math.min(lepes, steps.length - 1), data: cur.data || {}, updated_at: new Date().toISOString(), ...(isDeg && ids.length ? { program_id: ids[0] } : {}), ...extra };
+    const d = ujData || cur.data || {};
+    const ids = PROG_appIds({ data: d });
+    const patch = { student_step: Math.min(lepes, steps.length - 1), data: d, updated_at: new Date().toISOString(), ...(isDeg && ids.length ? { program_id: ids[0] } : {}), ...extra };
     const saved = await dlUpdate(APP_TABLE, cur.id, patch, APP_LS);
     setSaving(false);
-    if (saved) { const m = PROG_fromRow(saved); setCur(m); onSaved && onSaved(m); }
+    if (saved) { const m = PROG_fromRow(saved); setCur(m); onSaved && onSaved(m); mentettRef.current = JSON.stringify(m.data || {}); }
     return saved;
   };
+
+  /* AZONNALI MENTÉS azoknál a lépéseknél, amelyek a SZERVEREN is nyomot
+     hagynak: a dokumentumfeltöltés (fájl a tárolóban), a szintfelmérő beküldése
+     (elhasznált próbálkozás), az interjúfoglalás és a díjbejelentés. Ezek
+     bejegyzése nem várhat a „Folytatás"-ra.
+
+     MÉRVE 2026-09-29: a feltöltés csak a komponens állapotába került, és a
+     mentés egyedül a „Folytatás" / „Mentés és kilépés" gombon történt. Aki
+     feltöltött, majd a bal felső nyíllal vagy a menüvel lépett ki, annak a
+     fájlja bent maradt a tárolóban, de a jelentkezés adatából eltűnt: sem ő,
+     sem az ügyintéző nem látta többé. Ugyanez nullázta a szintfelmérő
+     beküldés-számlálóját is, ami a 3 próbálkozás korlátját játszotta ki.
+
+     A friss adatot ÁTADJUK a persistnek: a setCur aszinkron, a mentés nem
+     várhatja meg a következő rendert. */
+  const mentData = async (patch) => {
+    const d = { ...(cur.data || {}), ...patch };
+    setCur(c => ({ ...c, data: { ...(c.data || {}), ...patch } }));
+    dataRef.current = d;
+    return await persist({}, d);
+  };
+
+  /* KILÉPÉSKOR IS MENT. A menüre kattintva ez a nézet mentés nélkül bomlik le —
+     a beírt (de még nem továbbléptetett) adat ilyenkor is a piszkozatba kerül.
+     Nem várunk a válaszra (a lebomlás nem async), a kérés elindul. */
+  useEffect(() => {
+    const id = cur.id;
+    return () => {
+      const d = dataRef.current || {};
+      if (JSON.stringify(d) === mentettRef.current) return;
+      try { dlUpdate(APP_TABLE, id, { data: d, updated_at: new Date().toISOString() }, APP_LS); } catch (e) {}
+    };
+  }, []);
   /* A „Folytatás" ugyanazt a zárat tiszteli, mint a sáv. A gomb tiltva van
      hiányos lépésnél, de a záró feltétel ide is kell: a sáv és a gomb NE
      kétféle szabály szerint működjön. */
@@ -720,7 +759,9 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
 
   return (
     <div className="max-w-5xl 2xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 animate-in fade-in duration-300">
-      <button onClick={onExit} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-primary mb-4 transition-colors"><Lucide.ArrowLeft size={16} /> {backLabel || 'Vissza a képzésekhez'}</button>
+      {/* A KILÉPÉS IS MENT. Eddig ez a nyíl mentés nélkül dobta el a lépésen
+          bevitt adatot — a lenti „Mentés és kilépés"-szel most egyformán működik. */}
+      <button onClick={async () => { await persist(); onExit && onExit(); }} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-primary mb-4 transition-colors"><Lucide.ArrowLeft size={16} /> {backLabel || 'Vissza a képzésekhez'}</button>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div className="min-w-0">
           <p className="text-primary font-black text-xs uppercase tracking-widest mb-1">{isDeg && valasztott.length > 1 ? `Jelentkezés ${valasztott.length} képzésre` : <>{program.degree} jelentkezés</>}</p>
@@ -781,7 +822,7 @@ function ProgramApply({ program, programs, app, user, onExit, onSaved, notice, b
 
         {/* step body */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 sm:p-8 min-h-[360px]">
-          {hallgatoiNezet ? <PROG_StepBody stepKey={stepKey} program={virt} data={data} setData={setData} user={user} cur={cur} setCur={setCur}
+          {hallgatoiNezet ? <PROG_StepBody stepKey={stepKey} program={virt} data={data} setData={setData} mentData={mentData} user={user} cur={cur} setCur={setCur}
             onSubmit={async () => {
               /* Előbb mentünk (hogy az utolsó lépés adatai is bent legyenek),
                  utána a szerver fordítja át a sort az irodai szakaszba. */
@@ -850,7 +891,7 @@ const PROG_mathBekuldesek = (data) => Number((data && data.math && data.math.bek
 const PROG_mathKimeritve = (data) => PROG_mathBekuldesek(data) >= PROG_MATH_MAX_BEKULDES;
 
 /* ---------- per-step bodies ---------- */
-function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit }) {
+function PROG_StepBody({ stepKey, program, data, setData, mentData, user, cur, onSubmit }) {
   /* A feltöltés állapota. A hookok a függvény TETEJÉN állnak, mert a törzs
      lépésenként korán visszatér — feltételes ágban deklarálva megsértenék a
      hook-sorrendet. */
@@ -981,10 +1022,14 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
            kikerült: munkamenet nélkül a DOC_upload 'storage-unavailable'-t dob,
            és azt alább érthetően kiírjuk. */
         const path = await DOC_upload(file, (user && user.id) || null, cur.id, id);
-        setData({ docs: { ...docs, [id]: {
+        /* A BEJEGYZÉS AZONNAL MENTŐDIK. A fájl ekkor már a tárolóban van; ha a
+           hozzá tartozó bejegyzés a komponens állapotában maradna, a kilépés
+           elvesztené — a fájl ott lenne, de senki nem találná meg. */
+        const mentett = await mentData({ docs: { ...docs, [id]: {
           fileName: file.name, path, size: file.size,
           type: file.type || '', at: todayStr(),
         } } });
+        if (!mentett) setDocErr(id + ': A fájl feltöltődött, de a jelentkezéshez nem tudtuk hozzárendelni. Töltsd újra az oldalt, és ha a fájl nem látszik, próbáld újra a feltöltést.');
       } catch (err) {
         /* A valódi okot eddig lenyeltük, és mindenre „Próbáld újra"-t írtunk —
            ezért nem derült ki, hogy a szabály utasítja el. Az ismert okokat
@@ -1054,20 +1099,20 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
       </div>
     );
   }
-  if (stepKey === 'math') return <PROG_MathStep data={data} setData={setData} />;
+  if (stepKey === 'math') return <PROG_MathStep data={data} setData={mentData} />;
   if (stepKey === 'interview') {
     const iv = data.interview || {};
     /* A régi, beégetett időpontlista CSAK akkor jelenik meg, ha a 61-es
        migráció még nem futott le (vagy nincs adatbázis-kapcsolat) — az
        IV_ProcessInterview ilyenkor ezt a tartalékot rendereli. */
     const slots = PROG_slots();
-    const book = (s) => setData({ interview: { slot: s.time, interviewer: s.interviewer, teamsUrl: 'https://teams.microsoft.com/l/meetup-join/nje-' + s.id } });
+    const book = (s) => mentData({ interview: { slot: s.time, interviewer: s.interviewer, teamsUrl: 'https://teams.microsoft.com/l/meetup-join/nje-' + s.id } });
     const regi = iv.slot ? (
       <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-100">
         <div className="flex items-center gap-2 text-emerald-700 font-black mb-2"><Lucide.CalendarCheck size={18} /> Interjú lefoglalva</div>
         <div className="text-sm text-slate-600 font-bold">{DL_dateLong(iv.slot)} · {new Date(iv.slot).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
         <div className="text-sm text-slate-500">Interjúztató: {iv.interviewer} · Microsoft Teams</div>
-        <button className="text-xs font-bold text-slate-400 hover:text-primary mt-2" onClick={() => setData({ interview: {} })}>Időpont módosítása</button>
+        <button className="text-xs font-bold text-slate-400 hover:text-primary mt-2" onClick={() => mentData({ interview: {} })}>Időpont módosítása</button>
       </div>
     ) : (
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1078,7 +1123,7 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
     const allapot = (st) => {
       const c = st && st.current;
       const uj = c ? { slotId: c.id, status: c.status, booked: c.status === 'Booked', slot: c.start, start: c.start, end: c.end, interviewer: c.interviewer_name, teamsUrl: c.teams_url } : {};
-      if ((iv.slotId || '') !== (uj.slotId || '') || (iv.status || '') !== (uj.status || '')) setData({ interview: uj });
+      if ((iv.slotId || '') !== (uj.slotId || '') || (iv.status || '') !== (uj.status || '')) mentData({ interview: uj });
     };
     return (
       <div className="space-y-5">
@@ -1111,7 +1156,7 @@ function PROG_StepBody({ stepKey, program, data, setData, user, cur, onSubmit })
             {cur.ref_no ? <FIZ_KozlemenyDoboz refNo={cur.ref_no} magyarazat="A díj banki átutalásakor ezt írd a közlemény rovatba — enélkül nem tudjuk a befizetést a jelentkezésedhez rendelni." />
               : <p className="text-[12px] text-slate-500">Az utalási közlemény a jelentkezés mentése után jelenik meg.</p>}
             <div className="flex flex-wrap gap-3">
-              <button className={U_btnPrimary} onClick={() => setData({ fee: { declared: true, method: 'Banki átutalás', date: todayStr(), reference: FIZ_kozlemeny(cur.ref_no) || null } })}><Lucide.Landmark size={16} /> Átutalás bejelentése</button>
+              <button className={U_btnPrimary} onClick={() => mentData({ fee: { declared: true, method: 'Banki átutalás', date: todayStr(), reference: FIZ_kozlemeny(cur.ref_no) || null } })}><Lucide.Landmark size={16} /> Átutalás bejelentése</button>
             </div>
           </>
         )}
